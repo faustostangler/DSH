@@ -38,6 +38,8 @@ data_path = run.check_or_create_folder(data_path)
 # raw_data_path = data_path + 'raw/'
 # raw_data_path = run.check_or_create_folder(raw_data_path)
 
+
+# system stages
 def update_b3_companies(value: str) -> str:
     """
     Update missing companies from the provided dataframe by searching the web using the provided driver and wait object.
@@ -94,6 +96,8 @@ def update_b3_companies(value: str) -> str:
                 progress = format(progress, '.2f') + '%'
                 value = f'página {page+1}/{pages+1}, item {item+1}/{batch}, total {page*batch+item+1}/{companies}, {progress}, ["{ticker} {company_name}"]'
                 print(value)
+                if page*batch+item+1 == companies:
+                    break 
 
         # Drop any duplicate values in the b3_tickers dataframe
         b3_tickers.drop_duplicates(inplace=True)
@@ -124,15 +128,15 @@ def update_b3_companies(value: str) -> str:
                 keyword = run.wSendKeys(f'//*[@id="keyword"]', keyword, wait)
                 keyword = run.wClick(f'//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button', wait)
 
-                company = get_company(1, driver, wait)
-                b3_companies = pd.concat([b3_companies, pd.DataFrame([company], columns=var.cols_b3_companies)])
+                company = run.get_company(1, driver, wait)
+                b3_companies = pd.concat([b3_companies, pd.DataFrame([company], columns=cols_b3_companies)])
 
                 print(counter, size-counter, company)
             else:
                 print(counter, size-counter, keyword)
 
         b3_companies.drop_duplicates(inplace=True)
-        b3_companies.to_pickle(varsys.data_path + f'{df_name}.zip')
+        b3_companies.to_pickle(data_path + f'{df_name}.zip')
 
         # Close the driver and exit the script
         driver.close()
