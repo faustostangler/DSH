@@ -3,8 +3,8 @@ from dash import dcc, html, callback, Output, Input
 import plotly.express as px
 import dash_bootstrap_components as dbc
 
+import assets.helper as b3
 # import assets.variables as var
-# import assets.functions as run
 # import assets.system_variables as varsys
 # import assets.system_functions as runsys
 
@@ -42,15 +42,15 @@ layout = html.Div([
 )
 def options(value):
     if value == 'b3_companies':
-        value = run.update_b3_companies(value)
+        value = b3.update_b3_companies(value)
     if value == 'world_markets':
-        value = run.update_world_markets(value)
+        value = b3.update_world_markets(value)
     if value == 'yahoo_cotahist':
-        value = run.yahoo_cotahist(value)
+        value = b3.yahoo_cotahist(value)
     if value == 'get_nsd_links':
-        value = run.get_nsd_links(value)
+        value = b3.get_nsd_links(value)
     if value == 'get_dre':
-        value = run.get_dre(value)
+        value = b3.get_dre(value)
 
         
     return value
