@@ -65,7 +65,7 @@ def update_b3_companies(value: str) -> str:
         companies = int(companies.replace('.',''))
         pages = int(companies/batch)
 
-        value = f'found {companies} companies in {pages} pages'
+        value = f'found {companies} companies in {pages+1} pages'
         print(value)
 
         # Get all available companies directly from the web
@@ -90,7 +90,9 @@ def update_b3_companies(value: str) -> str:
                 company_name = run.txt_cln(run.wText(f'//*[@id="nav-bloco"]/div/div[{item+1}]/div/div/p[1]', wait))
                 keyword = [ticker, company_name]
                 b3_tickers = pd.concat([b3_tickers, pd.DataFrame([keyword], columns=cols_b3_tickers)])
-                value = f'página {pages-page}, item {item+1}, total {page*batch+item+1}, ["{ticker} {company_name}"]'
+                progress = ((page*batch+item+1)/companies)*100
+                progress = format(progress, '.2f') + '%'
+                value = f'página {page+1}/{pages+1}, item {item+1}/{batch}, total {page*batch+item+1}/{companies}, {progress}, ["{ticker} {company_name}"]'
                 print(value)
 
         # Drop any duplicate values in the b3_tickers dataframe
