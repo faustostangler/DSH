@@ -1,4 +1,4 @@
-import assets.helper as b3
+import helper as b3
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options

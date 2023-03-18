@@ -1,4 +1,4 @@
-import assets.functions as run
+import functions as run
 from typing import Any
 
 from selenium import webdriver
@@ -37,6 +37,10 @@ data_path = local_path + app_folder
 data_path = run.check_or_create_folder(data_path)
 # raw_data_path = data_path + 'raw/'
 # raw_data_path = run.check_or_create_folder(raw_data_path)
+
+# google cloud storage gcs
+json_key_file = 'credentials\storage admin.json'
+bucket_name = 'b3_bovespa_bucket'
 
 
 # system stages
