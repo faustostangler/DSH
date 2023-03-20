@@ -137,3 +137,76 @@ def update_b3_companies(value: str) -> str:
         value = str(e) + value
     return value
            
+def update_world_markets(value):
+  """
+  Updates the world markets data and saves it as a compressed pickle file.
+
+  Args:
+  value (str): A string value to be appended with "done".
+
+  Returns:
+  str: A string value appended with "done" to indicate the completion of the function.
+
+  """
+  # world stock symbols - https://polygon.io/stocks
+  # cols = ['market', 'abbreviation', 'totalCount', 'lastUpdated', 'index']
+  import credentials.keys
+  from stocksymbol import StockSymbol
+
+  # world markets
+  ss = StockSymbol(credentials.keys.polygon)
+  world_markets = pd.DataFrame(ss.market_list)
+  index = pd.DataFrame(ss.index_list)
+
+  world_markets.drop(labels='index', axis=1, inplace=True)
+
+  world_markets = pd.merge(index, world_markets, how='outer')
+  world_markets = world_markets[['market', 'abbreviation', 'totalCount', 'lastUpdated', 'indexName', 'indexId']]
+  world_markets.fillna('', inplace=True)
+
+  # world_markets[['market', 'abbreviation']] = world_markets[['market', 'abbreviation']].apply(runsys.txt_cln)
+  world_markets = world_markets.sort_values(by=['market','indexName'])
+
+  try:
+    abbreviation = world_markets['abbreviation'].unique()
+  except Exception as e:
+    abbreviation = []
+
+  df_name = 'world_companies'
+  world_companies = pd.DataFrame(columns=cols_world_markets)
+
+  # world companies
+  for index, abbrv in enumerate(abbreviation):
+    try:
+      df = pd.DataFrame(ss.get_symbol_list(market=abbrv)) # "us" or "america" will also work
+      world_companies = pd.concat([world_companies, df], ignore_index=True)
+      print(f'{abbrv} {index}+{len(abbreviation)-1-index} markets {index/(len(abbreviation)-1):.2%}, {len(df)} new, {len(world_companies)} total companies')
+    except Exception as e:
+      pass
+
+  world_companies = world_companies.copy()
+  world_companies['market'] = world_companies['market'].map(lambda x: x.replace('_market', ''))
+  world_companies.fillna('', inplace=True)
+  world_companies.drop_duplicates(inplace=True)
+  
+  # expand sufixes
+  world_companies[['ticker', 'exchange_country']] = world_companies['symbol'].str.split('.', expand=True)
+  world_companies['ticker_type'] = ''
+
+  # expand Brazil Ticker Sufixes
+  mask = (world_companies['market'] == 'br')
+  br_world_companies = world_companies[mask]
+
+  # adjustments
+  br_world_companies['ticker_type'] = br_world_companies['ticker'].str[4:]
+  br_world_companies = br_world_companies.copy()
+  br_world_companies['ticker'] = br_world_companies['ticker'].str[:4]
+
+  world_companies = pd.merge(world_companies, br_world_companies, how='left')
+  world_companies.fillna('', inplace=True)
+
+  # Save
+  world_companies = run.save_and_pickle(world_companies, df_name)
+
+  value = 'done ' + value
+  return value
