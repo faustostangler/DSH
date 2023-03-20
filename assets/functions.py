@@ -1,4 +1,4 @@
-import helper as b3
+import assets.helper as b3
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -14,9 +14,12 @@ from webdriver_manager.chrome import ChromeDriverManager
 import unidecode
 import string
 
+import os
+
 import pandas as pd
 
-import os
+from google.cloud import storage
+from io import BytesIO
 
 
 # text functions
@@ -353,14 +356,91 @@ def read_or_create_dataframe(file_name, cols):
     file_path = os.path.join(b3.data_path, f'{file_name}.zip')
     
     try:
-        df = pd.read_pickle(file_path)  # Try to read the file as a pickle.
-    except FileNotFoundError:  # Handle the specific error when the file is not found.
-        df = pd.DataFrame(columns=cols)  # Create an empty DataFrame with the specified columns.
+      df = download_from_gcs(file_name)
     except Exception as e:
+      try:
+        df = pd.read_pickle(file_path)  # Try to read the file as a pickle.
+      except Exception as e:
         print(f'Error occurred while reading file {file_name}: {e}')
         df = pd.DataFrame(columns=cols)
         
     df.drop_duplicates(inplace=True)  # Remove any duplicate rows (if any).
     
+    # df = upload_to_gcs(df, file_name)
     print(f'{file_name}: total {len(df)} items')
     return df
+
+def save_and_pickle(df, df_name):
+  df.to_pickle(b3.data_path + f'{df_name}.zip')
+  df = upload_to_gcs(df, df_name)
+
+  return df
+
+# storage functions
+def upload_to_gcs(df, df_name):
+    """Uploads a pandas DataFrame to Google Cloud Storage (GCS) as a zipped pickle file.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame to be uploaded.
+        df_name (str): The name to be used for the uploaded file (excluding the '.zip' extension).
+
+    Returns:
+        pandas.DataFrame: The input DataFrame.
+
+    Raises:
+        google.auth.exceptions.DefaultCredentialsError: If no valid credentials are found.
+        google.api_core.exceptions.NotFound: If the specified bucket or JSON key file does not exist.
+        google.cloud.exceptions.GoogleCloudError: If there was an error during the upload operation.
+
+    """
+    # GCS configuration
+    destination_blob_name = f'{df_name}.zip'
+
+    # Initialize GCS client
+    client = storage.Client.from_service_account_json(b3.json_key_file)
+    bucket = client.get_bucket(b3.bucket_name)
+
+    # Save DataFrame to a bytes buffer as a zipped pickle file
+    buffer = BytesIO()
+    df.to_pickle(buffer, compression='zip')
+    buffer.seek(0)
+
+    # Upload the buffer to GCS
+    blob = bucket.blob(destination_blob_name)
+    blob.upload_from_file(buffer, content_type='application/zip')
+
+    return df
+
+def download_from_gcs(df_name):
+    """Downloads a zipped pickle file from Google Cloud Storage (GCS) and returns its contents as a pandas DataFrame.
+
+    Args:
+        df_name (str): The name of the file to download (excluding the '.zip' extension).
+
+    Returns:
+        pandas.DataFrame: The contents of the downloaded file as a DataFrame.
+
+    Raises:
+        google.auth.exceptions.DefaultCredentialsError: If no valid credentials are found.
+        google.api_core.exceptions.NotFound: If the specified bucket or JSON key file does not exist.
+        google.cloud.exceptions.GoogleCloudError: If there was an error during the download operation.
+        ValueError: If the downloaded file cannot be read as a pandas DataFrame.
+
+    """
+    # GCS configuration
+    source_blob_name = f'{df_name}.zip'
+
+    # Initialize GCS client
+    client = storage.Client.from_service_account_json(b3.json_key_file)
+    bucket = client.get_bucket(b3.bucket_name)
+
+    # Download the zipped DataFrame from GCS to a bytes buffer
+    buffer = BytesIO()
+    blob = bucket.blob(source_blob_name)
+    blob.download_to_file(buffer)
+    buffer.seek(0)
+
+    # Load the zipped DataFrame into a Pandas DataFrame
+    df = pd.read_pickle(buffer, compression='zip')
+    return df
+
