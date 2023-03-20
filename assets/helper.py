@@ -59,7 +59,6 @@ def update_b3_companies(value: str) -> str:
 
     # run browser
     driver, wait = run.load_browser()
-
     try:
         # Get the total number of companies and pages
         driver.get(search_url)
@@ -72,37 +71,19 @@ def update_b3_companies(value: str) -> str:
         print(value)
 
         # Get all available companies directly from the web
-        df_name = 'b3_tickers'
-        b3_tickers = run.read_or_create_dataframe(df_name, cols_b3_companies)
-
+        driver.get(search_url)
+        time.sleep(1)
+        run.wSelect(f'//*[@id="selectPage"]', driver, wait)
+        raw_code = []
         for page in range(0, pages+1):
-            driver.get(search_url)
-            time.sleep(1)
-            run.wSelect(f'//*[@id="selectPage"]', driver, wait)
-
-            click = 0
-            while click-1 < page-1:
-                run.wClick(f'//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a', wait)
-                time.sleep(0.5)
-                click += 1
-            value = f'page {page}, clique {click}'
-            # raw_code_xpath = '//*[@id="nav-bloco"]/div'
-            time.sleep(1)
-
-            for item in range(0, batch):
-                ticker = run.wText(f'//*[@id="nav-bloco"]/div/div[{item+1}]/div/div/h5', wait)
-                company_name = run.txt_cln(run.wText(f'//*[@id="nav-bloco"]/div/div[{item+1}]/div/div/p[1]', wait))
-                keyword = [ticker, company_name]
-                b3_tickers = pd.concat([b3_tickers, pd.DataFrame([keyword], columns=cols_b3_tickers)])
-                progress = ((page*batch+item+1)/companies)*100
-                progress = format(progress, '.2f') + '%'
-                value = f'página {page+1}/{pages+1}, item {item+1}/{batch}, total {page*batch+item+1}/{companies}, {progress}, ["{ticker} {company_name}"]'
-                print(value)
-                if page*batch+item+2 == companies:
-                    break 
-
-        # Drop any duplicate values in the b3_tickers dataframe
-        b3_tickers.drop_duplicates(inplace=True)
+            xpath = '//*[@id="nav-bloco"]/div'
+            inner_html = run.wRaw(xpath, wait)
+            raw_code.append(inner_html)
+            run.wClick(f'//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a', wait)
+            time.sleep(0.5)
+            value = f'page {page+1}'
+            print(value)
+        b3_tickers = run.get_ticker_keywords(raw_code)
 
         # Update the missing companies from the database
         df_name = 'b3_companies'
@@ -136,8 +117,8 @@ def update_b3_companies(value: str) -> str:
                 print(counter, size-counter, company)
             else:
                 print(counter, size-counter, keyword)
-
-            break
+        b3_companies.fillna('', inplace=True)
+        b3_companies.reset_index(drop=True, inplace=True)
         b3_companies.drop_duplicates(inplace=True)
         
         b3_companies = run.save_and_pickle(b3_companies, df_name)

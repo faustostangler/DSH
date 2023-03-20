@@ -140,6 +140,17 @@ def wLink(xpath, wait, EC, By):
         # print('wLink', e)
         return ''
 
+def wRaw(xpath, wait):
+  try:
+    # Wait until the element is clickable, then retrieve its text.
+    element = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+    raw_code = element.get_attribute("innerHTML")
+    return raw_code
+  except Exception as e:
+    # If an exception occurs, print the error message (if needed) and return an empty string.
+    # print('wText', e)
+    return ''
+
 def txt_cln(text):
     """
     Cleans text by removing any leading/trailing white space, converting it to lowercase, removing
@@ -222,7 +233,7 @@ def get_company(i, driver, wait):
   """
   # listagem
   try:
-    list_dict = dict(zip(l1, l2))
+    list_dict = dict(zip(b3.l1, b3.l2))
     xpath = f'//*[@id="nav-bloco"]/div/div[{i}]/div/div/p[3]'
     listagem = wText(xpath, wait)
     for word, replacement in list_dict.items():
@@ -321,6 +332,43 @@ def get_company(i, driver, wait):
   company = [pregao, company_name, cvm, listagem, ticker, tickers, asin, cnpj, site, setor, subsetor, segmento, atividade, escriturador, url]
 
   return company
+
+def get_ticker_keywords(raw_code):
+  from bs4 import BeautifulSoup
+
+  # Initialize a list to hold the keyword information
+  keywords = []
+
+  for inner_html in raw_code:
+     # Parse the raw HTML source code
+    soup = BeautifulSoup(inner_html, 'html.parser')
+
+    # Find all the card elements
+    cards = soup.find_all('div', class_='card-body')
+
+    # Loop through each card element and extract the ticker and company name
+    for card in cards:
+      try:
+        # Extract the ticker and company name from the card element
+        ticker = txt_cln(card.find('h5', class_='card-title2').text)
+        company_name = txt_cln(card.find('p', class_='card-title').text)
+        pregao = txt_cln(card.find('p', class_='card-text').text)
+        listagem = txt_cln(card.find('p', class_='card-nome').text)
+
+        
+        # Append the ticker and company name to the keyword list
+        keyword = [ticker, company_name]
+        keywords.append(keyword)
+        print(keyword)
+      except Exception as e:
+        # print(e)
+        pass
+
+
+  df = pd.DataFrame(keywords, columns=['ticker', 'company_name'])
+  df.reset_index(drop=True, inplace=True)
+  df.drop_duplicates(inplace=True)
+  return df
 
 # os functions
 def check_or_create_folder(folder):
