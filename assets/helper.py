@@ -1,4 +1,4 @@
-import functions as run
+import assets.functions as run
 from typing import Any
 
 from selenium import webdriver
@@ -57,9 +57,6 @@ def update_b3_companies(value: str) -> str:
     - str: status message
     """
 
-    # Convert the value to string
-    value = str(value)
-
     # run browser
     driver, wait = run.load_browser()
 
@@ -78,30 +75,31 @@ def update_b3_companies(value: str) -> str:
         df_name = 'b3_tickers'
         b3_tickers = run.read_or_create_dataframe(df_name, cols_b3_companies)
 
-        # for page in range(0, pages+1):
-        #     driver.get(search_url)
-        #     time.sleep(1)
-        #     run.wSelect(f'//*[@id="selectPage"]', driver, wait)
+        for page in range(0, pages+1):
+            driver.get(search_url)
+            time.sleep(1)
+            run.wSelect(f'//*[@id="selectPage"]', driver, wait)
 
-        #     click = 0
-        #     while click-1 < page-1:
-        #         run.wClick(f'//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a', wait)
-        #         time.sleep(0.5)
-        #         click += 1
-        #     value = f'page {page}, clique {click}'
-        #     time.sleep(1)
+            click = 0
+            while click-1 < page-1:
+                run.wClick(f'//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a', wait)
+                time.sleep(0.5)
+                click += 1
+            value = f'page {page}, clique {click}'
+            # raw_code_xpath = '//*[@id="nav-bloco"]/div'
+            time.sleep(1)
 
-            # for item in range(0, batch):
-            #     ticker = run.wText(f'//*[@id="nav-bloco"]/div/div[{item+1}]/div/div/h5', wait)
-            #     company_name = run.txt_cln(run.wText(f'//*[@id="nav-bloco"]/div/div[{item+1}]/div/div/p[1]', wait))
-            #     keyword = [ticker, company_name]
-            #     b3_tickers = pd.concat([b3_tickers, pd.DataFrame([keyword], columns=cols_b3_tickers)])
-            #     progress = ((page*batch+item+1)/companies)*100
-            #     progress = format(progress, '.2f') + '%'
-            #     value = f'página {page+1}/{pages+1}, item {item+1}/{batch}, total {page*batch+item+1}/{companies}, {progress}, ["{ticker} {company_name}"]'
-            #     print(value)
-            #     if page*batch+item+2 == companies:
-            #         break 
+            for item in range(0, batch):
+                ticker = run.wText(f'//*[@id="nav-bloco"]/div/div[{item+1}]/div/div/h5', wait)
+                company_name = run.txt_cln(run.wText(f'//*[@id="nav-bloco"]/div/div[{item+1}]/div/div/p[1]', wait))
+                keyword = [ticker, company_name]
+                b3_tickers = pd.concat([b3_tickers, pd.DataFrame([keyword], columns=cols_b3_tickers)])
+                progress = ((page*batch+item+1)/companies)*100
+                progress = format(progress, '.2f') + '%'
+                value = f'página {page+1}/{pages+1}, item {item+1}/{batch}, total {page*batch+item+1}/{companies}, {progress}, ["{ticker} {company_name}"]'
+                print(value)
+                if page*batch+item+2 == companies:
+                    break 
 
         # Drop any duplicate values in the b3_tickers dataframe
         b3_tickers.drop_duplicates(inplace=True)
@@ -139,8 +137,11 @@ def update_b3_companies(value: str) -> str:
             else:
                 print(counter, size-counter, keyword)
 
+            break
         b3_companies.drop_duplicates(inplace=True)
-        b3_companies.to_pickle(data_path + f'{df_name}.zip')
+        
+        b3_companies = run.save_and_pickle(b3_companies, df_name)
+        # b3_companies.to_pickle(data_path + f'{df_name}.zip')
 
         # Close the driver and exit the script
         driver.close()
