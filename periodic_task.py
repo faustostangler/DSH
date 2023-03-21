@@ -6,6 +6,7 @@ def my_periodic_task():
 
     value = 'world_markets'
     value = b3.update_world_markets(value)
+
     print("All updated!")
 
 if __name__ == "__main__":
