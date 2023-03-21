@@ -492,3 +492,63 @@ def download_from_gcs(df_name):
     df = pd.read_pickle(buffer, compression='zip')
     return df
 
+# test functions
+def pdf_download():
+  import assets.helper as b3
+  import requests
+  import json
+  import base64
+  from google.cloud import storage
+  from io import BytesIO
+
+  # Set the required properties
+  codigoInstituicao = 2
+  numeroProtocolo = 1043145
+  token = '6LdVyiwaAAAAABobBnLknCD5VGGkmH9snlJBxCyr'
+  versaoCaptcha = 'V3'
+
+
+  # Send the request
+  base_url = 'https://www.rad.cvm.gov.br/ENET/'
+  url = base_url + "frmExibirArquivoIPEExterno.aspx/ExibirPDF"
+  headers = {"Content-Type": "application/json; charset=utf-8"}
+
+  for numeroProtocolo in range (1043146, 1043146+2):
+      # # Define the JSON payload
+      # data = {
+      #     "codigoInstituicao": codigoInstituicao,
+      #     "numeroProtocolo": numeroProtocolo,
+      #     "token": token,
+      #     "versaoCaptcha": versaoCaptcha, 
+      # }
+      # response = requests.post(url, headers=headers, data=json.dumps(data))
+      # # Get the base64-encoded PDF data from the response
+      # pdf_data = response.json()['d']
+
+      # # Decode base64-encoded PDF data
+      # pdf_bytes = base64.b64decode(pdf_data)
+
+      # # Save PDF data to file
+      # with open(f"{numeroProtocolo}.pdf", "wb") as f:
+      #     f.write(pdf_bytes)
+
+      
+      url = f"https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&numSequencia=567876&numVersao=1&numProtocolo={numeroProtocolo}&descTipo=IPE&CodigoInstituicao=1"
+      response = requests.get(url)
+
+      # Save PDF file to Google Cloud Service
+      # GCS configuration
+      destination_blob_name = f'{numeroProtocolo}.pdf'
+
+      # Initialize GCS client
+      client = storage.Client.from_service_account_json(b3.json_key_file)
+      bucket = client.get_bucket(b3.bucket_name)
+
+      # Upload the PDF file to GCS
+      blob = bucket.blob(destination_blob_name)
+      blob.upload_from_string(response.content, content_type='application/pdf')
+      # blob.upload_from_string(pdf_bytes, content_type='application/pdf')
+
+
+      print(numeroProtocolo)
+
