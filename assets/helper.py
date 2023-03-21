@@ -11,7 +11,10 @@ import time
 # variables 0
 url = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/?language=pt-br' 
 search_url = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/search?language=pt-br' 
-driver_wait_time = 2
+start = 1
+batch = 120
+bins = 20
+bin_size = 50
 
 # variables 1
 app_folder = 'datasets/'
@@ -20,12 +23,13 @@ cols_b3_tickers = ['ticker', 'company_name']
 cols_world_markets = ['symbol', 'shortName', 'longName', 'exchange', 'market', 'quoteType']
 cols_yahoo = {'symbol': 'str', 'shortName': 'str', 'longName': 'str', 'exchange': 'category', 'market': 'category', 'quoteType': 'category', 'ticker': 'str', 'exchange_y': 'category', 'tick_y': 'str', 'tick': 'str'}
 cols_info = ['symbol', 'shortName', 'longName', 'longBusinessSummary', 'exchange', 'quoteType', 'market', 'sector', 'industry', 'website', 'logo_url', 'country', 'state', 'city', 'address1', 'phone', 'returnOnEquity', 'beta3Year', 'beta', 'recommendationKey', 'recommendationMean']
+cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'protocolo', 'envio', 'url', 'nsd']
 cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
 cols_dre = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor','Url']
 
 # variables 2
+driver_wait_time = 2
 driver = wait = None
-
 def set_driver_and_wait(new_driver, new_wait):
     global driver, wait
     driver = new_driver
@@ -164,7 +168,7 @@ def update_world_markets(value):
   world_markets = world_markets[['market', 'abbreviation', 'totalCount', 'lastUpdated', 'indexName', 'indexId']]
   world_markets.fillna('', inplace=True)
 
-  # world_markets[['market', 'abbreviation']] = world_markets[['market', 'abbreviation']].apply(runsys.txt_cln)
+  # world_markets[['market', 'abbreviation']] = world_markets[['market', 'abbreviation']].apply(run.txt_cln)
   world_markets = world_markets.sort_values(by=['market','indexName'])
 
   try:
@@ -210,3 +214,152 @@ def update_world_markets(value):
 
   value = 'done ' + value
   return value
+
+def yahoo_cotahist(value):
+    # import yfinance as yf
+
+    # df_name = 'world_companies'
+    # world_companies = run.read_or_create_dataframe(df_name, cols_world_markets)
+
+    # df_name = 'company_info'
+    # company_info = run.read_or_create_dataframe(df_name, cols_info)
+
+    # c_info = pd.DataFrame(columns=cols_info)
+
+    # # filter missing companies
+    # mask = world_companies['symbol'].isin(company_info['symbol'].unique())
+    # downloaded_companies = world_companies[mask]
+    # missing_companies = world_companies[~mask]
+
+    # for c, company in enumerate(missing_companies.itertuples()):
+    #   downloaded = (len(downloaded_companies)+c+1)
+    #   print(f'{downloaded} {len(missing_companies)-(c+1)} of {len(world_companies)} {downloaded/len(world_companies):.4%} {company[5]} {company[4]}:{company[1]} {company[3]}')
+    #   ticker  = yf.Ticker(company[1])
+    #   try:
+    #     c_info2 = pd.DataFrame([ticker.info])
+    #     c_info2['symbol'] = company[1]
+    #     c_info = pd.concat([c_info, c_info2], ignore_index=True)
+    #   except Exception as e:
+    #     pass
+
+    # if (downloaded) % varsys.bin_size == 0:
+    #   if not c_info.empty:
+    #     # load
+    #     company_info = pd.read_pickle(varsys.data_path + f'{df_name}.zip')
+
+    #     # save
+    #     try:
+    #       company_info = pd.concat([company_info, c_info], ignore_index=True)
+
+    #       try:
+    #         company_info = company_info.drop(['companyOfficers'], axis=1, errors='ignore')
+    #         company_info.drop_duplicates(inplace=True)
+    #       except Exception as e:
+    #         pass
+            
+    #       company_info.to_pickle(varsys.data_path + f'{df_name}.zip')
+
+    #       company_info = pd.DataFrame(columns=cols_info)
+    #       c_info = pd.DataFrame(columns=cols_info)
+
+    #       print(f'partial save')
+    #     except Exception as e:
+    #       print(e)
+
+    # # final save
+    # company_info = pd.concat([company_info, c_info], ignore_index=True)
+    # company_info.sort_values(by=['market', 'exchange', 'quoteType', 'sector', 'industry', 'symbol'], inplace=True)
+
+    # try:
+    #   company_info = company_info.drop(['companyOfficers'], axis=1, errors='ignore')
+    #   company_info.drop_duplicates(inplace=True)
+    # except Exception as e:
+    #   pass
+
+    # company_info.to_pickle(varsys.data_path + f'{df_name}.zip')
+
+    # company_info = pd.DataFrame(columns=cols_info)
+    # c_info = pd.DataFrame(columns=cols_info)
+
+    value='please refactor using yahooquery, nothing done here'
+    return value
+
+def get_nsd_links(value):
+    """
+    This function loads the driver and the nsd data, and then iteratively scrapes new nsd links.
+    It saves the scraped data to a pickle file.
+    
+    Args:
+        value: a value passed to the function that is not used in the function
+        
+    Returns:
+        value: a value passed to the function that is not used in the function
+    """
+    # load driver
+    driver, wait = run.load_browser()
+
+    # load_nsd
+    nsd = run.load_nsd()
+
+    # get batch new items
+    empty_sequence = 0
+    err = 0
+    try:
+        start_range = int(max(nsd['nsd'])) + 1
+    except:
+        start_range = 1
+
+    df_name = f'nsd_links'
+    super_bin = batch * 20
+    end_range = start_range + super_bin
+    start_range = 1 + 1217
+    print('alert start_range', start_range)
+
+    # loop over nsd ranges to scrape new nsd links
+    for n in range(start_range, end_range):
+        nsd, err = run.get_nsd(cols_nsd, n, nsd, err, driver, wait)
+
+        # handle empty sequences
+        if err:
+            empty_sequence = empty_sequence + err
+            if empty_sequence + 1 == batch:
+                break
+        else:
+            empty_sequence = 0
+
+        # save nsd every bin_size iterations
+        if (n) % (bin_size) == 0:
+            try:
+                # preprocess the nsd data
+                nsd['nsd'] = pd.to_numeric(nsd['url'].str.replace('https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento=', '', regex=False).str.replace('&CodigoTipoInstituicao=1', '', regex=False), errors='coerce')
+                nsd['nsd'] = nsd['nsd'].astype(str)
+                nsd['nsd'] = nsd['nsd'].str.replace('.0', '', regex=False)
+                nsd['nsd'] = pd.to_numeric(nsd['nsd'], errors='coerce')
+                nsd.reset_index(drop=True, inplace=True)
+
+                # remove empty (no company) nsd_lines from nsd
+                mask = nsd['company'].notnull()
+                nsd = nsd[mask]
+
+                # save nsd
+                nsd = run.save_and_pickle(nsd, df_name)
+                print('partial save')
+            except Exception as e:
+                pass
+
+    # preprocess the nsd data
+    nsd['nsd'] = pd.to_numeric(nsd['url'].str.replace('https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento=', '', regex=False).str.replace('&CodigoTipoInstituicao=1', '', regex=False), errors='coerce')
+    nsd['nsd'] = nsd['nsd'].astype(str)
+    nsd['nsd'] = nsd['nsd'].str.replace('.0', '', regex=False)
+    nsd['nsd'] = pd.to_numeric(nsd['nsd'], errors='coerce')
+    nsd.reset_index(drop=True, inplace=True)
+
+    # remove empty (no company) nsd_lines from nsd
+    mask = nsd['company'].notnull()
+    nsd = nsd[mask]
+
+    # save nsd
+    nsd = run.save_and_pickle(nsd, df_name)
+    print('all nsd links are downloades')
+
+    return value
