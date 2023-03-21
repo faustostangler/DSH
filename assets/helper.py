@@ -312,8 +312,8 @@ def get_nsd_links(value):
     df_name = f'nsd_links'
     super_bin = batch * 20
     end_range = start_range + super_bin
-    start_range = 1 + 1217
-    print('alert start_range', start_range)
+    start_range = 1
+    print(f'starting at {start_range}')
 
     # loop over nsd ranges to scrape new nsd links
     for n in range(start_range, end_range):

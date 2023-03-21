@@ -189,7 +189,7 @@ def load_browser():
     options.add_argument('--disable-dev-shm-usage')  # Disable shared memory usage.
     options.add_argument('--disable-blink-features=AutomationControlled')  # Disable automated control.
     options.add_argument('start-maximized')  # Maximize the window on startup.
-    options = Options()
+    # options = Options()
 
     # Install and start the ChromeDriver service, passing in the options.
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
@@ -538,7 +538,6 @@ def read_or_create_dataframe(file_name, cols):
     """
     # Construct the full path to the file using the varsys data_path.
     file_path = os.path.join(b3.data_path, f'{file_name}.zip')
-    
     try:
       df = download_from_gcs(file_name+'error')
     except Exception as e:
