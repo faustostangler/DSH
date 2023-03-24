@@ -21,6 +21,11 @@ import pandas as pd
 from google.cloud import storage
 from io import BytesIO
 
+import requests
+from bs4 import BeautifulSoup
+import unidecode
+import string
+import datetime
 
 # text functions
 def wText(xpath: str, wait: WebDriverWait) -> str:
@@ -370,142 +375,6 @@ def get_ticker_keywords(raw_code):
   df.drop_duplicates(inplace=True)
   return df
 
-def load_nsd() -> pd.DataFrame:
-    """
-    Load the NSD (Non-Financial Statements) dataset from a previously saved file and performs some data cleaning.
-
-    Returns
-    -------
-    pd.DataFrame
-        The cleaned NSD dataset.
-    """
-
-    # load nsd
-    df_name = f'nsd_links'
-    nsd = read_or_create_dataframe(df_name, b3.cols_nsd)
-
-    nsd = nsd[b3.cols_nsd]
-    nsd.reset_index(drop=True, inplace=True)
-    try:
-        # drop any rows with missing values
-        nsd = nsd.dropna(subset=['nsd'])
-
-        # convert 'envio' column to datetime type
-        try:
-            nsd['envio'] = nsd['envio'].apply(lambda x: pd.to_datetime(x, format='%d/%m/%Y %H:%M:%S') if '/' in x else pd.to_datetime(x, format='%Y-%m-%d %H:%M:%S'))
-        except Exception as e:
-            pass
-        for i, val in nsd['envio'].iteritems():
-            if not isinstance(val, pd.Timestamp):
-                if '/' in val:
-                    nsd.at[i, 'envio'] = pd.to_datetime(val, format='%d/%m/%Y %H:%M:%S')
-                elif '-' in val:
-                    nsd.at[i, 'envio'] = pd.to_datetime(val, format='%Y-%m-%d %H:%M:%S')
-                else:
-                    nsd.at[i, 'envio'] = pd.NaT
-
-
-        # convert 'nsd' column to numeric type, remove '.0' and convert back to integer
-        nsd['nsd'] = pd.to_numeric(nsd['url'].str.replace('https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento=','', regex=False).str.replace('&CodigoTipoInstituicao=1','', regex=False), errors='coerce')
-        nsd['nsd'] = nsd['nsd'].astype(str).str.replace('.0','', regex=False).astype(int)
-
-        # convert categorical columns to category data type
-        nsd['company'] = nsd['company'].astype('category')
-        nsd['dri'] = nsd['dri'].astype('category')
-        nsd['dri2'] = nsd['dri2'].astype('category')
-        nsd['dre'] = nsd['dre'].astype('category')
-        nsd['auditor'] = nsd['auditor'].astype('category')
-        nsd['auditor_rt'] = nsd['auditor_rt'].astype('category')
-        # nsd['cancelamento'] = nsd['cancelamento'].astype('category')
-        nsd['data'] = nsd['data'].astype('category')
-        
-        # reset the index
-        nsd.reset_index(drop=True, inplace=True)
-        
-    except Exception as e:
-        # if an exception occurs, do nothing
-        pass
-    
-    return nsd
-
-def get_nsd(cols, n, nsd, err, driver, wait):
-    """
-    Retrieves information about a company from the CVM website given its sequential document number.
-    Appends the company information to a pandas DataFrame.
-
-    Parameters:
-    cols (namedtuple): Named tuple containing the column names for the DataFrame.
-    n (str): Sequential document number of the company.
-    nsd (DataFrame): DataFrame containing information about previously retrieved companies.
-    err (int): Error flag indicating if the retrieval was successful (0) or not (1).
-    driver (WebDriver): Selenium WebDriver instance used to interact with the CVM website.
-    wait (WebDriverWait): Selenium WebDriverWait instance used to wait for elements to load.
-
-    Returns:
-    nsd (DataFrame): Updated DataFrame containing the company information.
-    err (int): Updated error flag indicating if the retrieval was successful (0) or not (1).
-    """
-
-    # Construct the URL for the company
-    nsd_url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={n}&CodigoTipoInstituicao=1'
-
-    # Initialize the row with default values
-    row = [n, '', '', '', '', '', '', '', '', '', '']
-
-    # Navigate to the URL
-    driver.get(nsd_url)
-
-    # Retrieve the content of the page and split it into lines
-    content = wText(f'//*[@id="Form1"]/div[3]', wait)
-    content = content.splitlines()
-
-    # If the content has the expected number of lines, extract the relevant information
-    if len(content) == 12:
-        company = txt_cln(content[0])
-
-        dri = content[1].split(':')[1].strip()
-        try:
-            dri2 = txt_cln(dri.split('-')[1].strip())
-        except Exception as e:
-            dri2 = ''
-        dri = txt_cln(dri.split('-')[0].strip())
-
-        auditor_raw = content[3].split(':')[1].strip()
-        auditor = txt_cln(auditor_raw.split('-')[0].strip())
-        auditor_rt = txt_cln(content[4].split(':')[1].strip())
-
-        dre = content[2].split(' - ')
-        versao = dre[2]
-        data = dre[1]
-        dre = txt_cln(dre[0])
-
-        protocolo = content[5].split(' ')[1][2:]
-
-        envio = content[9]
-
-        try:
-          cancelamento = wText('//*[@id="divMotivoCancelamento"]', wait).split(': ')[1]
-          cancelamento = txt_cln(cancelamento)
-        except:
-          cancelamento = ''
-
-        # Update the row with the extracted information and reset the error flag
-        row = [n, company, dri, dri2, dre, data, versao, auditor, auditor_rt, cancelamento, protocolo, envio, nsd_url, n]
-        err = 0
-    else:
-        # If the content does not have the expected number of lines, set the row to default values and set the error flag
-        row = [n, '', '', '', '', '', '', '', '', '', '', '', '', n]
-        err = 1
-    
-    # Print some information about the retrieved company
-    print(row[0], row[5], row[4], row[1], row[10])
-
-    # Append the row to the DataFrame
-    df = pd.DataFrame([row[1:]], columns=cols)
-    nsd = pd.concat([nsd, df], ignore_index=True)
-
-    return nsd, err
-
 # os functions
 def check_or_create_folder(folder):
     """
@@ -539,14 +408,15 @@ def read_or_create_dataframe(file_name, cols):
     # Construct the full path to the file using the varsys data_path.
     file_path = os.path.join(b3.data_path, f'{file_name}.zip')
     try:
-      df = download_from_gcs(file_name+'error')
+      df = download_from_gcs(file_name+error)
+      pass
     except Exception as e:
       try:
         df = pd.read_pickle(file_path)  # Try to read the file as a pickle.
         # df = upload_to_gcs(df, file_name)
       except Exception as e:
         print(f'Error occurred while reading file {file_name}: {e}')
-        df = pd.DataFrame(columns=cols)
+        df = pd.DataFrame(columns=b3.cols_nsd)
         
     df.drop_duplicates(inplace=True)  # Remove any duplicate rows (if any).
     
@@ -558,6 +428,127 @@ def save_and_pickle(df, df_name):
   df = upload_to_gcs(df, df_name)
 
   return df
+
+# nsd_functions
+def nsd_range(nsd, safety_factor):
+  # start
+  try:
+    start = int(max(nsd['nsd'])) + 1
+  except:
+    start = 1
+
+  # find the gap in days from today to max 'envio' date
+  last_date = nsd['envio'].max().date()
+  today = datetime.datetime.now().date()
+  days_gap = (today - last_date).days
+
+  # group nsd by day
+  nsd_per_day = nsd.groupby(nsd['envio'].dt.date)['nsd'].count()
+
+  # find the average nsd items per day group, and other things
+  avg_nsd_per_day = nsd_per_day.mean()
+  max_nsd_per_day = nsd_per_day.max()
+  max_date_nsd_per_day = nsd_per_day.idxmax()
+
+  # calculate the expected items up to today
+  expected_nsd = int(avg_nsd_per_day * (days_gap + safety_factor) * safety_factor)
+
+  # end
+  end = start + expected_nsd
+
+  # range
+  start = start
+  end = start + expected_nsd 
+
+  return start-1, end
+
+def nsd_dates(nsd, safety_factor):
+  # find the gap in days from today to max 'envio' date
+  last_date = nsd['envio'].max().date()
+  today = datetime.datetime.now().date()
+  days_gap = (today - last_date).days
+  
+  # find the maximum 'nsd' gap
+  max_gap = int(((nsd['nsd'].diff().max() + safety_factor) * 0.1))
+
+  # group nsd by day
+  nsd_per_day = nsd.groupby(nsd['envio'].dt.date)['nsd'].count()
+
+  # find the average nsd items per day group, and other things
+  avg_nsd_per_day = nsd_per_day.mean()
+  max_nsd_per_day = nsd_per_day.max()
+  max_date_nsd_per_day = nsd_per_day.idxmax()
+
+  # last_date and previous safe date 
+  back_days = round(max_gap / avg_nsd_per_day)
+  limit_date = datetime.datetime.now().date() - datetime.timedelta(days=back_days)
+
+  return last_date, limit_date, max_gap
+
+def get_nsd(i):
+  nsd_url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={n}&CodigoTipoInstituicao=1'
+
+  # Getting the HTML content from the URL
+  response = requests.get(nsd_url)
+  html_content = response.text
+
+  # Parsing the HTML content with BeautifulSoup
+  soup = BeautifulSoup(html_content, 'html.parser')
+
+  # Extracting company
+  nomeCompanhia_tag = soup.find('span', {'id': 'lblNomeCompanhia'})
+  company = nomeCompanhia_tag.text.strip()
+  company = unidecode.unidecode(company).upper()
+
+  # Extracting dri and dri2
+  nomeDRI_tag = soup.find('span', {'id': 'lblNomeDRI'})
+  dri = nomeDRI_tag.text.strip().split(' - ')[0]
+  dri = unidecode.unidecode(dri).upper()
+  dri2 = nomeDRI_tag.text.strip().split(' - ')[-1].replace('(', '').replace(')', '')
+  dri2 = unidecode.unidecode(dri2).upper()
+
+  # Extracting 'FCA', data and versao
+  descricaoCategoria_tag = soup.find('span', {'id': 'lblDescricaoCategoria'})
+  descricaoCategoria = descricaoCategoria_tag.text.strip()
+  versao = descricaoCategoria.split(' - ')[-1]
+  data = descricaoCategoria.split(' - ')[1]
+  dre = descricaoCategoria.split(' - ')[0]
+  dre = unidecode.unidecode(dre).upper()
+
+  # Extracting auditor
+  lblAuditor_tag = soup.find('span', {'id': 'lblAuditor'})
+  auditor = lblAuditor_tag.text.strip().split(' - ')[0]
+  auditor = unidecode.unidecode(auditor).upper()
+
+  # Extracting auditor_rt
+  lblResponsavelTecnico_tag = soup.find('span', {'id': 'lblResponsavelTecnico'})
+  auditor_rt = lblResponsavelTecnico_tag.text.strip()
+  auditor_rt = unidecode.unidecode(auditor_rt).upper()
+
+  # Extracting protocolo
+  lblProtocolo_tag = soup.find('span', {'id': 'lblProtocolo'})
+  protocolo = lblProtocolo_tag.text.strip()
+
+  # Extracting '2010' and envio
+  lblDataDocumento_tag = soup.find('span', {'id': 'lblDataDocumento'})
+  lblDataDocumento = lblDataDocumento_tag.text.strip()
+
+  lblDataEnvio_tag = soup.find('span', {'id': 'lblDataEnvio'})
+  envio = lblDataEnvio_tag.text.strip()
+  envio = datetime.datetime.strptime(envio, "%d/%m/%Y %H:%M:%S")
+
+  # cancelamento
+  cancelamento_tag = soup.find('span', {'id': 'lblMotivoCancelamentoReapresentacao'})
+  cancelamento = cancelamento_tag.text.strip()
+  cancelamento = unidecode.unidecode(cancelamento).upper()
+
+  # url
+  url = nsd_url
+
+  # company
+  row = [company, dri, dri2, dre, data, versao, auditor, auditor_rt, cancelamento, protocolo, envio, url, n]
+
+  return row
 
 # storage functions
 def upload_to_gcs(df, df_name):
