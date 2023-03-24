@@ -7,6 +7,7 @@ import pandas as pd
 
 import os
 import time
+import datetime
 
 # variables 0
 url = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/?language=pt-br' 
@@ -23,7 +24,6 @@ cols_b3_tickers = ['ticker', 'company_name']
 cols_world_markets = ['symbol', 'shortName', 'longName', 'exchange', 'market', 'quoteType']
 cols_yahoo = {'symbol': 'str', 'shortName': 'str', 'longName': 'str', 'exchange': 'category', 'market': 'category', 'quoteType': 'category', 'ticker': 'str', 'exchange_y': 'category', 'tick_y': 'str', 'tick': 'str'}
 cols_info = ['symbol', 'shortName', 'longName', 'longBusinessSummary', 'exchange', 'quoteType', 'market', 'sector', 'industry', 'website', 'logo_url', 'country', 'state', 'city', 'address1', 'phone', 'returnOnEquity', 'beta3Year', 'beta', 'recommendationKey', 'recommendationMean']
-cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'protocolo', 'envio', 'url', 'nsd']
 cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
 cols_dre = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor','Url']
 
@@ -285,81 +285,46 @@ def yahoo_cotahist(value):
     return value
 
 def get_nsd_links(value):
-    """
-    This function loads the driver and the nsd data, and then iteratively scrapes new nsd links.
-    It saves the scraped data to a pickle file.
+    safety_factor = 1.8
+
+    gap = 0
+    start_time = time.time()
+
+    file_name = 'nsd_links'
+    cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
+    nsd = run.read_or_create_dataframe(file_name, cols_nsd)
+    nsd['envio'] = pd.to_datetime(nsd['envio'], dayfirst=True)
     
-    Args:
-        value: a value passed to the function that is not used in the function
-        
-    Returns:
-        value: a value passed to the function that is not used in the function
-    """
-    # load driver
-    driver, wait = run.load_browser()
+    start, end = run.nsd_range(nsd, safety_factor)
+    print(f'from {start} to {end}')
 
-    # load_nsd
-    nsd = run.load_nsd()
-
-    # get batch new items
-    empty_sequence = 0
-    err = 0
-    try:
-        start_range = int(max(nsd['nsd'])) + 1
-    except:
-        start_range = 1
-
-    df_name = f'nsd_links'
-    super_bin = batch * 20
-    end_range = start_range + super_bin
-    start_range = 1 + 1217
-    print('alert start_range', start_range)
-
-    # loop over nsd ranges to scrape new nsd links
-    for n in range(start_range, end_range):
-        nsd, err = run.get_nsd(cols_nsd, n, nsd, err, driver, wait)
-
-        # handle empty sequences
-        if err:
-            empty_sequence = empty_sequence + err
-            if empty_sequence + 1 == batch:
+    for i, n in enumerate(range(start, end)):
+        # interrupt conditions
+        last_date, limit_date, max_gap = run.nsd_dates(nsd, safety_factor)
+        if last_date > limit_date:
+            if gap == max_gap:
                 break
-        else:
-            empty_sequence = 0
 
-        # save nsd every bin_size iterations
-        if (n) % (bin_size) == 0:
-            try:
-                # preprocess the nsd data
-                nsd['nsd'] = pd.to_numeric(nsd['url'].str.replace('https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento=', '', regex=False).str.replace('&CodigoTipoInstituicao=1', '', regex=False), errors='coerce')
-                nsd['nsd'] = nsd['nsd'].astype(str)
-                nsd['nsd'] = nsd['nsd'].str.replace('.0', '', regex=False)
-                nsd['nsd'] = pd.to_numeric(nsd['nsd'], errors='coerce')
-                nsd.reset_index(drop=True, inplace=True)
+        # elapsed time
+        elapsed_time = (time.time() - start_time)
+        elapsed_time = '{:.6f}'.format(elapsed_time/(i+1))
+        minutes, seconds = divmod(round(float(elapsed_time)), 60)
+        elapsed_time_formatted = f'{int(minutes)}m {int(seconds)}s'
+        now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-                # remove empty (no company) nsd_lines from nsd
-                mask = nsd['company'].notnull()
-                nsd = nsd[mask]
+        try:
+            # add nsd row to dataframe
+            row = run.get_nsd(i)
+            nsd = pd.concat([nsd, pd.DataFrame([row], columns=cols_nsd)])
+            print(row[-1], row[10], now, elapsed_time, row[4], row[3], row[0], elapsed_time_formatted)
+            # reset gap
+            gap = 0
+        except Exception as e:
+            # increase gap count
+            gap += 1
+            print(n, elapsed_time)
 
-                # save nsd
-                nsd = run.save_and_pickle(nsd, df_name)
-                print('partial save')
-            except Exception as e:
-                pass
-
-    # preprocess the nsd data
-    nsd['nsd'] = pd.to_numeric(nsd['url'].str.replace('https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento=', '', regex=False).str.replace('&CodigoTipoInstituicao=1', '', regex=False), errors='coerce')
-    nsd['nsd'] = nsd['nsd'].astype(str)
-    nsd['nsd'] = nsd['nsd'].str.replace('.0', '', regex=False)
-    nsd['nsd'] = pd.to_numeric(nsd['nsd'], errors='coerce')
-    nsd.reset_index(drop=True, inplace=True)
-
-    # remove empty (no company) nsd_lines from nsd
-    mask = nsd['company'].notnull()
-    nsd = nsd[mask]
-
-    # save nsd
-    nsd = run.save_and_pickle(nsd, df_name)
-    print('all nsd links are downloades')
+        if gap == max_gap:
+            break
 
     return value
