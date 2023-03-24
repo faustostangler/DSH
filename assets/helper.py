@@ -324,4 +324,12 @@ def get_nsd_links(value):
             gap += 1
             print(n, elapsed_time)
 
+        if n % bin_size == 0:
+            nsd = run.save_and_pickle(nsd, file_name)
+            print('partial save')
+
+    nsd = run.save_and_pickle(nsd, file_name)
+    print('final save')
+
+
     return value

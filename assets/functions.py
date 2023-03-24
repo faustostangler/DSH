@@ -567,22 +567,25 @@ def upload_to_gcs(df, df_name):
         google.cloud.exceptions.GoogleCloudError: If there was an error during the upload operation.
 
     """
-    # GCS configuration
-    destination_blob_name = f'{df_name}.zip'
+    try:
+      # GCS configuration
+      destination_blob_name = f'{df_name}.zip'
 
-    # Initialize GCS client
-    client = storage.Client.from_service_account_json(b3.json_key_file)
-    bucket = client.get_bucket(b3.bucket_name)
+      # Initialize GCS client
+      client = storage.Client.from_service_account_json(b3.json_key_file)
+      bucket = client.get_bucket(b3.bucket_name)
 
-    # Save DataFrame to a bytes buffer as a zipped pickle file
-    buffer = BytesIO()
-    df.to_pickle(buffer, compression='zip')
-    buffer.seek(0)
+      # Save DataFrame to a bytes buffer as a zipped pickle file
+      buffer = BytesIO()
+      df.to_pickle(buffer, compression='zip')
+      buffer.seek(0)
 
-    # Upload the buffer to GCS
-    blob = bucket.blob(destination_blob_name)
-    blob.upload_from_file(buffer, content_type='application/zip')
-
+      # Upload the buffer to GCS
+      blob = bucket.blob(destination_blob_name)
+      blob.upload_from_file(buffer, content_type='application/zip')
+    except Exception as e:
+      # print(e)
+      pass
     return df
 
 def download_from_gcs(df_name):
