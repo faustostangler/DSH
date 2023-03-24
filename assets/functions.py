@@ -485,7 +485,7 @@ def nsd_dates(nsd, safety_factor):
 
   return last_date, limit_date, max_gap
 
-def get_nsd(i):
+def get_nsd(n):
   nsd_url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={n}&CodigoTipoInstituicao=1'
 
   # Getting the HTML content from the URL
