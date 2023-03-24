@@ -16,4 +16,4 @@ def my_periodic_task():
     print("All updated!")
 
 if __name__ == "__main__":
-    my_periodic_task()
+    my_periodic_task()  

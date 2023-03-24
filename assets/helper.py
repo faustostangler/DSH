@@ -294,7 +294,7 @@ def get_nsd_links(value):
     cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
     nsd = run.read_or_create_dataframe(file_name, cols_nsd)
     nsd['envio'] = pd.to_datetime(nsd['envio'], dayfirst=True)
-    
+
     start, end = run.nsd_range(nsd, safety_factor)
     print(f'from {start} to {end}')
 
@@ -314,7 +314,7 @@ def get_nsd_links(value):
 
         try:
             # add nsd row to dataframe
-            row = run.get_nsd(i)
+            row = run.get_nsd(n)
             nsd = pd.concat([nsd, pd.DataFrame([row], columns=cols_nsd)])
             print(row[-1], row[10], now, elapsed_time, row[4], row[3], row[0], elapsed_time_formatted)
             # reset gap
@@ -323,8 +323,5 @@ def get_nsd_links(value):
             # increase gap count
             gap += 1
             print(n, elapsed_time)
-
-        if gap == max_gap:
-            break
 
     return value
