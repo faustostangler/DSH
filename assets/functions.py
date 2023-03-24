@@ -408,7 +408,7 @@ def read_or_create_dataframe(file_name, cols):
     # Construct the full path to the file using the varsys data_path.
     file_path = os.path.join(b3.data_path, f'{file_name}.zip')
     try:
-      df = download_from_gcs(file_name+error)
+      df = download_from_gcs(file_name)
       pass
     except Exception as e:
       try:
