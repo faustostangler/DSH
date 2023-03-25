@@ -27,6 +27,10 @@ cols_info = ['symbol', 'shortName', 'longName', 'longBusinessSummary', 'exchange
 cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
 cols_dre = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor','Url']
 
+demo = ['Demonstrações Financeiras Padronizadas', 'Informações Trimestrais']
+cmbGrupo = ['Dados da Empresa']
+cmbQuadro = ['Demonstração do Resultado', 'Balanço Patrimonial Ativo', 'Balanço Patrimonial Passivo', 'Demonstração do Fluxo de Caixa', 'Demonstração de Valor Adicionado', 'Demonstração do Resultado Abrangente']
+
 # variables 2
 driver_wait_time = 2
 driver = wait = None
@@ -306,9 +310,9 @@ def get_nsd_links(value):
                 break
 
         # elapsed time
-        elapsed_time = (time.time() - start_time)
-        elapsed_time = '{:.6f}'.format(elapsed_time/(i+1))
-        minutes, seconds = divmod(round(float(elapsed_time)), 60)
+        running_time = (time.time() - start_time)
+        elapsed_time = '{:.6f}'.format(running_time/(i+1))
+        minutes, seconds = divmod(round(float(running_time)), 60)
         elapsed_time_formatted = f'{int(minutes)}m {int(seconds)}s'
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -333,3 +337,46 @@ def get_nsd_links(value):
 
 
     return value
+
+def get_dre(value):
+  # get new nsd links to download not yet downloaded in dre
+  nsd = run.get_new_dre_links()
+
+  # download new dre from nsd list
+  file_name = f'dre_raw'
+  dre = run.read_or_create_dataframe(file_name, cols_dre)
+  df = pd.DataFrame(columns=cols_dre)
+
+  size = len(nsd)
+  start_time = time.time()
+  for l, line in enumerate(nsd.itertuples()):
+    # elapsed time
+    running_time = (time.time() - start_time)
+    avg_time_per_item = running_time / (l + 1)
+    elapsed_time = f'{running_time / (l + 1):.6f}'
+    # remaining time
+    remaining_time = size * avg_time_per_item
+    minutes, seconds = divmod(int(float(remaining_time)), 60)
+    remaining_time_formatted = f'{int(minutes)}m {int(seconds)}s'
+
+    # read table
+    # read and concat quarters from nsd (and all dre in each quarter)
+    quarter = run.read_quarter(line)
+    df = pd.concat([df, quarter], ignore_index=True)
+
+    print(f'remaining {(size-l-1)} items and {remaining_time_formatted}, {remaining_time:.6f} seconds')
+    
+    if (size-l) % (bin_size) == 0:
+      dre = pd.concat([dre, df], ignore_index=True)
+
+      dre = run.save_and_pickle(df, file_name)
+      df = pd.DataFrame(columns=cols_dre)
+      print('partial save')
+
+  dre.drop_duplicates(inplace=True, keep='first')
+  dre.sort_values(by=['Companhia', 'Trimestre', 'Conta'], ascending=[True, False, True], inplace=True)
+  dre = run.save_and_pickle(df, file_name)
+  print('final save')
+
+
+  return value

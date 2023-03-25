@@ -10,8 +10,11 @@ def my_periodic_task():
     # value = 'yahoo_cotahist'
     # value = b3.yahoo_cotahist(value)
 
+    # value = 'nsd'
+    # value = b3.get_nsd_links(value)
+
     value = 'nsd'
-    value = b3.get_nsd_links(value)
+    value = b3.get_dre(value)
 
     print("All updated!")
 

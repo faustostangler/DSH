@@ -487,7 +487,7 @@ def nsd_dates(nsd, safety_factor):
 
 def get_nsd(n):
   nsd_url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={n}&CodigoTipoInstituicao=1'
-
+  nsd_url = 'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento=123581&CodigoTipoInstituicao=1'
   # Getting the HTML content from the URL
   response = requests.get(nsd_url)
   html_content = response.text
@@ -549,6 +549,124 @@ def get_nsd(n):
   row = [company, dri, dri2, dre, data, versao, auditor, auditor_rt, cancelamento, protocolo, envio, url, n]
 
   return row
+
+def clean_nsd(nsd):
+  nsd.reset_index(drop=True, inplace=True)
+  nsd['nsd'] = pd.to_numeric(nsd['url'].str.replace('https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento=','', regex=False).str.replace('&CodigoTipoInstituicao=1','', regex=False), errors='coerce')
+  nsd['nsd'] = nsd['nsd'].astype(str).str.replace('.0','', regex=False)
+  nsd.set_index('nsd', inplace=True)
+
+  try:  
+    nsd['company'] = nsd['company'].astype('category')
+    nsd['dri'] = nsd['dri'].astype('category')
+    nsd['dri2'] = nsd['dri2'].astype('category')
+    nsd['dre'] = nsd['dre'].astype('category')
+    nsd['data'] = nsd['data'].astype('category')
+    nsd['versao'] = nsd['versao'].astype('category')
+    nsd['envio'] = pd.to_datetime(nsd['envio'], format='%d/%m/%Y %H:%M:%S', infer_datetime_format=True)
+  except Exception as e:
+    pass
+  
+  try:
+    nsd = nsd[b3.cols_nsd]
+  except Exception as e:
+    # cols.remove('nsd')
+    # nsd = nsd[b3.cols_nsd]
+      pass
+  nsd = nsd.dropna()
+
+  # mask1 = nsd['auditor'] == ''
+  # mask2 = nsd['auditor'].isnull()
+  # nsd = nsd[~mask1 & ~mask2]
+
+  # filter and sort
+  nsd.sort_values(by=['company', 'data', 'versao'], ascending=[True, True, True], inplace=True)
+
+  return nsd
+
+# dre
+def clean_dre(dre):
+  try:
+    dre['nsd'] = pd.to_numeric(dre['Url'].str.replace('https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento=','', regex=False).str.replace('&CodigoTipoInstituicao=1','', regex=False), errors='ignore')
+    dre.sort_values(by=['nsd'], ascending=[False], inplace=True)
+
+    dre['Companhia'] = dre['Companhia'].astype('category')
+    dre['Demonstrativo'] = dre['Demonstrativo'].astype('category')
+    dre['Conta'] = dre['Conta'].astype('category')
+    dre['Descrição'] = dre['Descrição'].astype('category')
+    dre['Url'] = dre['Url'].astype('category')
+    dre['nsd'] = dre['nsd'].astype('category')
+
+    # dre['Trimestre'] = pd.to_datetime(dre['Trimestre'], format='%d/%m/%Y')
+    dre['Trimestre'] = pd.to_datetime(dre['Trimestre'], yearfirst=True, dayfirst=True, infer_datetime_format=True)
+
+    dre['Valor'] = pd.to_numeric(dre['Valor'], errors='coerce')
+  except Exception as e:
+     pass
+
+  try:
+     dre = dre[b3.cols_dre]
+  except Exception as e:
+     pass
+
+  return dre
+
+def get_new_dre_links():
+      # load links
+    file_name = 'nsd_links'
+    nsd = read_or_create_dataframe(file_name, b3.cols_nsd)
+    nsd = clean_nsd(nsd)
+
+    # filter most recent by company and data, drop duplicates, keep most recent
+    the_most_recent = nsd[['company', 'data']].copy()
+    the_most_recent.drop_duplicates(inplace=True, keep='last')
+
+    # filter nsd by recent and repeated
+    nsd_repeated = nsd.loc[~nsd.index.isin(the_most_recent.index)]
+    nsd_recent = nsd.loc[nsd.index.isin(the_most_recent.index)]
+
+    dre_options = nsd['dre'].unique().tolist()
+    dre_options.sort()
+    mask0 = (nsd['dre'] == dre_options[0]) # 'DEMONSTRACOES FINANCEIRAS PADRONIZADAS'
+    mask1 = (nsd['dre'] == dre_options[1]) # 'FORMULARIO CADASTRAL'
+    mask2 = (nsd['dre'] == dre_options[2]) # 'FORMULARIO DE REFERENCIA'
+    mask3 = (nsd['dre'] == dre_options[3]) # 'INFORMACOES TRIMESTRAIS'
+    mask4 = (nsd['dre'] == dre_options[4]) # 'INFORME TRIMESTRAL DE SECURITIZADORA'
+    nsd_dre = nsd[mask0 | mask3].copy()
+    nsd_cad = nsd[mask1].copy()
+    nsd_ref = nsd[mask2].copy()
+    nsd_sec = nsd[mask4].copy()
+
+    # filter by type
+    nsd = nsd_dre
+
+    file_name = 'dre_raw'
+    dre = read_or_create_dataframe(file_name, b3.cols_dre)
+    dre = clean_dre(dre)
+
+    try:
+        # remove dre not in nsd (so to re-download the new ones)
+        nsd_url = nsd['url'].unique()
+        mask = dre['Url'].isin(nsd_url)
+        dre_old = dre[~mask].copy()
+        dre_new = dre[mask].copy()
+    except Exception as e:
+        dre_old = dre.copy()
+        dre_new = dre.copy()
+
+    # remove nsd that is in the dre_new
+    try:
+        dre_new_url = dre_new['Url'].unique()
+        mask = nsd['url'].isin(dre_new_url)
+        nsd_recent_old = nsd[mask]
+        nsd_recent_new = nsd[~mask]
+    except Exception as e:
+        nsd_recent_old = nsd_dre.copy()
+        nsd_recent_new = nsd_dre.copy()
+
+    print(len(nsd), 'total,', len(dre_old), 'financial statements to update and', len(nsd_recent_new), 'new financial statements to download')
+
+    return nsd_recent_new
 
 # storage functions
 def upload_to_gcs(df, df_name):
