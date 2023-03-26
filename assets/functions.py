@@ -194,8 +194,8 @@ def load_browser():
     options.add_argument('--no-sandbox')  # Avoid sandboxing.
     options.add_argument('--disable-dev-shm-usage')  # Disable shared memory usage.
     options.add_argument('--disable-blink-features=AutomationControlled')  # Disable automated control.
+    # options = Options()
     options.add_argument('start-maximized')  # Maximize the window on startup.
-    options = Options()
 
     # Install and start the ChromeDriver service, passing in the options.
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
@@ -742,7 +742,7 @@ def read_cmbQuadro(quadro, line, driver, wait):
       column_index = 2  # For the third column, the index is 2 (0-based indexing)
       table = table.iloc[:, 0:3]
       table = table.rename(columns={table.columns[column_index]: 'Valor'})
-      table.iloc[:, column_index] = pd.to_numeric(table.iloc[:, column_index].str.replace('.', ''))
+      table.iloc[:, column_index] = pd.to_numeric(table.iloc[:, column_index].str.replace('.', '', regex=False))
       table['Valor'] = pd.to_numeric(table['Valor'], errors='coerce')
       table.fillna(0, inplace=True)
       table['Valor'] = table['Valor'].astype(float) * unidade
