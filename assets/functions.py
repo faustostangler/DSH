@@ -645,31 +645,36 @@ def get_new_dre_links(dre):
 
     try:
         # remove dre not in nsd (so to re-download the new ones)
-        nsd_url = nsd['url'].unique()
-        mask = dre['Url'].isin(nsd_url)
-        dre_old = dre[~mask].copy()
-        dre_new = dre[mask].copy()
+        mask = dre['Url'].isin(nsd['url'])
+        dre_old = dre[~mask].copy() # Contém as linhas do dataframe dre com URLs que não estão presentes no dataframe nsd.
+        dre_new = dre[mask].copy() # Contém as linhas do dataframe dre com URLs que estão presentes no dataframe nsd.
     except Exception as e:
         dre_old = dre.copy()
         dre_new = dre.copy()
 
-    # remove nsd that is in the dre_new
     try:
-        dre_new_url = dre_new['Url'].unique()
-        mask = nsd['url'].isin(dre_new_url)
-        nsd_recent_old = nsd[mask]
-        nsd_recent_new = nsd[~mask]
+        # remove nsd that is in the dre_new
+        mask = nsd['url'].isin(dre_new['Url'])
+        nsd_recent_old = nsd[mask] # Contém as linhas do dataframe nsd com URLs que estão presentes no dataframe dre_new, que Contém as linhas do dataframe dre com URLs que estão presentes no dataframe nsd.
+        nsd_recent_new = nsd[~mask] # Contém as linhas do dataframe nsd com URLs que não estão presentes no dataframe dre_new, que Contém as linhas do dataframe dre com URLs que estão presentes no dataframe nsd.
+        # O dataframe nsd_recent_new 
+        # contém as linhas de nsd que têm URLs exclusivas de nsd, 
+        # ou seja, não compartilhadas com dre_new. 
+        # Já o dataframe dre_new 
+        # contém as linhas de dre que têm URLs compartilhadas com nsd.
     except Exception as e:
         nsd_recent_old = nsd_dre.copy()
         nsd_recent_new = nsd_dre.copy()
 
-    nsd_recent_new['data'] = pd.to_datetime(nsd_recent_new['data'], format='%d/%m/%Y')
-    nsd_recent_new = nsd_recent_new.sort_values(by=['company', 'data'])
-    nsd_recent_new['data'] = nsd_recent_new['data'].dt.strftime('%d/%m/%Y')
+    # nsd = pd.concat([dre_old, nsd_recent_new])
+
+    nsd['data'] = pd.to_datetime(nsd['data'], format='%d/%m/%Y')
+    nsd = nsd.sort_values(by=['company', 'data'])
+    nsd['data'] = nsd['data'].dt.strftime('%d/%m/%Y')
 
     print(len(nsd), 'total,', len(dre_old), 'financial statements to update and', len(nsd_recent_new), 'new financial statements to download')
 
-    return nsd_recent_new
+    return nsd
 
 def read_quarter(line, driver, wait):
   try:
