@@ -26,6 +26,7 @@ from bs4 import BeautifulSoup
 import unidecode
 import string
 import datetime
+import time
 
 # text functions
 def wText(xpath: str, wait: WebDriverWait) -> str:
@@ -415,7 +416,7 @@ def read_or_create_dataframe(file_name, cols):
         df = pd.read_pickle(file_path)  # Try to read the file as a pickle.
         # df = upload_to_gcs(df, file_name)
       except Exception as e:
-        print(f'Error occurred while reading file {file_name}: {e}')
+        # print(f'Error occurred while reading file {file_name}: {e}')
         df = pd.DataFrame(columns=b3.cols_nsd)
         
     df.drop_duplicates(inplace=True)  # Remove any duplicate rows (if any).
@@ -487,7 +488,6 @@ def nsd_dates(nsd, safety_factor):
 
 def get_nsd(n):
   nsd_url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={n}&CodigoTipoInstituicao=1'
-  nsd_url = 'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento=123581&CodigoTipoInstituicao=1'
   # Getting the HTML content from the URL
   response = requests.get(nsd_url)
   html_content = response.text
@@ -663,11 +663,14 @@ def get_new_dre_links(dre):
         nsd_recent_old = nsd_dre.copy()
         nsd_recent_new = nsd_dre.copy()
 
+    nsd_recent_new['data'] = pd.to_datetime(nsd_recent_new['data'], format='%d/%m/%Y')
+    nsd_recent_new = nsd_recent_new.sort_values(by=['company', 'data'])
+    nsd_recent_new['data'] = nsd_recent_new['data'].dt.strftime('%d/%m/%Y')
+
     print(len(nsd), 'total,', len(dre_old), 'financial statements to update and', len(nsd_recent_new), 'new financial statements to download')
 
     return nsd_recent_new
 
-# concat single trimester multiple dres
 def read_quarter(line, driver, wait):
   try:
     # initialize quarter dataframe
@@ -707,7 +710,6 @@ def read_quarter(line, driver, wait):
     # print(e)
     pass
 
-# get each single dre from url
 def read_cmbQuadro(quadro, line, driver, wait):
   try:
       # select item
@@ -731,14 +733,16 @@ def read_cmbQuadro(quadro, line, driver, wait):
           unidade = 1 / milhao
 
       # read and clean quadro
-      table = pd.read_html(driver.page_source, header=0, thousands='.')[0]
+      table = pd.read_html(driver.page_source, header=0)[0]
 
       # selenium exit frame
       driver.switch_to.parent_frame()
 
       # clean and format table
+      column_index = 2  # For the third column, the index is 2 (0-based indexing)
       table = table.iloc[:, 0:3]
-      table = table.rename(columns={table.columns[2]: 'Valor'})
+      table = table.rename(columns={table.columns[column_index]: 'Valor'})
+      table.iloc[:, column_index] = pd.to_numeric(table.iloc[:, column_index].str.replace('.', ''))
       table['Valor'] = pd.to_numeric(table['Valor'], errors='coerce')
       table.fillna(0, inplace=True)
       table['Valor'] = table['Valor'].astype(float) * unidade
@@ -750,8 +754,6 @@ def read_cmbQuadro(quadro, line, driver, wait):
       pass
   return table
 
-
-# get cmbGrupo info - Dados da Empresa, Notas Explicativas e Comentários do Desempenho
 def read_cmbGrupo(grupo, line, driver, wait):
     try:
         # select item
@@ -820,6 +822,113 @@ def read_cmbGrupo(grupo, line, driver, wait):
         print(e, 'find me')
         pass
     return table
+
+# math
+def clean_dre_math(dre):
+  try:
+    # clean
+    dre['Companhia'] = dre['Companhia'].str.replace(' EM RECUPERACAO JUDICIAL', '')
+    dre['Companhia'] = dre['Companhia'].str.replace(' EM LIQUIDACAO EXTRAJUDICIAL', '')
+    dre['Companhia'] = dre['Companhia'].str.replace(' EM LIQUIDACAO', '')
+
+
+    # standartization
+    dre['Companhia'] = dre['Companhia'].astype('category')
+    dre['Demonstrativo'] = dre['Demonstrativo'].astype('category')
+    dre['Trimestre'] = pd.to_datetime(dre['Trimestre'], yearfirst=True, dayfirst=True, infer_datetime_format=True)
+    dre['Conta'] = dre['Conta'].astype('str')
+    dre['Conta'] = dre['Conta'].astype('category')
+    dre['Descrição'] = dre['Descrição'].astype('category')
+    dre['Valor'] = pd.to_numeric(dre['Valor'], errors='coerce')
+    dre['Url'] = dre['Url'].astype('category')
+    dre['nsd'] = pd.to_numeric(dre['Url'].str.replace('https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento=','', regex=False).str.replace('&CodigoTipoInstituicao=1','', regex=False), errors='ignore')
+    dre['nsd'] = dre['nsd'].astype('str')
+    dre['nsd'] = dre['nsd'].astype('category')
+
+    dre.reset_index(drop=True, inplace=True)
+    dre = (dre.sort_values(by=['Companhia', 'Trimestre', 'Conta'],
+                        key=lambda col: pd.to_datetime(col, format='%d/%m/%Y') if col.name == 'Trimestre' else col))
+
+    dre = dre[b3.cols_dre_math]
+  except Exception as e:
+    pass
+  return dre
+
+def get_dre_years(dre_raw, dre_math):
+     # Get all Different Companhia and Trimestres
+  try:
+    raw = dre_raw.groupby(['Companhia', 'Trimestre'], group_keys=False)
+    math = dre_math.groupby(['Companhia', 'Trimestre'], group_keys=False)
+
+    difference = set(raw.groups.keys()) - set(math.groups.keys())
+  except Exception as e:
+    raw = dre_raw.groupby(['Companhia', 'Trimestre'], group_keys=False)
+    difference = set(raw.groups.keys())
+
+  difference = sorted(list(difference), key=lambda x: (x[0], x[1]))
+
+  years = []
+  for key in difference:
+      item = f'{key[0]} {key[1].year}'
+      if item not in years:
+          years.append(item)
+  
+  return years
+
+def dre_prepare(dre_raw, dre_math):
+  years = get_dre_years(dre_raw, dre_math)
+
+  # create 'update' columns
+  dre_raw = dre_raw.assign(updated = lambda x: x['Companhia'].astype(str) + ' ' + x['Trimestre'].dt.year.astype(str))
+  try:
+      dre_math = dre_math.assign(updated = lambda x: x['Companhia'].astype(str) + ' ' + x['Trimestre'].dt.year.astype(str))
+  except Exception as e:
+    try:
+      dre_math = dre_math.assign(updated = lambda x: x['Companhia'].astype(str) + ' ' + x['Trimestre'].astype(str))
+    except Exception as e:
+       pass
+
+  # remove years from dre_math = remove years from existing dataframe
+  try:
+    mask_math = dre_math['updated'].isin(years)
+    dre_math = dre_math[~mask_math][b3.cols_dre_math]
+  except Exception as e:
+    dre_math = dre_math
+
+  # filter dre_raw by years = keep years from dataframe to be processed
+  try:
+    mask_raw = dre_raw['updated'].isin(years)
+    dre_raw = dre_raw[mask_raw][b3.cols_dre_math]
+  except Exception as e:
+     dre_raw = dre_raw
+
+  return dre_raw, dre_math
+
+def get_math(dre_raw, dre_math):
+    # do the math
+  last_quarters = ['3', '4']
+  all_quarters = ['6', '7']
+
+  math = dre_raw.groupby([dre_raw['Companhia'], dre_raw['Trimestre'].dt.year, dre_raw['Conta']], group_keys=False)
+  size = len(math)
+  print(f'Total of {size} items (items in company quarters) new to process')
+
+  try:
+      cias_grouped = dre_math.groupby([dre_math['Companhia'], dre_math['Trimestre'].dt.year, dre_math['Conta']], group_keys=False)
+  except Exception as e:
+    try:
+      cias_grouped = dre_math.groupby([dre_math['Companhia'], dre_math['Trimestre'], dre_math['Conta']], group_keys=False)
+    except Exception as e:
+      pass
+
+  try:
+    cias = []
+    for key in cias_grouped:
+      cias.append(key[0])
+  except Exception as e:
+     cias = []
+
+  return cias, math
 
 # storage functions
 def upload_to_gcs(df, df_name):
