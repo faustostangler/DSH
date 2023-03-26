@@ -367,9 +367,9 @@ def get_dre(value):
     quarter = run.read_quarter(line, driver, wait)
     df = pd.concat([df, quarter], ignore_index=True)
 
-    print(f'{l+1}, {(size-l-1-1)}, {((l+1) / size) * 100:.6f}%, {run.txt_cln(line[1])}, {line[5]}, {remaining_time_formatted}')
+    print(f'{l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {run.txt_cln(line[1])}, {line[5]}, {remaining_time_formatted}')
     
-    if (size-l) % (bin_size) == 0:
+    if (size-l+1) % (bin_size) == 0:
       dre = pd.concat([dre, df], ignore_index=True)
 
       dre = run.save_and_pickle(dre, file_name)
@@ -377,8 +377,10 @@ def get_dre(value):
       print('partial save')
 
   dre.drop_duplicates(inplace=True, keep='first')
-  dre.sort_values(by=['Companhia', 'Trimestre', 'Conta'], ascending=[True, False, True], inplace=True)
-  dre = run.save_and_pickle(df, file_name)
+  dre['Trimestre'] = pd.to_datetime(dre['Trimestre'], format='%d/%m/%Y')
+  dre.sort_values(by=['Companhia', 'Trimestre', 'Url', 'Conta'], ascending=[True, False, True, True], inplace=True)
+  dre['Trimestre'] = dre['Trimestre'].dt.strftime('%d/%m/%Y')
+  dre = run.save_and_pickle(dre, file_name)
   print('final save')
 
 

@@ -666,7 +666,7 @@ def get_new_dre_links(dre):
         nsd_recent_old = nsd_dre.copy()
         nsd_recent_new = nsd_dre.copy()
 
-    # nsd = pd.concat([dre_old, nsd_recent_new])
+    nsd = nsd_recent_new
 
     nsd['data'] = pd.to_datetime(nsd['data'], format='%d/%m/%Y')
     nsd = nsd.sort_values(by=['company', 'data'])
