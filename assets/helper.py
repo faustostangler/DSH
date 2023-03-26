@@ -339,13 +339,18 @@ def get_nsd_links(value):
     return value
 
 def get_dre(value):
-  # get new nsd links to download not yet downloaded in dre
-  nsd = run.get_new_dre_links()
-
   # download new dre from nsd list
   file_name = f'dre_raw'
   dre = run.read_or_create_dataframe(file_name, cols_dre)
   df = pd.DataFrame(columns=cols_dre)
+
+  # get new nsd links to download not yet downloaded in dre
+  nsd = run.get_new_dre_links(dre)
+  nsd['data'] = pd.to_datetime(nsd['data'], format='%d/%m/%Y')
+  nsd = nsd.sort_values(by=['company', 'data'])
+  nsd['data'] = nsd['data'].dt.strftime('%d/%m/%Y')
+
+  driver, wait = run.load_browser()
 
   size = len(nsd)
   start_time = time.time()
@@ -356,15 +361,16 @@ def get_dre(value):
     elapsed_time = f'{running_time / (l + 1):.6f}'
     # remaining time
     remaining_time = size * avg_time_per_item
-    minutes, seconds = divmod(int(float(remaining_time)), 60)
-    remaining_time_formatted = f'{int(minutes)}m {int(seconds)}s'
+    hours, remainder = divmod(int(float(remaining_time)), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    remaining_time_formatted = f'{int(hours)}h {int(minutes)}m {int(seconds)}s'
 
     # read table
     # read and concat quarters from nsd (and all dre in each quarter)
-    quarter = run.read_quarter(line)
+    quarter = run.read_quarter(line, driver, wait)
     df = pd.concat([df, quarter], ignore_index=True)
 
-    print(f'remaining {(size-l-1)} items and {remaining_time_formatted}, {remaining_time:.6f} seconds')
+    print(f'{l+1}, {(size-l-1-1)}, {((l+1) / size) * 100:.6f}%, {run.txt_cln(line[1])}, {line[5]}, {remaining_time_formatted}')
     
     if (size-l) % (bin_size) == 0:
       dre = pd.concat([dre, df], ignore_index=True)

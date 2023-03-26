@@ -194,7 +194,7 @@ def load_browser():
     options.add_argument('--disable-dev-shm-usage')  # Disable shared memory usage.
     options.add_argument('--disable-blink-features=AutomationControlled')  # Disable automated control.
     options.add_argument('start-maximized')  # Maximize the window on startup.
-    # options = Options()
+    options = Options()
 
     # Install and start the ChromeDriver service, passing in the options.
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
@@ -611,7 +611,7 @@ def clean_dre(dre):
 
   return dre
 
-def get_new_dre_links():
+def get_new_dre_links(dre):
       # load links
     file_name = 'nsd_links'
     nsd = read_or_create_dataframe(file_name, b3.cols_nsd)
@@ -640,8 +640,7 @@ def get_new_dre_links():
     # filter by type
     nsd = nsd_dre
 
-    file_name = 'dre_raw'
-    dre = read_or_create_dataframe(file_name, b3.cols_dre)
+    # dre processing
     dre = clean_dre(dre)
 
     try:
@@ -667,6 +666,160 @@ def get_new_dre_links():
     print(len(nsd), 'total,', len(dre_old), 'financial statements to update and', len(nsd_recent_new), 'new financial statements to download')
 
     return nsd_recent_new
+
+# concat single trimester multiple dres
+def read_quarter(line, driver, wait):
+  try:
+    # initialize quarter dataframe
+    quarter = pd.DataFrame(columns=b3.cols_dre)
+
+    # get url
+    url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={line[0]}&CodigoTipoInstituicao=1'
+    driver.get(url)
+
+    for quadro in b3.cmbQuadro:
+      # concat quadro to quarter
+      global table
+      table = read_cmbQuadro(quadro, line, driver, wait)
+      table['Companhia'] = line[1]
+      table['Trimestre'] = line[5]
+      table['Url'] = line[12]
+      table['Demonstrativo'] = quadro
+      try:
+        quarter = pd.concat([quarter, table], ignore_index=True)
+      except Exception as e:
+        # print(e)
+        pass
+
+    for grupo in b3.cmbGrupo:
+      table = read_cmbGrupo(grupo, line, driver, wait)
+      try:
+        quarter = pd.concat([quarter, table], ignore_index=True)
+      except Exception as e:
+        # print(e)
+        pass
+    
+    quarter['Companhia'] = quarter['Companhia'].apply(txt_cln)
+    quarter['Trimestre'] = pd.to_datetime(quarter['Trimestre'], format='%d/%m/%Y')
+
+    return quarter
+  except Exception as e:
+    # print(e)
+    pass
+
+# get each single dre from url
+def read_cmbQuadro(quadro, line, driver, wait):
+  try:
+      # select item
+      xpath = '//*[@id="cmbQuadro"]'
+      selectBox = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+      selectBox = Select(driver.find_element(By.XPATH, xpath))
+      selectBox.select_by_visible_text(quadro)
+
+      # selenium enter frame
+      xpath = '//*[@id="iFrameFormulariosFilho"]'
+      frame = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+      frame = driver.find_elements(By.XPATH, xpath)
+      driver.switch_to.frame(frame[0])
+
+      # get unidade de conta
+      milhao = 1000000
+      xpath = '//*[@id="TituloTabelaSemBorda"]'
+      if '(Reais Mil)' in wText(xpath, wait):
+          unidade = 1000 / milhao
+      else:
+          unidade = 1 / milhao
+
+      # read and clean quadro
+      table = pd.read_html(driver.page_source, header=0, thousands='.')[0]
+
+      # selenium exit frame
+      driver.switch_to.parent_frame()
+
+      # clean and format table
+      table = table.iloc[:, 0:3]
+      table = table.rename(columns={table.columns[2]: 'Valor'})
+      table['Valor'] = pd.to_numeric(table['Valor'], errors='coerce')
+      table.fillna(0, inplace=True)
+      table['Valor'] = table['Valor'].astype(float) * unidade
+
+      # time.sleep(random.uniform(0,1))
+
+  except Exception as e:
+      # print(e)
+      pass
+  return table
+
+
+# get cmbGrupo info - Dados da Empresa, Notas Explicativas e Comentários do Desempenho
+def read_cmbGrupo(grupo, line, driver, wait):
+    try:
+        # select item
+        xpath = '//*[@id="cmbGrupo"]'
+        selectBox = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+        selectBox = Select(driver.find_element(By.XPATH, xpath))
+        selectBox.select_by_visible_text(grupo)
+
+		# selenium enter frame
+        xpath = '//*[@id="iFrameFormulariosFilho"]'
+        frame = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+        frame = driver.find_elements(By.XPATH, xpath)
+        driver.switch_to.frame(frame[0])
+
+		# read and clean quadro
+        table = pd.read_html(driver.page_source, header=0, thousands='.')[0]
+
+		# selenium exit frame
+        driver.switch_to.parent_frame()
+
+        # clean and format table
+        for x in ['x']:
+            break
+        on = on_tes = on_outras = pn = pn_tes = pn_outras = 0
+        # Ordinárias
+        mask = table[table.columns[0]] == 'Ordinárias'
+        on = pd.to_numeric(table[mask].iloc[0,1].replace('.', '' ))
+        try:
+            on_tes = pd.to_numeric(table[mask].iloc[1,1].replace('.', '' ))
+        except Exception as e:
+            pass
+        try:
+            on_outras = pd.to_numeric(table[mask].iloc[2,1].replace('.', '' ))
+        except Exception as e:
+            pass
+        # preferenciais
+        mask = table[table.columns[0]] == 'Preferenciais'
+        pn = pd.to_numeric(table[mask].iloc[0,1].replace('.', '' ))
+        try:
+            pn_tes = pd.to_numeric(table[mask].iloc[1,1].replace('.', '' ))
+        except Exception as e:
+            pass
+        try:
+            pn_outras = pd.to_numeric(table[mask].iloc[2,1].replace('.', '' ))
+        except Exception as e:
+            pass
+
+        # get unidade de conta
+        milhao = 1
+        if '(Mil)' in table.columns[0]:
+                unidade = 1000/milhao
+        else:
+                unidade = 1/milhao
+        # prepare dataframe
+        demo = 'Composição do Capital'
+        table = []
+        table.append([line[1], line[5], demo, '0.01', 'Ações Ordinárias', on*unidade, line[12]])
+        table.append([line[1], line[5], demo, '0.01.01', 'Ações Ordinárias em Tesouraria', on_tes*unidade, line[12]])
+        table.append([line[1], line[5], demo, '0.01.02', 'Ações Ordinárias Outras', on_outras*unidade, line[12]])
+        table.append([line[1], line[5], demo, '0.02', 'Ações Preferenciais', pn*unidade, line[12]])
+        table.append([line[1], line[5], demo, '0.02.01', 'Ações Preferenciais em Tesouraria', pn_tes*unidade, line[12]])
+        table.append([line[1], line[5], demo, '0.02.02', 'Ações Preferenciais Outras', pn_outras*unidade, line[12]])
+        table = pd.DataFrame(table, columns=b3.cols_dre)
+
+    except Exception as e:
+        print(e, 'find me')
+        pass
+    return table
 
 # storage functions
 def upload_to_gcs(df, df_name):
