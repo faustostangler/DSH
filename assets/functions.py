@@ -1410,24 +1410,6 @@ def get_dtp_lines(df, demo, df_lines):
     return pd.concat(dtp, ignore_index=True)
 
 # intel pre fundamentalist
-def create_md_list(df):
-    
-    md = {}
-    for idx, row in df.iterrows():
-        p = clean_text(row['Conta'] + ' - ' + row['Descrição']).split('  ')
-        p = '_' + str(p[0]) + '_' + p[1].replace(' ','_').lower()
-        md[p] = row['Valor']
-
-    return md
-
-def create_line(df, group):
-
-    line = {}
-    for col in df.columns.to_list():
-        line[col] = df[col][df.index[0]]
-
-    return line
-
 def fundamentaline(df, line, title='', valor=''):
     fsdesc = 'Descrição'
     fscol = 'Conta'
@@ -1442,7 +1424,23 @@ def fundamentaline(df, line, title='', valor=''):
     line[fsval] = valor
 
     df = pd.concat([df, pd.DataFrame([line])], ignore_index=True).drop_duplicates()
+    return df
 
+def add_fundamental_line(df, line, title, valor=None):
+    fsdesc = 'Descrição'
+    fscol = 'Conta'
+    fsval = 'Valor'
+    sep = ' - '
+
+    conta = title.split(sep)[0]
+    desc = title.replace(conta + sep, '')
+
+    new_line = line.copy()
+    new_line[fsdesc] = desc
+    new_line[fscol] = conta
+    new_line[fsval] = valor
+
+    df = pd.concat([df, pd.DataFrame([line])], ignore_index=True).drop_duplicates()
     return df
 
 # intel
@@ -1960,13 +1958,18 @@ def inteligence_dre(df):
     return result
 
 def fundamentalist_dre(df, group):
+    new_lines = []
     try:
       # create md_list (magic dre items list)
-      md = create_md_list(df)
+      md = {}
+      for _, row in df.iterrows():
+          key = clean_text(row['Conta'] + ' - ' + row['Descrição']).split('  ')
+          key = '_' + str(key[0]) + '_' + key[1].replace(' ','_').lower()
+          md[key] = row['Valor']
       md_list = [*md.keys()]
 
       # create line
-      line = create_line(df, group)
+      line = {col:df[col][df.index[0]] for col in df.columns.to_list()}
       line['Valor'] = None
 
       # Relações Entre Ativos e Passivos
@@ -2111,7 +2114,6 @@ def fundamentalist_dre(df, group):
        pass
 
     return df
-
 
 # storage functions
 def upload_to_gcs(df, df_name):
