@@ -158,7 +158,7 @@ def wRaw(xpath, wait):
     # print('wText', e)
     return ''
 
-def txt_cln(text):
+def clean_text(text):
     """
     Cleans text by removing any leading/trailing white space, converting it to lowercase, removing
     accents, punctuation, and converting to uppercase.
@@ -244,21 +244,21 @@ def get_company(i, driver, wait):
     xpath = f'//*[@id="nav-bloco"]/div/div[{i}]/div/div/p[3]'
     listagem = wText(xpath, wait)
     for word, replacement in list_dict.items():
-      listagem = txt_cln(listagem.replace(word, replacement))
+      listagem = clean_text(listagem.replace(word, replacement))
   except Exception as e:
     listagem = ''
 
   # pregao
   try:
     xpath = f'//*[@id="nav-bloco"]/div/div[{i}]/div/div/p[2]'
-    pregao = txt_cln(wText(xpath, wait))
+    pregao = clean_text(wText(xpath, wait))
   except Exception as e:
     pregao = ''
   
   # company name
   try:
     xpath = f'//*[@id="nav-bloco"]/div/div[{i}]/div/div/p[1]'
-    company_name = txt_cln(wText(xpath, wait))
+    company_name = clean_text(wText(xpath, wait))
   except Exception as e:
     company_name = ''
 
@@ -329,7 +329,7 @@ def get_company(i, driver, wait):
   # escriturador
   try:
     escriturador = [div2 for div2 in div2 if 'Instituição' in div2][0].split(':')[1].split()
-    escriturador = txt_cln(' '.join(pd.Series(escriturador).drop_duplicates().tolist()))
+    escriturador = clean_text(' '.join(pd.Series(escriturador).drop_duplicates().tolist()))
   except Exception as e:
     escriturador = ''
 
@@ -357,10 +357,10 @@ def get_ticker_keywords(raw_code):
     for card in cards:
       try:
         # Extract the ticker and company name from the card element
-        ticker = txt_cln(card.find('h5', class_='card-title2').text)
-        company_name = txt_cln(card.find('p', class_='card-title').text)
-        pregao = txt_cln(card.find('p', class_='card-text').text)
-        listagem = txt_cln(card.find('p', class_='card-nome').text)
+        ticker = clean_text(card.find('h5', class_='card-title2').text)
+        company_name = clean_text(card.find('p', class_='card-title').text)
+        pregao = clean_text(card.find('p', class_='card-text').text)
+        listagem = clean_text(card.find('p', class_='card-nome').text)
 
         
         # Append the ticker and company name to the keyword list
@@ -899,6 +899,27 @@ def process_dataframe(df):
         pass
     return df_updated
 
+def process_dataframe_trimestre(df):
+    try:
+      df['Trimestre'] = pd.to_datetime(df['Trimestre'], format='%d/%m/%Y')
+      # df = df.assign(updated = lambda x: x['Companhia'].astype('string') + ' ' + x['Trimestre'].dt.year.astype(str))
+
+      num_chunks = int(np.ceil(len(df) / b3.chunksize))
+      df_updated = pd.DataFrame()
+      
+      if num_chunks == 0:
+        df['demosheet'] = ''
+        df_updated = df      
+      else:
+        for i in range(num_chunks):
+          df_chunk = df.iloc[i * b3.chunksize: (i + 1) * b3.chunksize]
+          df_chunk = df_chunk.assign(demosheet = lambda x: x['Companhia'].astype('string') + ' ' + x['Trimestre'].dt.strftime('%d/%m/%Y'))
+          df_updated = pd.concat([df_updated, df_chunk], ignore_index=True)
+
+    except Exception as e:
+        pass
+    return df_updated
+
 def dre_prepare(dre_raw, dre_math):
   years = get_dre_years(dre_raw, dre_math)
 
@@ -1027,11 +1048,1071 @@ def math_magic(key, df, size, cias, l):
               df.loc[i12, 'Valor'] = [v12]
 
   return df, cias, status, key
-  
+
+# intel pre inteligence
+def division(div1, div2):
+    try:
+        result = div1/div2
+    except Exception as e:
+        result = 0
+    return result
+
+def list_merge(li1, li2):
+    # merge li1 + li2 and remove duplicates ['a', 'b'] + ['b', 'c'] = ['a', 'b', 'c']
+    li3 = []
+    [li3.append(i) for i in li1 + li2 if i not in li3]
+    return li3
+
+def list_subtract(li1, li2):
+    # remove li2 from li1  ['a', 'b'] - ['b', 'c'] = ['a']
+    li3 = [i for i in li1 if i not in li2]
+    return li3
+
+def list_inclusives(li1, li2):
+    # only common_terms ['a', 'b'] and ['b', 'c'] = ['b']
+    li3 = [value for value in li1 if value in li2]
+    return li3
+
+def list_exclusives(li1, li2):
+    # only unique items from both lists ['a', 'b'] - ['b', 'c'] = ['a', 'c']
+    li3 = [i for i in li1 + li2 if i not in li1 or i not in li2]
+    return li3
+
+def item_to_list(item):
+    if type(item) is str:
+        item = [item]
+    if type(item) is tuple:
+        item = list(item)
+    if type(item) is list:
+        item = [clean_text(word) for word in item]
+        item = '|'.join(item)
+
+    return item
+
+def filter_df_old(df='', line='', exact='', exact_exclusion='', startswith='', startswith_not='', endswith='', endswith_not='', contains='', contains_not='', levelmin='', levelmax=''):
+    mask = ''
+
+    try:
+        if line != '':
+            empty_mask = ~((df.index == False) & (df.index == True))
+            exact_mask = exact_exclusion_mask = startswith_mask = startswith_not_mask = endswith_mask = endswith_not_mask = contains_mask = contains_not_mask = levelmin_mask = levelmax_mask = empty_mask
+
+            # exact
+            if exact != '':
+                item = exact
+                exact_mask = (df[line] == item).replace({np.nan: False})
+
+            # exact exclusion
+            if exact_exclusion != '':
+                item = exact_exclusion
+                exact_exclusion_mask = ~(df[line] == item).replace({np.nan: False})
+
+            # startswith
+            if startswith != '':
+                item = item_to_list(startswith)
+                item = item.split('|')[0]
+                startswith_mask = (df[line].apply(lambda word: clean_text(word)).str[:len(item)] == item).replace({np.nan: False})
+
+            # startswith_not
+            if startswith_not != '':
+                item = item_to_list(startswith_not)
+                item = item.split('|')[0]
+                startswith_not_mask = ~(df[line].apply(lambda word: clean_text(word)).str[:len(item)] == item).replace({np.nan: False})
+
+            # endswith
+            if endswith != '':
+                item = item_to_list(endswith)
+                item = item.split('|')[0]
+                endswith_mask = (df[line].apply(lambda word: clean_text(word)).str[-len(item):] == item).replace({np.nan: False})
+
+            # endswith_not
+            if endswith_not != '':
+                item = item_to_list(endswith_not)
+                item = item.split('|')[0]
+                endswith_not_mask = ~(df[line].apply(lambda word: clean_text(word)).str[-len(item):] == item).replace({np.nan: False})
+
+            # contains
+            if contains != '':
+                item = item_to_list(contains)
+                contains_mask = df[line].apply(lambda word: clean_text(word)).str.contains(item, case=False).replace({np.nan: False})
+
+            # contains_not
+            if contains_not != '':
+                item = item_to_list(contains_not)
+                contains_not_mask = ~df[line].apply(lambda word: clean_text(word)).str.contains(item, case=False).replace({np.nan: False})
+
+            # levelmin
+            if levelmin != '':
+                item = int(levelmin)
+                levelmin_mask = df[line].str.len() >= 1+(item-1)*3
+
+            # levelmax
+            if levelmax != '':
+                item = int(levelmax)
+                levelmax_mask = df[line].str.len() <= 1+(item-1)*3
 
 
+            mask = exact_mask & exact_exclusion_mask & startswith_mask & startswith_not_mask & endswith_mask & endswith_not_mask & contains_mask & contains_not_mask & levelmin_mask & levelmax_mask
+    except Exception as e:
+        print('error zise 0')    
 
-  
+    return mask
+
+def filter_df(df='', line='', exact='', exact_exclusion='', startswith='', startswith_not='', endswith='', endswith_not='', contains='', contains_not='', levelmin='', levelmax=''):
+    mask = pd.Series(True, index=df.index)
+
+    try:
+        if line != '':
+            # exact
+            if exact != '':
+                mask &= (df[line] == exact)
+
+            # exact exclusion
+            if exact_exclusion != '':
+                mask &= ~(df[line] == exact_exclusion)
+
+            cleaned = df[line].str.strip()
+
+            # startswith
+            if startswith != '':
+                mask &= cleaned.str.startswith(startswith)
+
+            # startswith_not
+            if startswith_not != '':
+                mask &= ~cleaned.str.startswith(startswith_not)
+
+            # endswith
+            if endswith != '':
+                mask &= cleaned.str.endswith(endswith)
+
+            # endswith_not
+            if endswith_not != '':
+                mask &= ~cleaned.str.endswith(endswith_not)
+
+            # contains
+            if contains != '':
+                mask &= cleaned.str.contains(contains, case=False)
+
+            # contains_not
+            if contains_not != '':
+                mask &= ~cleaned.str.contains(contains_not, case=False)
+
+            # levelmin
+            if levelmin != '':
+                mask &= (cleaned.str.len() >= 1+(int(levelmin)-1)*3)
+
+            # levelmax
+            if levelmax != '':
+                mask &= (cleaned.str.len() <= 1+(int(levelmax)-1)*3)
+
+    except Exception as e:
+        print(f'error zise 0: {e}')    
+
+    return mask
+
+def filter_conditions(df, line, conditions):
+    mask = pd.Series([True] * len(df))
+    
+    for condition, value in conditions.items():
+        operation = condition.split('_', 1)[1]
+        if operation in ["startswith", "startswith_not", "endswith", "endswith_not", "contains", "contains_not"]:
+            value = item_to_list(value)
+
+        if operation == "exact":
+            mask &= (df[line] == value).replace({np.nan: False})
+        elif operation == "exact_exclusion":
+            mask &= (df[line] != value).replace({np.nan: False})
+        elif operation == "startswith":
+            mask &= (df[line].apply(lambda word: clean_text(word)).str[:len(value)] == value).replace({np.nan: False})
+        elif operation == "startswith_not":
+            mask &= (df[line].apply(lambda word: clean_text(word)).str[:len(value)] != value).replace({np.nan: False})
+        elif operation == "endswith":
+            mask &= (df[line].apply(lambda word: clean_text(word)).str[-len(value):] == value).replace({np.nan: False})
+        elif operation == "endswith_not":
+            mask &= (df[line].apply(lambda word: clean_text(word)).str[-len(value):] != value).replace({np.nan: False})
+        elif operation == "contains":
+            mask &= df[line].str.contains(value, case=False).replace({np.nan: False})
+        elif operation == "contains_not":
+            mask &= ~df[line].str.contains(value, case=False).replace({np.nan: False})
+        elif operation == "levelmin":
+            mask &= (df[line].str.len() >= 1 + (int(value) - 1) * 3).replace({np.nan: False})
+        elif operation == "levelmax":
+            mask &= (df[line].str.len() <= 1 + (int(value) - 1) * 3).replace({np.nan: False})
+
+    return mask
+
+def get_dtp_line_old(df='', demo='', name='', 
+    conta_exact='', conta_exact_exclusion='', conta_startswith='', conta_startswith_not='', conta_endswith='', conta_endswith_not='', conta_contains='', conta_contains_not='', conta_levelmin='', conta_levelmax='', 
+    descricao_exact='', descricao_exact_exclusion='', descricao_startswith='', descricao_startswith_not='', descricao_endswith='', descricao_endswith_not='', descricao_contains='', descricao_contains_not=''
+    ):
+    '''
+    Return filtered DRE using 'Conta' and 'Descrição' and combinations parameters. Inform dataframe and name for exclusive line
+    
+    Options are 'exact', 'startswith', 'endswith', contains', positive or negative with '_not'. Exclusive for Conta: 'levelmin' and 'levelmax' of hierarquical levels
+
+    Optional Parameters for Conta
+    ----------
+    conta_exact : str
+        Get all exact string in 'Conta'
+
+    conta_exact_exclusion : str
+        Get all but exact string in 'Conta'
+
+    conta_startswith : str
+        Get all starting with string in 'Conta'
+
+    conta_startswith_not : str
+        Get all but starting with string in 'Conta'
+
+    conta_endswith : str
+        Get all ending with string in 'Conta'
+
+    conta_endswith_not : str
+        Get all but ending with string in 'Conta'
+
+    conta_contains : str
+        Get all containing strings in 'Conta'
+
+    conta_contains_not : str
+        Get all but containing strings in 'Conta'
+
+    Optional Parameters for Descrição
+    ----------
+    descricao_exact : str
+        Get all exact string in 'Descrição'
+
+    descricao_exact_exclusion : str
+        Get all but exact string in 'Descrição'
+
+    descricao_startswith : str
+        Get all starting with string in 'Descrição'
+
+    descricao_startswith_not : str
+        Get all but starting with string in 'Descrição'
+
+    descricao_endswith : str
+        Get all ending with string in 'Descrição'
+
+    descricao_endswith_not : str
+        Get all but ending with string in 'Descrição'
+
+    descricao_contains : str
+        Get all containing strings in 'Descrição'
+
+    descricao_contains_not : str
+        Get all but containing strings in 'Descrição'
+
+    Returns
+    -------
+    df
+        Returns filtered dataframe
+
+'''
+    try:
+
+        empty_mask = ~((df.index == False) & (df.index == True))
+        mask_conta = mask_descricao = empty_mask
+
+        if conta_exact or conta_exact_exclusion or conta_startswith or conta_startswith_not or conta_endswith or conta_endswith_not or conta_contains or conta_contains_not or conta_levelmin or conta_levelmax:
+            mask_conta = filter_df(line='Conta', df=df, exact=conta_exact, exact_exclusion=conta_exact_exclusion, startswith=conta_startswith, startswith_not=conta_startswith_not, endswith=conta_endswith, endswith_not=conta_endswith_not, contains=conta_contains, contains_not=conta_contains_not, levelmin=conta_levelmin, levelmax=conta_levelmax)
+
+        if descricao_exact or descricao_exact_exclusion or descricao_startswith or descricao_startswith_not or descricao_endswith or descricao_endswith_not or descricao_contains or descricao_contains_not:
+            mask_descricao = filter_df(line='Descrição', df=df, exact=descricao_exact, exact_exclusion=descricao_exact_exclusion, startswith=descricao_startswith, startswith_not=descricao_startswith_not, endswith=descricao_endswith, endswith_not=descricao_endswith_not, contains=descricao_contains, contains_not=descricao_contains_not)
+
+        if len(df[mask_conta & mask_descricao]) > 0:
+            dict_empty = {}
+            dict_empty['Companhia'] = df.loc[df.index[0], 'Companhia']
+            dict_empty['Trimestre'] = df.loc[df.index[0], 'Trimestre']
+            dict_empty['Demonstrativo'] = demo
+            dict_empty['Conta'] = name.split(' - ')[0]
+            dict_empty['Descrição'] = name.split(' - ')[1]
+            dict_empty['Valor'] = df[mask_conta & mask_descricao]['Valor'].max()
+            dict_empty['Url'] = df.loc[df.index[0], 'Url']
+            dict_empty['nsd'] = df.loc[df.index[0], 'nsd']
+            result = pd.DataFrame([dict_empty])
+            # result = df[mask_conta & mask_descricao]
+        else:
+            dict_empty = {}
+            dict_empty['Companhia'] = df.loc[df.index[0], 'Companhia']
+            dict_empty['Trimestre'] = df.loc[df.index[0], 'Trimestre']
+            dict_empty['Demonstrativo'] = demo
+            dict_empty['Conta'] = name.split(' - ')[0]
+            dict_empty['Descrição'] = name.split(' - ')[1]
+            dict_empty['Valor'] = 0.0
+            dict_empty['Url'] = df.loc[df.index[0], 'Url']
+            dict_empty['nsd'] = df.loc[df.index[0], 'nsd']
+            result = pd.DataFrame([dict_empty])
+    except Exception as e:
+        print('xc', e)    
+
+    return result
+
+def get_dtp_line_gtp1(df='', demo='', name='', 
+    conta_exact='', conta_exact_exclusion='', conta_startswith='', conta_startswith_not='', conta_endswith='', conta_endswith_not='', conta_contains='', conta_contains_not='', conta_levelmin='', conta_levelmax='', 
+    descricao_exact='', descricao_exact_exclusion='', descricao_startswith='', descricao_startswith_not='', descricao_endswith='', descricao_endswith_not='', descricao_contains='', descricao_contains_not=''
+    ):
+
+    mask_conta = filter_df(line='Conta', df=df, exact=conta_exact, exact_exclusion=conta_exact_exclusion, startswith=conta_startswith, startswith_not=conta_startswith_not, endswith=conta_endswith, endswith_not=conta_endswith_not, contains=conta_contains, contains_not=conta_contains_not, levelmin=conta_levelmin, levelmax=conta_levelmax)
+    mask_descricao = filter_df(line='Descrição', df=df, exact=descricao_exact, exact_exclusion=descricao_exact_exclusion, startswith=descricao_startswith, startswith_not=descricao_startswith_not, endswith=descricao_endswith, endswith_not=descricao_endswith_not, contains=descricao_contains, contains_not=descricao_contains_not)
+
+    dict_empty = {}
+    dict_empty['Companhia'] = df.loc[df.index[0], 'Companhia']
+    dict_empty['Trimestre'] = df.loc[df.index[0], 'Trimestre']
+    dict_empty['Demonstrativo'] = demo
+    dict_empty['Conta'] = name.split(' - ')[0]
+    dict_empty['Descrição'] = name.split(' - ')[1]
+    dict_empty['Valor'] = 0.0  # Initialize the value with 0.0
+    dict_empty['Url'] = df.loc[df.index[0], 'Url']
+    dict_empty['nsd'] = df.loc[df.index[0], 'nsd']
+
+    filtered_df = df[mask_conta & mask_descricao]
+
+    if len(filtered_df) > 0:
+        dict_empty['Valor'] = filtered_df['Valor'].max()
+
+    result = pd.DataFrame([dict_empty])
+
+    return result
+
+def get_dtp_line(df, demo, name, **conditions):
+    conditions_conta = {k: v for k, v in conditions.items() if k.startswith('conta_')}
+    conditions_descricao = {k: v for k, v in conditions.items() if k.startswith('descricao_')}
+
+    mask_conta = filter_conditions(df, 'Conta', conditions_conta)
+    mask_descricao = filter_conditions(df, 'Descrição', conditions_descricao)
+    mask = mask_conta & mask_descricao
+
+    # Populate result dataframe based on the mask
+    line = {
+        'Companhia': df.loc[df.index[0], 'Companhia'],
+        'Trimestre': df.loc[df.index[0], 'Trimestre'],
+        'Demonstrativo': demo,
+        'Conta': name.split(' - ')[0],
+        'Descrição': name.split(' - ')[1],
+        'Valor': df[mask]['Valor'].max() if len(df[mask]) > 0 else 0.0,
+        'Url': df.loc[df.index[0], 'Url'],
+        'nsd': df.loc[df.index[0], 'nsd']
+    }
+    
+    return pd.DataFrame([line])
+
+def get_dtp_lines(df, demo, df_lines):
+    dtp = [] # demonstrativos trimestrais padronizados
+
+    for name, conditions in df_lines:
+        kwargs = {}
+        for condition, value in conditions:
+            kwargs[condition] = value
+
+        line = get_dtp_line(df=df, demo=demo, name=name, **kwargs)
+        dtp.append(line)
+
+    return pd.concat(dtp, ignore_index=True)
+
+# intel pre fundamentalist
+def create_md_list(df):
+    
+    md = {}
+    for idx, row in df.iterrows():
+        p = clean_text(row['Conta'] + ' - ' + row['Descrição']).split('  ')
+        p = '_' + str(p[0]) + '_' + p[1].replace(' ','_').lower()
+        md[p] = row['Valor']
+
+    return md
+
+def create_line(df, group):
+
+    line = {}
+    for col in df.columns.to_list():
+        line[col] = df[col][df.index[0]]
+
+    return line
+
+def fundamentaline(df, line, title='', valor=''):
+    fsdesc = 'Descrição'
+    fscol = 'Conta'
+    fsval = 'Valor'
+    
+    sep = ' - '
+    conta = title.split(sep)[0]
+    desc = title.replace(conta + sep, '')
+
+    line[fsdesc] = desc
+    line[fscol] = conta
+    line[fsval] = valor
+
+    df = pd.concat([df, pd.DataFrame([line])], ignore_index=True).drop_duplicates()
+
+    return df
+
+# intel
+def inteligence_dre_old(df):
+    try:
+        demo0 = demo = 'Composição do Capital'
+        df_a = get_dtp_line(df=df, demo=demo, name='00.01 - Ações Ordinárias', conta_exact='0.01')
+        df_b = get_dtp_line(df=df, demo=demo, name='00.02 - Ações Preferenciais', conta_exact='0.02')
+        df_c = get_dtp_line(df=df, demo=demo, name='00.01.01 - Ações Ordinárias em Tesouraria', conta_exact='0.01.01')
+        df_d = get_dtp_line(df=df, demo=demo, name='00.01.02 - Ações Ordinárias Outras', conta_exact='0.01.02')
+        df_e = get_dtp_line(df=df, demo=demo, name='00.02.01 - Ações Prerenciais em Tesouraria', conta_exact='0.02.01')
+        df_f = get_dtp_line(df=df, demo=demo, name='00.02.02 - Ações Prerenciais Outras', conta_exact='0.02.02')
+        d0 = pd.concat([df_a, df_b, df_c, df_d, df_e, df_f], ignore_index=True)
+
+        demo1 = demo = 'Balanço Patrimonial Ativo'
+        df_a = get_dtp_line(df=df, demo=demo, name='01 - Ativo Total', conta_exact='1')
+        df_b = get_dtp_line(df=df, demo=demo, name='01.01 - Ativo Circulante de Curto Prazo', conta_exact='1.01')
+        df_c = get_dtp_line(df=df, demo=demo, name='01.01.01 - Caixa e Disponibilidades de Caixa', conta_exact='1.01.01')
+        df_d = get_dtp_line(df=df, demo=demo, name='01.01.02 - Aplicações Financeiras', conta_startswith='1.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['aplica', 'depósito', 'reserv', 'saldo', 'centra', 'interfinanceir', 'crédit'], conta_contains_not=['1.01.01', '1.01.02', '1.01.06'])
+        df_e = get_dtp_line(df=df, demo=demo, name='01.01.03 - Contas a Receber', conta_startswith='1.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['conta'])
+        df_f = get_dtp_line(df=df, demo=demo, name='01.01.04 - Estoques', conta_startswith='1.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['estoque'])
+        df_g = get_dtp_line(df=df, demo=demo, name='01.01.05 - Ativos Biológicos', conta_startswith='1.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['biológic'])
+        df_h = get_dtp_line(df=df, demo=demo, name='01.01.06 - Tributos', conta_startswith='1.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['tribut'])
+        df_i = get_dtp_line(df=df, demo=demo, name='01.01.07 - Despesas', conta_startswith='1.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['despes'])
+        df_j = get_dtp_line(df=df, demo=demo, name='01.01.09 - Outros Ativos Circulantes', conta_startswith='1.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains='outr', descricao_contains_not=['aplica', 'depósito', 'reserv', 'saldo', 'centra', 'interfinanceir', 'crédit', 'conta', 'estoque', 'biológic', 'tribut', 'despes'], conta_contains_not=['1.01.01', '1.01.02', '1.01.03', '1.01.04', '1.01.05', '1.01.06', '1.01.07'])
+        df_k = get_dtp_line(df=df, demo=demo, name='01.02 - Ativo Não Circulante de Longo Prazo', conta_exact='1.02')
+        df_l = get_dtp_line(df=df, demo=demo, name='01.02.01 - Ativos Financeiros', conta_startswith='1.02.', descricao_contains_not=['investiment', 'imobilizad', 'intangív'])
+        df_m = get_dtp_line(df=df, demo=demo, name='01.02.01.01 - Ativos Financeiros a Valor Justo', conta_startswith='1.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains='valor justo', descricao_contains_not='custo amortizado')
+        df_n = get_dtp_line(df=df, demo=demo, name='01.02.01.02 - Ativos Financeiros ao Custo Amortizado', conta_startswith='1.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains='custo amortizado', descricao_contains_not='valor justo')
+        df_o = get_dtp_line(df=df, demo=demo, name='01.02.01.03 - Contas a Receber', conta_startswith='1.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains='conta')
+        df_p = get_dtp_line(df=df, demo=demo, name='01.02.01.04 - Estoques', conta_startswith='1.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains='estoque')
+        df_q = get_dtp_line(df=df, demo=demo, name='01.02.01.05 - Ativos Biológicos', conta_startswith='1.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains='biológic')
+        df_r = get_dtp_line(df=df, demo=demo, name='01.02.01.06 - Tributos', conta_startswith='1.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains='tribut')
+        df_s = get_dtp_line(df=df, demo=demo, name='01.02.01.07 - Despesas', conta_startswith='1.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains='despes')
+        df_t = get_dtp_line(df=df, demo=demo, name='01.02.01.09 - Outros Ativos Não Circulantes', conta_startswith='1.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains_not=['valor justo', 'custo amortizado', 'conta', 'estoque', 'biológic', 'tribut', 'despes'])
+        df_u = get_dtp_line(df=df, demo=demo, name='01.02.02 - Investimentos Não Capex', conta_startswith='1.02.', descricao_contains=['investiment'])
+        df_v = get_dtp_line(df=df, demo=demo, name='01.02.02.01 - Propriedades - Investimentos Não Capex', conta_startswith='1.02.', conta_levelmin=3 ,descricao_contains=['propriedad'])
+        df_w = get_dtp_line(df=df, demo=demo, name='01.02.02.02 - Arrendamentos - Investimentos Não Capex', conta_startswith='1.02.', conta_levelmin=3 ,descricao_contains=['arrendam'], descricao_contains_not=['sotware', 'imobilizad', 'intangív', 'direit'])
+        df_x = get_dtp_line(df=df, demo=demo, name='01.02.03 - Imobilizados', conta_startswith='1.02.', descricao_contains=['imobilizad'])
+        df_y = get_dtp_line(df=df, demo=demo, name='01.02.03.01 - Imobilizados em Operação', conta_startswith='1.02.03.', descricao_contains=['operaç'])
+        df_z = get_dtp_line(df=df, demo=demo, name='01.02.03.02 - Imobilizados em Arrendamento', conta_startswith='1.02.03.', descricao_contains=['arrend'])
+        df_aa = get_dtp_line(df=df, demo=demo, name='01.02.03.03 - Imobilizados em Andamento', conta_startswith='1.02.03.', descricao_contains=['andament'])
+        df_ab = get_dtp_line(df=df, demo=demo, name='01.02.04 - Intangível', conta_startswith='1.02.', descricao_contains=['intangív'])
+        df_ac = get_dtp_line(df=df, demo=demo, name='01.03 - Empréstimos', conta_startswith='1.', conta_levelmax=2, descricao_contains='empréstimo')
+        df_ad = get_dtp_line(df=df, demo=demo, name='01.04 - Tributos Diferidos', conta_startswith='1.', conta_levelmax=2, descricao_contains='tributo')
+        df_ae = get_dtp_line(df=df, demo=demo, name='01.05 - Investimentos', conta_startswith='1.', conta_levelmax=2, descricao_contains='investimento')
+        df_af = get_dtp_line(df=df, demo=demo, name='01.05.01 - Participações em Coligadas', conta_startswith='1.', conta_levelmin=3, conta_levelmax=3, descricao_contains='coligad')
+        df_ag = get_dtp_line(df=df, demo=demo, name='01.05.02 - Participações em Controladas', conta_startswith='1.', conta_levelmin=3, conta_levelmax=3, descricao_contains='controlad')
+        df_ah = get_dtp_line(df=df, demo=demo, name='01.06 - Imobilizados', conta_startswith='1.', conta_levelmax=2, descricao_contains='imobilizado')
+        df_ai = get_dtp_line(df=df, demo=demo, name='01.06.01 - Propriedades - Investimentos Não Capex', conta_startswith='1.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['1.02.'], descricao_contains=['propriedad', 'imóve'])
+        df_aj = get_dtp_line(df=df, demo=demo, name='01.06.02 - Arrendamento - Investimentos Não Capex', conta_startswith='1.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['1.02.'], descricao_contains='arrendam')
+        df_ak = get_dtp_line(df=df, demo=demo, name='01.06.03 - Tangíveis - Investimentos Não Capex', conta_startswith='1.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['1.02.'], descricao_contains=['arrendam', 'equipamento'])
+        df_al = get_dtp_line(df=df, demo=demo, name='01.07 - Intangíveis', conta_startswith='1.', conta_levelmax=2, descricao_contains='intangíve')
+        df_am = get_dtp_line(df=df, demo=demo, name='01.07.01 - Intangíveis', conta_startswith='1.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['1.02.'], descricao_contains='intangíve')
+        df_an = get_dtp_line(df=df, demo=demo, name='01.07.02 - Goodwill', conta_startswith='1.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['1.02.'], descricao_contains='goodwill')
+        df_ao = get_dtp_line(df=df, demo=demo, name='01.08 - Permanente', conta_startswith='1.0', conta_levelmax=2, descricao_contains='permanente')
+        df_ap = get_dtp_line(df=df, demo=demo, name='01.09 - Outros Ativos', conta_startswith='1.0', conta_levelmax=2, conta_contains_not=['1.01', '1.02'], descricao_contains_not=['empréstimo', 'tributo', 'investimento', 'imobilizado', 'intangíve', 'permanente'])
+        df_aq = get_dtp_line(df=df, demo=demo, name='01.09.01 - Depreciação e Amortização Acumuladas', conta_startswith='1.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['depreciaç', 'amortizaç'])
+        df_ar = get_dtp_line(df=df, demo=demo, name='01.09.09 - Outros Ativos', conta_startswith='1.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['1.01.', '1.02'], descricao_contains_not=['depreciaç', 'amortizaç', 'empréstimo', 'tributo', 'investimento', 'imobilizado', 'intangíve', 'permanente', 'goodwill', 'arrendam', 'equipamento', 'propriedad', 'imóve', 'coligad', 'controlad'])
+        d1 = pd.concat([df_a, df_b, df_c, df_d, df_e, df_f, df_g, df_h, df_i, df_j, df_k, df_l, df_m, df_n, df_o, df_p, df_q, df_r, df_s, df_t, df_u, df_v, df_w, df_x, df_y, df_z, df_aa, df_ab, df_ac, df_ad, df_ae, df_af, df_ag, df_ah, df_ai, df_aj, df_ak, df_al, df_am, df_an, df_ao, df_ap, df_aq, df_ar], ignore_index=True)
+        
+        demo2 = demo = 'Balanço Patrimonial Passivo'
+        df_a = get_dtp_line(df=df, demo=demo, name='02 - Passivo Total', conta_exact='2')
+        df_b = get_dtp_line(df=df, demo=demo, name='02.01 - Passivo Circulante de Curto Prazo', conta_startswith='2.', conta_levelmin=2, conta_levelmax=2, descricao_contains=['circulante', 'o resultado', 'amortizado', 'negociaç'], descricao_contains_not=['não', 'patrimônio', 'fisca'])
+        df_c = get_dtp_line(df=df, demo=demo, name='02.01.01 - Obrigações Sociais e Trabalhistas', conta_startswith='2.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['obrigações sociais'])
+        df_d = get_dtp_line(df=df, demo=demo, name='02.01.01.01 - Obrigações Sociais', conta_startswith='2.01.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['socia'])
+        df_e = get_dtp_line(df=df, demo=demo, name='02.01.01.02 - Obrigações Trabalhistas', conta_startswith='2.01.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['trabalhista'])
+        df_f = get_dtp_line(df=df, demo=demo, name='02.01.01.09 - Outras Obrigações', conta_startswith='2.01.01', conta_levelmin=4, conta_levelmax=4, descricao_contains_not=['socia', 'trabalhista'])
+        df_g = get_dtp_line(df=df, demo=demo, name='02.01.02 - Fornecedores', conta_startswith='2.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['fornecedor'])
+        df_h = get_dtp_line(df=df, demo=demo, name='02.01.02.01 - Fornecedores Nacionais', conta_startswith=['2.01.01.''2.01.02'], conta_levelmin=4, conta_levelmax=4, descricao_contains=['fornecedores nacionais'])
+        df_i = get_dtp_line(df=df, demo=demo, name='02.01.02.02 - Fornecedores Estrangeiros', conta_startswith=['2.01.01.''2.01.02'], conta_levelmin=4, conta_levelmax=4, descricao_contains=['fornecedores estrangeiros'])
+        df_j = get_dtp_line(df=df, demo=demo, name='02.01.03 - Obrigações Fiscais', conta_startswith='2.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['obrigaç', 'fisca'], descricao_contains_not='socia')
+        df_k = get_dtp_line(df=df, demo=demo, name='02.01.03.01 - Obrigações Fiscais Federais', conta_startswith='2.01.03', conta_levelmin=4, conta_levelmax=4, descricao_contains=['federa'])
+        df_l = get_dtp_line(df=df, demo=demo, name='02.01.03.02 - Obrigações Fiscais Estaduais', conta_startswith='2.01.03', conta_levelmin=4, conta_levelmax=4, descricao_contains=['estadua'])
+        df_m = get_dtp_line(df=df, demo=demo, name='02.01.03.03 - Obrigações Fiscais Municipais', conta_startswith='2.01.03', conta_levelmin=4, conta_levelmax=4, descricao_contains=['municipa'])
+        df_n = get_dtp_line(df=df, demo=demo, name='02.01.03.09 - Outras Obrigações Fiscais', conta_startswith='2.01.03', conta_levelmin=4, conta_levelmax=4, descricao_contains_not=['federa', 'estadua', 'municipa'])
+        df_o = get_dtp_line(df=df, demo=demo, name='02.01.04 - Empréstimos, Financiamentos e Debêntures', conta_startswith='2.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['empréstimo', 'financiamento'])
+        df_p = get_dtp_line(df=df, demo=demo, name='02.01.04.01 - Empréstimos e Financiamentos', conta_startswith='2.01.04', conta_levelmin=4, conta_levelmax=4, descricao_contains=['empréstimo', 'financiamento'])
+        df_q = get_dtp_line(df=df, demo=demo, name='02.01.04.01 - Empréstimos e Financiamentos', conta_startswith='2.01.04', conta_levelmin=4, conta_levelmax=4, descricao_contains=['empréstimo', 'financiamento'])
+        df_r = get_dtp_line(df=df, demo=demo, name='02.01.04.01.01 - Empréstimos e Financiamentos em Moeda Nacional', conta_startswith='2.01.04.01', conta_levelmin=5, conta_levelmax=5, descricao_contains=['naciona'])
+        df_s = get_dtp_line(df=df, demo=demo, name='02.01.04.01.02 - Empréstimos e Financiamentos em Moeda Estrangeira', conta_startswith='2.01.04.01', conta_levelmin=5, conta_levelmax=5, descricao_contains=['estrangeir'])
+        df_t = get_dtp_line(df=df, demo=demo, name='02.01.04.02 - Debêntures', conta_startswith='2.01.04', conta_levelmin=4, conta_levelmax=4, descricao_contains=['debentur'])
+        df_u = get_dtp_line(df=df, demo=demo, name='02.01.04.03 - Arrendamentos', conta_startswith='2.01.04', conta_levelmin=4, conta_levelmax=4, descricao_contains=['arrendament'])
+        df_v = get_dtp_line(df=df, demo=demo, name='02.01.04.09 - Outros empréstimos, financiamentos e debêntures', conta_startswith='2.01.04', conta_levelmin=4, conta_levelmax=4, descricao_contains_not=['empréstimo', 'financiamento', 'debentur', 'arrendament'])
+        df_w = get_dtp_line(df=df, demo=demo, name='02.01.05 - Outras Obrigações', conta_startswith='2.01.05', conta_levelmin=3, conta_levelmax=3, descricao_contains=['outr', 'relaç'])
+        df_x = get_dtp_line(df=df, demo=demo, name='02.01.05.01 - Passivos com Partes Relacionadas', conta_startswith='2.01.05', conta_levelmin=4, conta_levelmax=4, descricao_contains=['partes relacionadas'])
+        df_y = get_dtp_line(df=df, demo=demo, name='02.01.05.09 - Outros', conta_startswith='2.01.05', conta_levelmin=4, conta_levelmax=4, descricao_contains_not=['partes relacionadas'])
+        df_z = get_dtp_line(df=df, demo=demo, name='02.01.06 - Provisões', conta_startswith='2.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['provis'])
+        df_aa = get_dtp_line(df=df, demo=demo, name='02.01.06.01 - Provisões Específicas', conta_startswith='2.01.06.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['provis'])
+        df_ab = get_dtp_line(df=df, demo=demo, name='02.01.06.01.01 - Provisões Fiscais', conta_startswith='2.01.06.01.01', conta_levelmin=5, conta_levelmax=5, descricao_contains=['fisca'])
+        df_ac = get_dtp_line(df=df, demo=demo, name='02.01.06.01.02 - Provisões Trabalhistas e Previdenciárias', conta_startswith='2.01.06.01.02', conta_levelmin=5, conta_levelmax=5, descricao_contains=['trabalhist'])
+        df_ad = get_dtp_line(df=df, demo=demo, name='02.01.06.01.03 - Provisões para Benefícios a Empregados', conta_startswith='2.01.06.01.03', conta_levelmin=5, conta_levelmax=5, descricao_contains=['benefício'])
+        df_ae = get_dtp_line(df=df, demo=demo, name='02.01.06.01.04 - Provisões Judiciais Cíveis', conta_startswith='2.01.06.01.04', conta_levelmin=5, conta_levelmax=5, descricao_contains=['cív'])
+        df_af = get_dtp_line(df=df, demo=demo, name='02.01.06.01.05 - Outras Provisões Específicas', conta_startswith='2.01.06.01.05', conta_levelmin=5, conta_levelmax=5, descricao_contains=['outr'])
+        df_ag = get_dtp_line(df=df, demo=demo, name='02.01.06.02 - Provisões Outras', conta_startswith='2.01.06.02', conta_levelmin=4, conta_levelmax=4, descricao_contains=['provis'])
+        df_ah = get_dtp_line(df=df, demo=demo, name='02.01.06.02.01 - Provisões para Garantias', conta_startswith='2.01.06.02', conta_levelmin=5, conta_levelmax=5, descricao_contains=['garantia'])
+        df_ai = get_dtp_line(df=df, demo=demo, name='02.01.06.02.02 - Provisões para Reestruturação', conta_startswith='2.01.06.02', conta_levelmin=5, conta_levelmax=5, descricao_contains=['reestrutura'])
+        df_aj = get_dtp_line(df=df, demo=demo, name='02.01.06.02.03 - Provisões para Passivos Ambientais e de Desativação', conta_startswith='2.01.06.02', conta_levelmin=5, conta_levelmax=5, descricao_contains=['ambient'])
+        df_ak = get_dtp_line(df=df, demo=demo, name='02.01.07 - Passivos sobre Ativos Não-Correntes a Venda e Descontinuados', conta_startswith='2.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['Passivos sobre ativos'])
+        df_al = get_dtp_line(df=df, demo=demo, name='02.01.07.01 - Passivos sobre Ativos Não-Correntes a Venda', conta_startswith='2.01.07.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['venda'])
+        df_am = get_dtp_line(df=df, demo=demo, name='02.01.07.02 - Passivos sobre Ativos de Operações Descontinuadas', conta_startswith='2.01.07.02', conta_levelmin=4, conta_levelmax=4, descricao_contains=['descontinuad'])
+        df_an = get_dtp_line(df=df, demo=demo, name='02.01.09 - Outros Passivos', conta_startswith='2.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains_not=['obrigações sociais', 'fornecedor', 'obrigaç', 'fisca', 'empréstimo', 'financiamento', 'provis', 'Passivos sobre ativos'])
+        df_ao = get_dtp_line(df=df, demo=demo, name='02.02 - Passivo Não Circulante de Longo Prazo', conta_startswith='2.', conta_levelmin=2, conta_levelmax=2, descricao_contains=['longo prazo', 'não circulante', 'ngeociação', 'fisca', 'provis', 'exercício', 'outr', 'venda'], descricao_contains_not=['patrimônio'])
+        df_ap = get_dtp_line(df=df, demo=demo, name='02.02.01 - Empréstimos e Financiamentos de Longo Prazo', conta_startswith='2.02', conta_levelmin=3, conta_levelmax=3, descricao_contains=['empréstim', 'financiament'])
+        df_aq = get_dtp_line(df=df, demo=demo, name='02.02.01.01 - Empréstimos e Financiamentos', conta_startswith='2.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['empréstim', 'financiament'])
+        df_ar = get_dtp_line(df=df, demo=demo, name='02.02.01.01.01 - Empréstimos e Financiamentos em Moeda Nacional', conta_startswith='2.02.01.01', conta_levelmin=5, conta_levelmax=5, descricao_contains=['naciona'])
+        df_as = get_dtp_line(df=df, demo=demo, name='02.02.01.01.02 - Empréstimos e Financiamentos em Moeda Estrangeira', conta_startswith='2.02.01.01', conta_levelmin=5, conta_levelmax=5, descricao_contains=['estrangeir'])
+        df_at = get_dtp_line(df=df, demo=demo, name='02.02.01.02 - Debêntures', conta_startswith='2.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['debentur'])
+        df_au = get_dtp_line(df=df, demo=demo, name='02.02.01.03 - Arrendamentos', conta_startswith='2.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['arrendament'])
+        df_av = get_dtp_line(df=df, demo=demo, name='02.02.02.09 - Outros empréstimos, financiamentos e debêntures', conta_startswith='2.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains_not=['empréstimo', 'financiamento', 'debentur', 'arrendament'])
+        df_aw = get_dtp_line(df=df, demo=demo, name='02.02.02 - Outras Obrigações', conta_startswith='2.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['obriga'])
+        df_ax = get_dtp_line(df=df, demo=demo, name='02.02.02.01 - Com Partes Relacionadas', conta_startswith='2.02.02.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['relacionad'])
+        df_ay = get_dtp_line(df=df, demo=demo, name='02.02.02.02 - Outras Obrigações', conta_startswith='2.02.02.02', conta_levelmin=4, conta_levelmax=4, descricao_contains=['outr'])
+        df_az = get_dtp_line(df=df, demo=demo, name='02.02.03 - Tributos Diferidos', conta_startswith='2.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['tributo'])
+        df_ba = get_dtp_line(df=df, demo=demo, name='02.02.03.01 - Imposto de Renda e Contribuição Social', conta_startswith='2.02.03', conta_levelmin=4, conta_levelmax=4, descricao_contains=['imposto de renda', 'contribuição social'])
+        df_bb = get_dtp_line(df=df, demo=demo, name='02.02.03.02 - Outros tributos diferidos', conta_startswith='2.02.03', conta_levelmin=4, conta_levelmax=4, descricao_contains_not=['imposto de renda', 'contribuição social'])
+        df_bc = get_dtp_line(df=df, demo=demo, name='02.02.04 - Provisões', conta_startswith='2.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['provis'])
+        df_bd = get_dtp_line(df=df, demo=demo, name='02.02.04.01 - Provisões Específicas', conta_startswith='2.02.04.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['provis'])
+        df_be = get_dtp_line(df=df, demo=demo, name='02.02.04.01.01 - Provisões Fiscais', conta_startswith='2.02.04.01.01', conta_levelmin=5, conta_levelmax=5, descricao_contains=['fisca'])
+        df_bf = get_dtp_line(df=df, demo=demo, name='02.02.04.01.02 - Provisões Trabalhistas e Previdenciárias', conta_startswith='2.02.04.01.02', conta_levelmin=5, conta_levelmax=5, descricao_contains=['trabalhist'])
+        df_bg = get_dtp_line(df=df, demo=demo, name='02.02.04.01.03 - Provisões para Benefícios a Empregados', conta_startswith='2.02.04.01.03', conta_levelmin=5, conta_levelmax=5, descricao_contains=['benefício'])
+        df_bh = get_dtp_line(df=df, demo=demo, name='02.02.04.01.04 - Provisões Judiciais Cíveis', conta_startswith='2.02.04.01.04', conta_levelmin=5, conta_levelmax=5, descricao_contains=['cív'])
+        df_bi = get_dtp_line(df=df, demo=demo, name='02.02.04.02 - Outras Provisões', conta_startswith='2.02.04.02', conta_levelmin=4, conta_levelmax=4, descricao_contains=['provis'])
+        df_bj = get_dtp_line(df=df, demo=demo, name='02.02.04.02.01 - Provisões para Garantias', conta_startswith='2.02.04.02', conta_levelmin=5, conta_levelmax=5, descricao_contains=['garantia'])
+        df_bk = get_dtp_line(df=df, demo=demo, name='02.02.04.02.02 - Provisões para Reestruturação', conta_startswith='2.02.04.02', conta_levelmin=5, conta_levelmax=5, descricao_contains=['reestrutura'])
+        df_bl = get_dtp_line(df=df, demo=demo, name='02.02.04.02.03 - Provisões para Passivos Ambientais e de Desativação', conta_startswith='2.02.04.02', conta_levelmin=5, conta_levelmax=5, descricao_contains=['ambient'])
+        df_bm = get_dtp_line(df=df, demo=demo, name='02.02.05 - Passivos sobre Ativos Não-Correntes a Venda e Descontinuados', conta_startswith='2.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['Passivos sobre ativos'])
+        df_bn = get_dtp_line(df=df, demo=demo, name='02.02.05.01 - Passivos sobre Ativos Não-Correntes a Venda', conta_startswith='2.02.05.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['venda'])
+        df_bo = get_dtp_line(df=df, demo=demo, name='02.02.05.02 - Passivos sobre Ativos de Operações Descontinuadas', conta_startswith='2.02.05.02', conta_levelmin=4, conta_levelmax=4, descricao_contains=['descontinuad'])
+        df_bp = get_dtp_line(df=df, demo=demo, name='02.02.06 - Lucros e Receitas a Apropriar', conta_startswith='2.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['lucros e receitas'])
+        df_bq = get_dtp_line(df=df, demo=demo, name='02.02.06.01 - Lucros a Apropriar', conta_startswith='2.02.06.01', conta_levelmin=4, conta_levelmax=4, descricao_contains=['lucr'])
+        df_br = get_dtp_line(df=df, demo=demo, name='02.02.06.02 - Receitas a Apropriar', conta_startswith='2.02.06.02', conta_levelmin=4, conta_levelmax=4, descricao_contains=['receit'])
+        df_bs = get_dtp_line(df=df, demo=demo, name='02.02.06.03 - Subvenções de Investimento a Apropriar', conta_startswith='2.02.06.03', conta_levelmin=4, conta_levelmax=4, descricao_contains=['subvenç'])
+        df_bt = get_dtp_line(df=df, demo=demo, name='02.02.09 - Outros Passivos', conta_startswith=['2.02.07', '2.02.08', '2.02.09'], conta_levelmin=3, conta_levelmax=3)
+        df_bu = get_dtp_line(df=df, demo=demo, name='02.03 - Patrimônio Líquido', conta_startswith='2.', conta_levelmin=2, conta_levelmax=2, descricao_contains='patrimônio')
+        df_bv = get_dtp_line(df=df, demo=demo, name='02.03.01 - Capital Social', conta_startswith='2.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['2.01', '2.02'], descricao_contains=['capital social'])
+        df_bw = get_dtp_line(df=df, demo=demo, name='02.03.02 - Reservas de Capital', conta_startswith='2.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['2.01', '2.02'], descricao_contains=['reservas de capital'])
+        df_bx = get_dtp_line(df=df, demo=demo, name='02.03.03 - Reservas de Reavaliação', conta_startswith='2.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['2.01', '2.02'], descricao_contains=['reservas de reavaliaç'])
+        df_by = get_dtp_line(df=df, demo=demo, name='02.03.04 - Reservas de Lucros', conta_startswith='2.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['2.01', '2.02'], descricao_contains=['reservas de lucro'])
+        df_bz = get_dtp_line(df=df, demo=demo, name='02.03.05 - Lucros ou Prejuízos Acumulados', conta_startswith='2.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['2.01', '2.02'], descricao_contains=['lucro', 'prejuízo', 'acumulad'], descricao_contains_not='reserva')
+        df_ca = get_dtp_line(df=df, demo=demo, name='02.03.06 - Ajustes de Avaliação Patrimonial', conta_startswith='2.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['2.01', '2.02'], descricao_contains=['avaliação patrimonial'])
+        df_cb = get_dtp_line(df=df, demo=demo, name='02.03.07 - Ajustes Acumulados de Conversão', conta_startswith='2.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['2.01', '2.02'], descricao_contains=['ajustes acumulados'])
+        df_cc = get_dtp_line(df=df, demo=demo, name='02.03.08 - Outros Resultados Abrangentes', conta_startswith='2.', conta_levelmin=3, conta_levelmax=3, conta_startswith_not=['2.01', '2.02'], descricao_contains=['resultados abrangentes'])
+        df_cd = get_dtp_line(df=df, demo=demo, name='02.04 - Outros Passivos ou Provissões', conta_startswith=['2.04', '2.05', '2.06', '2.07', '2.08', '2.09'], conta_levelmin=2, conta_levelmax=2, descricao_contains_not='patrimonio')
+        d2 = pd.concat([df_a, df_b, df_c, df_d, df_e, df_f, df_g, df_h, df_i, df_j, df_k, df_l, df_m, df_n, df_o, df_p, df_q, df_r, df_s, df_t, df_u, df_v, df_w, df_x, df_y, df_z, df_aa, df_ab, df_ac, df_ad, df_ae, df_af, df_ag, df_ah, df_ai, df_aj, df_ak, df_al, df_am, df_an, df_ao, df_ap, df_aq, df_ar, df_as, df_at, df_au, df_av, df_aw, df_ax, df_ay, df_az, df_ba, df_bb, df_bc, df_bd, df_be, df_bf, df_bg, df_bh, df_bi, df_bj, df_bk, df_bl, df_bm, df_bn, df_bo, df_bp, df_bq, df_br, df_bs, df_bt, df_bu, df_bv, df_bw, df_bx, df_by, df_bz, df_ca, df_cb, df_cc, df_cd], ignore_index=True)
+
+        demo3 = demo = 'Demonstração do Resultado'
+        df_a = get_dtp_line(df=df, demo=demo, name='03.01 - Receita Bruta', conta_exact='3.01')
+        df_b = get_dtp_line(df=df, demo=demo, name='03.02 - Custo de Produção', conta_exact='3.02')
+        df_c = get_dtp_line(df=df, demo=demo, name='03.03 - Resultado Bruto (Receita Líquida)', conta_exact='3.03')
+        df_d = get_dtp_line(df=df, demo=demo, name='03.04 - Despesas Operacionais', conta_exact='3.04')
+        df_e = get_dtp_line(df=df, demo=demo, name='03.04.01 - Despesas com Vendas', conta_exact='3.04.01')
+        df_f = get_dtp_line(df=df, demo=demo, name='03.04.02 - Despesas Gerais e Administrativas', conta_exact='3.04.02')
+        df_g = get_dtp_line(df=df, demo=demo, name='03.04.09 - Outras despesas, receitas ou equivalências', conta_levelmin=3, conta_levelmax=3, conta_startswith=['3.04.'], conta_startswith_not=['3.04.01', '3.04.02'])
+        df_h = get_dtp_line(df=df, demo=demo, name='03.05 - LAJIR EBIT Resultado Antes do Resultado Financeiro e dos Tributos', conta_exact='3.05')
+        df_i = get_dtp_line(df=df, demo=demo, name='03.06 - Resultado Financeiro (Não Operacional)', conta_exact='3.06')
+        df_j = get_dtp_line(df=df, demo=demo, name='03.07 - Resultado Antes dos Tributos sobre o Lucro', conta_exact='3.07')
+        df_k = get_dtp_line(df=df, demo=demo, name='03.08 - Impostos IRPJ e CSLL', conta_exact='3.08')
+        df_l = get_dtp_line(df=df, demo=demo, name='03.09 - Resultado Líquido das Operações Continuadas', conta_exact='3.09')
+        df_m = get_dtp_line(df=df, demo=demo, name='03.10 - Resultado Líquido das Operações Descontinuadas', conta_exact='3.10')
+        df_n = get_dtp_line(df=df, demo=demo, name='03.11 - Lucro Líquido', conta_exact='3.11')
+        d3 = pd.concat([df_a, df_b, df_c, df_d, df_e, df_f, df_g, df_h, df_i, df_j, df_k, df_l, df_m, df_n], ignore_index=True)
+
+        demo6 = demo = 'Demonstração de Fluxo de Caixa'
+        # imobilizado e intangível
+        df_a = get_dtp_line(df=df, demo=demo, name='06.01 - Caixa das Operações', conta_exact='6.01')
+        df_b = get_dtp_line(df=df, demo=demo, name='06.01.01 - Caixa das Operações', conta_startswith='6.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['operac'], descricao_contains_not=['ativ', 'print(e)iv', 'despes', 'ingress', 'pagament', 'receb', 'arrendament', 'aquisic'])
+        df_c = get_dtp_line(df=df, demo=demo, name='06.01.02 - Variações de Ativos e Passivos', conta_startswith='6.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['ativ'], descricao_contains_not=['operac', 'imob', 'intangív', 'adiantament', 'provis', 'permanent', 'despes', 'pagament', 'recebiment', 'caixa', 'derivativ', 'judicia', ])
+        df_d = get_dtp_line(df=df, demo=demo, name='06.01.09 - Outros Caixas Operacionais', conta_startswith='6.01.', conta_levelmin=3, conta_levelmax=3, descricao_contains_not=['ativ', 'operac'])
+        df_e = get_dtp_line(df=df, demo=demo, name='06.02 - Caixa de Investimentos CAPEX', conta_exact='6.02')
+        # imobilizado e intangível
+        kw60201 = ['investiment', 'mobiliár', 'derivativ', 'propriedad']
+        kw60202 = ['imob', 'intangív']
+        kw60203 = ['financeir']
+        kw60204 = ['coligad', 'controlad', 'ligad']
+        kw60205 = ['juro', 'jcp', 'jscp', 'dividend']
+        kw602 = []
+        [kw602.append(i) for i in kw60201 + kw60202 + kw60203 + kw60204 + kw60205 if i not in kw602]
+        df_f = get_dtp_line(df=df, demo=demo, name='06.02.01 - Investimentos', conta_startswith='6.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60201, descricao_contains_not=list_subtract(kw602, kw60201))
+        df_g = get_dtp_line(df=df, demo=demo, name='06.02.02 - Imobilizado e Intangível', conta_startswith='6.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60202, descricao_contains_not=list_subtract(kw602, kw60202))
+        df_h = get_dtp_line(df=df, demo=demo, name='06.02.03 - Aplicações Financeiras', conta_startswith='6.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60203, descricao_contains_not=list_subtract(kw602, kw60203))
+        df_i = get_dtp_line(df=df, demo=demo, name='06.02.04 - Coligadas e Controladas', conta_startswith='6.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60204, descricao_contains_not=list_subtract(kw602, kw60204))
+        df_j = get_dtp_line(df=df, demo=demo, name='06.02.05 - Juros sobre Capital Próprio e Dividendos', conta_startswith='6.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60205, descricao_contains_not=list_subtract(kw602, kw60205))
+        df_k = get_dtp_line(df=df, demo=demo, name='06.02.09 - Outros Caixas de Investimento', conta_startswith='6.02.', conta_levelmin=3, conta_levelmax=3, descricao_contains_not=kw602)
+        df_l = get_dtp_line(df=df, demo=demo, name='06.03 - Caixa de Financiamento', conta_exact='6.03')
+        # dividend juros jcp, jscp bonifica, 
+        kw60301 = ['capital']
+        kw60302 = ['ação', 'ações', 'acionist']
+        kw60303 = ['debentur', 'empréstim', 'financiam']
+        kw60304 = ['credor']
+        kw60305 = ['amortizaç', 'captaç']
+        kw60306 = ['dividend', 'juros', 'jcp', 'bonifica']
+        kw603 = []
+        [kw603.append(i) for i in kw60301 + kw60302 + kw60303 + kw60304 + kw60305 + kw60306 if i not in kw603]
+        df_m = get_dtp_line(df=df, demo=demo, name='06.03.01 - Capital', conta_startswith='6.03.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60301, descricao_contains_not=list_subtract(kw603, kw60301))
+        df_n = get_dtp_line(df=df, demo=demo, name='06.03.02 - Ações e Acionistas', conta_startswith='6.03.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60302, descricao_contains_not=list_subtract(kw603, kw60302))
+        df_o = get_dtp_line(df=df, demo=demo, name='06.03.03 - Debêntures, empréstimos e financiamentos', conta_startswith='6.03.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60303, descricao_contains_not=list_subtract(kw603, kw60303))
+        df_p = get_dtp_line(df=df, demo=demo, name='06.03.04 - Credores', conta_startswith='6.03.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60304, descricao_contains_not=list_subtract(kw603, kw60304))
+        df_q = get_dtp_line(df=df, demo=demo, name='06.03.05 - Captações e Amortizações', conta_startswith='6.03.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60305, descricao_contains_not=list_subtract(kw603, kw60305))
+        df_r = get_dtp_line(df=df, demo=demo, name='06.03.06 - Juros JCP e Dividendos', conta_startswith='6.03.', conta_levelmin=3, conta_levelmax=3, descricao_contains=kw60306, descricao_contains_not=list_subtract(kw603, kw60306))
+        df_s = get_dtp_line(df=df, demo=demo, name='06.03.09 - Outros Caixas de Financiamento', conta_startswith='6.03.', conta_levelmin=3, conta_levelmax=3, descricao_contains_not=kw603)
+        df_t = get_dtp_line(df=df, demo=demo, name='06.04 - Caixa da Variação Cambial', conta_exact='6.04')
+        df_u = get_dtp_line(df=df, demo=demo, name='06.05 - Variação do Caixa', conta_exact='6.05')
+        df_v = get_dtp_line(df=df, demo=demo, name='06.05.01 - Saldo Inicial do Caixa ', conta_exact='6.05.01')
+        df_w = get_dtp_line(df=df, demo=demo, name='06.05.02 - Saldo Final do Caixa', conta_exact='6.05.02')
+        d6 = pd.concat([df_a, df_b, df_c, df_d, df_e, df_f, df_g, df_h, df_i, df_j, df_k, df_l, df_m, df_n, df_o, df_p, df_q, df_r, df_s, df_t, df_u, df_v, df_w], ignore_index=True)
+
+        demo7 = demo = 'Demonstração de Valor Adiconado'
+        df_a = get_dtp_line(df=df, demo=demo, name='07.01 - Receitas', conta_startswith='7.', descricao_contains=['receita'], descricao_contains_not='líquid')
+        df_b = get_dtp_line(df=df, demo=demo, name='07.01.01 - Vendas', conta_exact='7.01.01')
+        df_c = get_dtp_line(df=df, demo=demo, name='07.01.02 - Outras Receitas', conta_exact='7.01.02')
+        df_d = get_dtp_line(df=df, demo=demo, name='07.01.03 - Ativos Próprios', conta_exact='7.01.03')
+        df_e = get_dtp_line(df=df, demo=demo, name='07.01.04 - Reversão de Créditos Podres', conta_exact='7.01.04')
+        df_f = get_dtp_line(df=df, demo=demo, name='07.02 - Custos dos Insumos', conta_startswith='7.', descricao_contains=['insumos adquiridos', 'intermediação financeira', 'provis'])
+        df_g = get_dtp_line(df=df, demo=demo, name='07.02.01 - Custo de Mercadorias', conta_exact='7.02.01')
+        df_h = get_dtp_line(df=df, demo=demo, name='07.02.02 - Custo de Materiais, Energia e Terceiros', conta_exact='7.02.02')
+        df_i = get_dtp_line(df=df, demo=demo, name='07.02.03 - Valores Ativos', conta_exact='7.02.03')
+        df_j = get_dtp_line(df=df, demo=demo, name='07.02.04 - Outros', conta_exact='7.02.04')
+        df_k = get_dtp_line(df=df, demo=demo, name='07.03 - Valor Adicionado Bruto', conta_startswith='7.', descricao_contains=['valor adicionado bruto'])
+        df_l = get_dtp_line(df=df, demo=demo, name='07.04 - Retenções', conta_startswith='7.', descricao_contains=['retenç', 'Benefíci', 'sinistr'])
+        df_m = get_dtp_line(df=df, demo=demo, name='07.04.01 - Depreciação e Amortização', conta_startswith='7.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['deprecia', 'amortiza', 'exaust'])
+        df_n = get_dtp_line(df=df, demo=demo, name='07.04.02 - Outras retenções', conta_exact='7.04.02')
+        df_o = get_dtp_line(df=df, demo=demo, name='07.05 - Valor Adicionado Líquido', conta_startswith='7.', descricao_contains=['valor adicionado líquid', 'receita operacional'], conta_startswith_not='7.01', descricao_contains_not='transferência')
+        df_p = get_dtp_line(df=df, demo=demo, name='07.06 - Valor Adicionado em Transferência', conta_startswith='7.', descricao_contains=['transferência'])
+        df_q = get_dtp_line(df=df, demo=demo, name='07.06.01 - Resultado de Equivalência Patrimonial', conta_startswith='7.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['equivalencia patrimonial'])
+        df_r = get_dtp_line(df=df, demo=demo, name='07.06.02 - Receitas Financeiras', conta_exact='7.06.02')
+        df_s = get_dtp_line(df=df, demo=demo, name='07.06.03 - Outros', conta_exact='7.06.03')
+        df_t = get_dtp_line(df=df, demo=demo, name='07.07 - Valor Adicionado Total a Distribuir', conta_startswith='7.', descricao_contains=['total a distribuir'])
+        df_u = get_dtp_line(df=df, demo=demo, name='07.08 - Distribuição do Valor Adicionado', conta_startswith='7.', descricao_contains=['Distribuição do Valor Adicionado'])
+        df_v = get_dtp_line(df=df, demo=demo, name='07.08.01 - Pessoal', conta_startswith='7.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['pessoal'])
+        df_w = get_dtp_line(df=df, demo=demo, name='07.08.01.01 - Remuneração Direta', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['remuneração direta'])
+        df_x = get_dtp_line(df=df, demo=demo, name='07.08.01.02 - Benefícios', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['benefícios'])
+        df_y = get_dtp_line(df=df, demo=demo, name='07.08.01.03 - FGTS', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['F.G.T.S.', 'fgts'])
+        df_z = get_dtp_line(df=df, demo=demo, name='07.08.01.04 - Outros', conta_exact='7.08.01.04')
+        df_aa = get_dtp_line(df=df, demo=demo, name='07.08.02 - Impostos, Taxas e Contribuições', conta_startswith='7.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['imposto', 'taxa', 'contribuiç'])
+        df_ab = get_dtp_line(df=df, demo=demo, name='07.08.02.01 - Federais', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['federa'])
+        df_ac = get_dtp_line(df=df, demo=demo, name='07.08.02.02 - Estaduais', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['estadua'])
+        df_ad = get_dtp_line(df=df, demo=demo, name='07.08.02.03 - Municipais', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['municipa'])
+        df_ae = get_dtp_line(df=df, demo=demo, name='07.08.03 - Remuneração de Capital de Terceiros', conta_startswith='7.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['remuneraç', 'capital', 'terceir'], descricao_contains_not='própri')
+        df_af = get_dtp_line(df=df, demo=demo, name='07.08.03.01 - Juros Pagos', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['juro'], descricao_contains_not='propri')
+        df_ag = get_dtp_line(df=df, demo=demo, name='07.08.03.02 - Aluguéis', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['alugue'])
+        df_ah = get_dtp_line(df=df, demo=demo, name='07.08.04 - Remuneração de Capital Próprio', conta_startswith='7.', conta_levelmin=3, conta_levelmax=3, descricao_contains=['remuneraç', 'capital', 'própri'], descricao_contains_not='terceir')
+        df_ai = get_dtp_line(df=df, demo=demo, name='07.08.04.01 - Juros sobre o Capital Próprio', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['juros sobre', 'jcp'])
+        df_aj = get_dtp_line(df=df, demo=demo, name='07.08.04.02 - Dividendos', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['dividend'])
+        df_ak = get_dtp_line(df=df, demo=demo, name='07.08.04.03 - Lucros Retidos', conta_startswith='7.', conta_levelmin=4, conta_levelmax=4, descricao_contains=['lucros retidos'])
+        df_al = get_dtp_line(df=df, demo=demo, name='07.08.05 - Outros', conta_exact='7.08.05')
+        d7 = pd.concat([df_a, df_b, df_c, df_d, df_e, df_f, df_g, df_h, df_i, df_j, df_k, df_l, df_m, df_n, df_o, df_p, df_q, df_r, df_s, df_t, df_u, df_v, df_w, df_x, df_y, df_z, df_aa, df_ab, df_ac, df_ad, df_ae, df_af, df_ag, df_ah, df_ai, df_aj, df_ak, df_al], ignore_index=True)
+
+        try:
+            result = pd.concat([d0, d1, d2, d3, d6, d7], ignore_index=True).drop_duplicates()
+        except Exception as e:
+            print('ac', e)
+    except Exception as e:
+        print('ad', e)
+
+    return result
+
+def inteligence_dre(df):
+    try:
+        d0_demo = 'Composição do Capital'
+        d0_lines = [
+            ('00.01 - Ações Ordinárias', [('conta_exact', '0.01')]),
+            ('00.02 - Ações Preferenciais', [('conta_exact', '0.02')]),
+            ('00.01.01 - Ações Ordinárias em Tesouraria', [('conta_exact', '0.01.01')]),
+            ('00.01.02 - Ações Ordinárias Outras', [('conta_exact', '0.01.02')]),
+            ('00.02.01 - Ações Prerenciais em Tesouraria', [('conta_exact', '0.02.01')]),
+            ('00.02.02 - Ações Prerenciais Outras', [('conta_exact', '0.02.02')]),
+        ]
+        d0 = get_dtp_lines(df, d0_demo, d0_lines)
+        
+        d1_demo = 'Balanço Patrimonial Ativo'
+        d1_lines = [
+            ('01 - Ativo Total', [('conta_exact', '1')]),
+            ('01.01 - Ativo Circulante de Curto Prazo', [('conta_exact', '1.01')]),
+            ('01.01.01 - Caixa e Disponibilidades de Caixa', [('conta_exact', '1.01.01')]),
+            ('01.01.02 - Aplicações Financeiras', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['aplica', 'depósito', 'reserv', 'saldo', 'centra', 'interfinanceir', 'crédit']), ('conta_contains_not', ['1.01.01', '1.01.02', '1.01.06'])]),
+            ('01.01.03 - Contas a Receber', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['conta'])]),
+            ('01.01.04 - Estoques', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['estoque'])]),
+            ('01.01.05 - Ativos Biológicos', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['biológic'])]),
+            ('01.01.06 - Tributos', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['tribut'])]),
+            ('01.01.07 - Despesas', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['despes'])]),
+            ('01.01.09 - Outros Ativos Circulantes', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'outr'), ('descricao_contains_not', ['aplica', 'depósito', 'reserv', 'saldo', 'centra', 'interfinanceir', 'crédit', 'conta', 'estoque', 'biológic', 'tribut', 'despes']), ('conta_contains_not', ['1.01.01', '1.01.02', '1.01.03', '1.01.04', '1.01.05', '1.01.06', '1.01.07'])]),
+            ('01.02 - Ativo Não Circulante de Longo Prazo', [('conta_exact', '1.02')]),
+            ('01.02.01 - Ativos Financeiros', [('conta_startswith', '1.02.'), ('descricao_contains_not', ['investiment', 'imobilizad', 'intangív'])]),
+            ('01.02.01.01 - Ativos Financeiros a Valor Justo', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'valor justo'), ('descricao_contains_not', 'custo amortizado')]),
+            ('01.02.01.02 - Ativos Financeiros ao Custo Amortizado', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'custo amortizado'), ('descricao_contains_not', 'valor justo')]),
+            ('01.02.01.03 - Contas a Receber', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'conta')]),
+            ('01.02.01.04 - Estoques', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'estoque')]),
+            ('01.02.01.05 - Ativos Biológicos', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'biológic')]),
+            ('01.02.01.06 - Tributos', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'tribut')]),
+            ('01.02.01.07 - Despesas', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'despes')]),
+            ('01.02.01.09 - Outros Ativos Não Circulantes', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['valor justo', 'custo amortizado', 'conta', 'estoque', 'biológic', 'tribut', 'despes'])]),
+            ('01.02.02 - Investimentos Não Capex', [('conta_startswith', '1.02.'), ('descricao_contains', ['investiment'])]),
+            ('01.02.02.01 - Propriedades - Investimentos Não Capex', [('conta_startswith', '1.02.'), ('conta_levelmin', 3), ('descricao_contains', ['propriedad'])]),
+            ('01.02.02.02 - Arrendamentos - Investimentos Não Capex', [('conta_startswith', '1.02.'), ('conta_levelmin', 3), ('descricao_contains', ['arrendam']), ('descricao_contains_not', ['sotware', 'imobilizad', 'intangív', 'direit'])]),
+            ('01.02.03 - Imobilizados', [('conta_startswith', '1.02.'), ('descricao_contains', ['imobilizad'])]),
+            ('01.02.03.01 - Imobilizados em Operação', [('conta_startswith', '1.02.03.'), ('descricao_contains', ['operaç'])]),
+            ('01.02.03.02 - Imobilizados em Arrendamento', [('conta_startswith', '1.02.03.'), ('descricao_contains', ['arrend'])]),
+            ('01.02.03.03 - Imobilizados em Andamento', [('conta_startswith', '1.02.03.'), ('descricao_contains', ['andament'])]),
+            ('01.02.04 - Intangível', [('conta_startswith', '1.02.'), ('descricao_contains', ['intangív'])]),
+            ('01.03 - Empréstimos', [('conta_startswith', '1.'), ('conta_levelmax', 2), ('descricao_contains', 'empréstimo')]),
+            ('01.04 - Tributos Diferidos', [('conta_startswith', '1.'), ('conta_levelmax', 2), ('descricao_contains', 'tributo')]),
+            ('01.05 - Investimentos', [('conta_startswith', '1.'), ('conta_levelmax', 2), ('descricao_contains', 'investimento')]),
+            ('01.05.01 - Participações em Coligadas', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'coligad')]),
+            ('01.05.02 - Participações em Controladas', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'controlad')]),
+            ('01.06 - Imobilizados', [('conta_startswith', '1.'), ('conta_levelmax', 2), ('descricao_contains', 'imobilizado')]),
+            ('01.06.01 - Propriedades - Investimentos Não Capex', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.02.']), ('descricao_contains', ['propriedad', 'imóve'])]),
+            ('01.06.02 - Arrendamento - Investimentos Não Capex', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.02.']), ('descricao_contains', 'arrendam')]),
+            ('01.06.03 - Tangíveis - Investimentos Não Capex', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.02.']), ('descricao_contains', ['arrendam', 'equipamento'])]),
+            ('01.07 - Intangíveis', [('conta_startswith', '1.'), ('conta_levelmax', 2), ('descricao_contains', 'intangíve')]),
+            ('01.07.01 - Intangíveis', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.02.']), ('descricao_contains', 'intangíve')]),
+            ('01.07.02 - Goodwill', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.02.']), ('descricao_contains', 'goodwill')]),
+            ('01.08 - Permanente', [('conta_startswith', '1.0'), ('conta_levelmax', 2), ('descricao_contains', 'permanente')]),
+            ('01.09.09 - Outros Ativos', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.01.', '1.02']), ('descricao_contains_not', ['depreciaç', 'amortizaç', 'empréstimo', 'tributo', 'investimento', 'imobilizado', 'intangíve', 'permanente', 'goodwill', 'arrendam', 'equipamento', 'propriedad', 'imóve', 'coligad', 'controlad'])]),
+        ]
+        d1 = get_dtp_lines(df, d1_demo, d1_lines)
+
+        d2_demo = 'Balanço Patrimonial Passivo'
+        d2_lines = [
+              ('02 - Passivo Total', [('conta_exact', '2')]),
+              ('02.01 - Passivo Circulante de Curto Prazo', [('conta_startswith', '2.'), ('conta_levelmin', 2), ('conta_levelmax', 2), ('descricao_contains', ['circulante', 'o resultado', 'amortizado', 'negociaç']), ('descricao_contains_not', ['não', 'patrimônio', 'fisca'])]),
+              ('02.01.01 - Obrigações Sociais e Trabalhistas', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['obrigações sociais'])]),
+              ('02.01.01.01 - Obrigações Sociais', [('conta_startswith', '2.01.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['socia'])]),
+              ('02.01.01.02 - Obrigações Trabalhistas', [('conta_startswith', '2.01.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['trabalhista'])]),
+              ('02.01.01.09 - Outras Obrigações', [('conta_startswith', '2.01.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['socia', 'trabalhista'])]),
+              ('02.01.02 - Fornecedores', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['fornecedor'])]),
+              ('02.01.02.01 - Fornecedores Nacionais', [('conta_startswith', ['2.01.01.', '2.01.02']), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['fornecedores nacionais'])]),
+              ('02.01.02.02 - Fornecedores Estrangeiros', [('conta_startswith', ['2.01.01.', '2.01.02']), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['fornecedores estrangeiros'])]),
+              ('02.01.03 - Obrigações Fiscais', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['obrigaç', 'fisca']), ('descricao_contains_not', 'socia')]),
+              ('02.01.03.01 - Obrigações Fiscais Federais', [('conta_startswith', '2.01.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['federa'])]),
+              ('02.01.03.02 - Obrigações Fiscais Estaduais', [('conta_startswith', '2.01.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['estadua'])]),
+              ('02.01.03.03 - Obrigações Fiscais Municipais', [('conta_startswith', '2.01.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'municipa')]),
+              ('02.01.03.09 - Outras Obrigações Fiscais', [('conta_startswith', '2.01.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['federa', 'estadua', 'municipa'])]),
+              ('02.01.04 - Empréstimos, Financiamentos e Debêntures', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['empréstimo', 'financiamento'])]),
+              ('02.01.04.01 - Empréstimos e Financiamentos', [('conta_startswith', '2.01.04'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['empréstimo', 'financiamento'])]),
+              ('02.01.04.01 - Empréstimos e Financiamentos', [('conta_startswith', '2.01.04'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['empréstimo', 'financiamento'])]),
+              ('02.01.04.01.01 - Empréstimos e Financiamentos em Moeda Nacional', [('conta_startswith', '2.01.04.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'naciona')]),
+              ('02.01.04.01.02 - Empréstimos e Financiamentos em Moeda Estrangeira', [('conta_startswith', '2.01.04.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'estrangeir')]),
+              ('02.01.04.02 - Debêntures', [('conta_startswith', '2.01.04'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'debentur')]),
+              ('02.01.04.03 - Arrendamentos', [('conta_startswith', '2.01.04'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'arrendament')]),
+              ('02.01.04.09 - Outros empréstimos, financiamentos e debêntures', [('conta_startswith', '2.01.04'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['empréstimo', 'financiamento', 'debentur', 'arrendament'])]),
+              ('02.01.05 - Outras Obrigações', [('conta_startswith', '2.01.05'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['outr', 'relaç'])]),
+              ('02.01.05.01 - Passivos com Partes Relacionadas', [('conta_startswith', '2.01.05'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['partes relacionadas'])]),
+              ('02.01.05.09 - Outros', [('conta_startswith', '2.01.05'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['partes relacionadas'])]),
+              ('02.01.06 - Provisões', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['provis'])]),
+              ('02.01.06.01 - Provisões Específicas', [('conta_startswith', '2.01.06.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['provis'])]),
+              ('02.01.06.01.01 - Provisões Fiscais', [('conta_startswith', '2.01.06.01.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['fisca'])]),
+              ('02.01.06.01.02 - Provisões Trabalhistas e Previdenciárias', [('conta_startswith', '2.01.06.01.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['trabalhist'])]),
+              ('02.01.06.01.03 - Provisões para Benefícios a Empregados', [('conta_startswith', '2.01.06.01.03'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['benefício'])]),
+              ('02.01.06.01.04 - Provisões Judiciais Cíveis', [('conta_startswith', '2.01.06.01.04'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['cív'])]),
+              ('02.01.06.01.05 - Outras Provisões Específicas', [('conta_startswith', '2.01.06.01.05'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['outr'])]),
+              ('02.01.06.02 - Provisões Outras', [('conta_startswith', '2.01.06.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['provis'])]),
+              ('02.01.06.02.01 - Provisões para Garantias', [('conta_startswith', '2.01.06.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['garantia'])]),
+              ('02.01.06.02.02 - Provisões para Reestruturação', [('conta_startswith', '2.01.06.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['reestrutura'])]),
+              ('02.01.06.02.03 - Provisões para Passivos Ambientais e de Desativação', [('conta_startswith', '2.01.06.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['ambient'])]),
+              ('02.01.07 - Passivos sobre Ativos Não-Correntes a Venda e Descontinuados', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['Passivos sobre ativos'])]),
+              ('02.01.07.01 - Passivos sobre Ativos Não-Correntes a Venda', [('conta_startswith', '2.01.07.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['venda'])]),
+              ('02.01.07.02 - Passivos sobre Ativos de Operações Descontinuadas', [('conta_startswith', '2.01.07.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['descontinuad'])]),
+              ('02.01.09 - Outros Passivos', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains_not', ['obrigações sociais', 'fornecedor', 'obrigaç', 'fisca', 'empréstimo', 'financiamento', 'provis', 'Passivos sobre ativos'])]),
+              ('02.02 - Passivo Não Circulante de Longo Prazo', [('conta_startswith', '2.'), ('conta_levelmin', 2), ('conta_levelmax', 2), ('descricao_contains', ['longo prazo', 'não circulante', 'ngeociação', 'fisca', 'provis', 'exercício', 'outr', 'venda']), ('descricao_contains_not', ['patrimônio'])]),
+              ('02.02.01 - Empréstimos e Financiamentos de Longo Prazo', [('conta_startswith', '2.02'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['empréstim', 'financiament'])]),
+              ('02.02.01.01 - Empréstimos e Financiamentos', [('conta_startswith', '2.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['empréstim', 'financiament'])]),
+              ('02.02.01.01.01 - Empréstimos e Financiamentos em Moeda Nacional', [('conta_startswith', '2.02.01.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['naciona'])]),
+              ('02.02.01.01.02 - Empréstimos e Financiamentos em Moeda Estrangeira', [('conta_startswith', '2.02.01.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['estrangeir'])]),
+              ('02.02.01.02 - Debêntures', [('conta_startswith', '2.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['debentur'])]),
+              ('02.02.01.03 - Arrendamentos', [('conta_startswith', '2.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['arrendament'])]),
+              ('02.02.02.09 - Outros empréstimos, financiamentos e debêntures', [('conta_startswith', '2.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['empréstimo', 'financiamento', 'debentur', 'arrendament'])]),
+              ('02.02.02 - Outras Obrigações', [('conta_startswith', '2.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['obriga'])]),
+              ('02.02.02.01 - Com Partes Relacionadas', [('conta_startswith', '2.02.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['relacionad'])]),
+              ('02.02.02.02 - Outras Obrigações', [('conta_startswith', '2.02.02.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['outr'])]),
+              ('02.02.03 - Tributos Diferidos', [('conta_startswith', '2.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'tributo')]),
+              ('02.02.03.01 - Imposto de Renda e Contribuição Social', [('conta_startswith', '2.02.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['imposto de renda', 'contribuição social'])]),
+              ('02.02.03.02 - Outros tributos diferidos', [('conta_startswith', '2.02.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['imposto de renda', 'contribuição social'])]),
+              ('02.02.04 - Provisões', [('conta_startswith', '2.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'provis')]),
+              ('02.02.04.01 - Provisões Específicas', [('conta_startswith', '2.02.04.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'provis')]),
+              ('02.02.04.01.01 - Provisões Fiscais', [('conta_startswith', '2.02.04.01.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'fisca')]),
+              ('02.02.04.01.02 - Provisões Trabalhistas e Previdenciárias', [('conta_startswith', '2.02.04.01.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'trabalhist')]),
+              ('02.02.04.01.03 - Provisões para Benefícios a Empregados', [('conta_startswith', '2.02.04.01.03'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'benefício')]),
+              ('02.02.04.01.04 - Provisões Judiciais Cíveis', [('conta_startswith', '2.02.04.01.04'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'cív')]),
+              ('02.02.04.02 - Outras Provisões', [('conta_startswith', '2.02.04.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'provis')]),
+              ('02.02.04.02.01 - Provisões para Garantias', [('conta_startswith', '2.02.04.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'garantia')]),
+              ('02.02.04.02.02 - Provisões para Reestruturação', [('conta_startswith', '2.02.04.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'reestrutura')]),
+              ('02.02.04.02.03 - Provisões para Passivos Ambientais e de Desativação', [('conta_startswith', '2.02.04.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['ambient'])]),
+              ('02.02.05 - Passivos sobre Ativos Não-Correntes a Venda e Descontinuados', [('conta_startswith', '2.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['Passivos sobre ativos'])]),
+              ('02.02.05.01 - Passivos sobre Ativos Não-Correntes a Venda', [('conta_startswith', '2.02.05.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['venda'])]),
+              ('02.02.05.02 - Passivos sobre Ativos de Operações Descontinuadas', [('conta_startswith', '2.02.05.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['descontinuad'])]),
+              ('02.02.06 - Lucros e Receitas a Apropriar', [('conta_startswith', '2.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['lucros e receitas'])]),
+              ('02.02.06.01 - Lucros a Apropriar', [('conta_startswith', '2.02.06.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['lucr'])]),
+              ('02.02.06.02 - Receitas a Apropriar', [('conta_startswith', '2.02.06.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['receit'])]),
+              ('02.02.06.03 - Subvenções de Investimento a Apropriar', [('conta_startswith', '2.02.06.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['subvenç'])]),
+              ('02.02.09 - Outros Passivos', [('conta_startswith', ['2.02.07', '2.02.08', '2.02.09']), ('conta_levelmin', 3), ('conta_levelmax', 3)]),
+              ('02.03 - Patrimônio Líquido', [('conta_startswith', '2.'), ('conta_levelmin', 2), ('conta_levelmax', 2), ('descricao_contains', 'patrimônio')]),
+              ('02.03.01 - Capital Social', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['capital social'])]),
+              ('02.03.02 - Reservas de Capital', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['reservas de capital'])]),
+              ('02.03.03 - Reservas de Reavaliação', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['reservas de reavaliaç'])]),
+              ('02.03.04 - Reservas de Lucros', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['reservas de lucro'])]),
+              ('02.03.05 - Lucros ou Prejuízos Acumulados', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['lucro', 'prejuízo', 'acumulad']), ('descricao_contains_not', 'reserva')]),
+              ('02.03.06 - Ajustes de Avaliação Patrimonial', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['avaliação patrimonial'])]),
+              ('02.03.07 - Ajustes Acumulados de Conversão', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['ajustes acumulados'])]),
+              ('02.03.08 - Outros Resultados Abrangentes', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['resultados abrangentes'])]),
+              ('02.04 - Outros Passivos ou Provissões', [('conta_startswith', ['2.04', '2.05', '2.06', '2.07', '2.08', '2.09']), ('conta_levelmin', 2), ('conta_levelmax', 2), ('descricao_contains_not', 'patrimonio')]),
+        ]
+        d2 = get_dtp_lines(df, d2_demo, d2_lines)
+
+        d3_demo = 'Demonstração do Resultado'
+        d3_lines = [
+            ('03.01 - Receita Bruta', [('conta_exact', '3.01')]),
+            ('03.02 - Custo de Produção', [('conta_exact', '3.02')]),
+            ('03.03 - Resultado Bruto (Receita Líquida)', [('conta_exact', '3.03')]),
+            ('03.04 - Despesas Operacionais', [('conta_exact', '3.04')]),
+            ('03.04.01 - Despesas com Vendas', [('conta_exact', '3.04.01')]),
+            ('03.04.02 - Despesas Gerais e Administrativas', [('conta_exact', '3.04.02')]),
+            ('03.04.09 - Outras despesas, receitas ou equivalências', [('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith', ['3.04.']), ('conta_startswith_not', ['3.04.01', '3.04.02'])]),
+            ('03.05 - LAJIR EBIT Resultado Antes do Resultado Financeiro e dos Tributos', [('conta_exact', '3.05')]),
+            ('03.06 - Resultado Financeiro (Não Operacional)', [('conta_exact', '3.06')]),
+            ('03.07 - Resultado Antes dos Tributos sobre o Lucro', [('conta_exact', '3.07')]),
+            ('03.08 - Impostos IRPJ e CSLL', [('conta_exact', '3.08')]),
+            ('03.09 - Resultado Líquido das Operações Continuadas', [('conta_exact', '3.09')]),
+            ('03.10 - Resultado Líquido das Operações Descontinuadas', [('conta_exact', '3.10')]),
+            ('03.11 - Lucro Líquido', [('conta_exact', '3.11')]),
+        ]
+        d3 = get_dtp_lines(df, d3_demo, d3_lines)
+
+        d6_demo = 'Demonstração de Fluxo de Caixa'
+        # imobilizado e intangível
+        kw60201 = ['investiment', 'mobiliár', 'derivativ', 'propriedad']
+        kw60202 = ['imob', 'intangív']
+        kw60203 = ['financeir']
+        kw60204 = ['coligad', 'controlad', 'ligad']
+        kw60205 = ['juro', 'jcp', 'jscp', 'dividend']
+        kw602 = list(set(kw60201 + kw60202 + kw60203 + kw60204 + kw60205))
+        # dividend juros jcp, jscp bonifica, 
+        kw60301 = ['capital']
+        kw60302 = ['ação', 'ações', 'acionist']
+        kw60303 = ['debentur', 'empréstim', 'financiam']
+        kw60304 = ['credor']
+        kw60305 = ['amortizaç', 'captaç']
+        kw60306 = ['dividend', 'juros', 'jcp', 'bonifica']
+        kw603 = list(set(kw60301 + kw60302 + kw60303 + kw60304 + kw60305 + kw60306))
+        d6_lines = [
+            ('06.01 - Caixa das Operações', [('conta_exact', '6.01')]),
+            ('06.01.01 - Caixa das Operações', [('conta_startswith', '6.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['operac']), ('descricao_contains_not', ['ativ', 'print(e)iv', 'despes', 'ingress', 'pagament', 'receb', 'arrendament', 'aquisic'])]),
+            ('06.01.02 - Variações de Ativos e Passivos', [('conta_startswith', '6.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['ativ']), ('descricao_contains_not', ['operac', 'imob', 'intangív', 'adiantament', 'provis', 'permanent', 'despes', 'pagament', 'recebiment', 'caixa', 'derivativ', 'judicia'])]),
+            ('06.01.09 - Outros Caixas Operacionais', [('conta_startswith', '6.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains_not', ['ativ', 'operac'])]),
+            ('06.02 - Caixa de Investimentos CAPEX', [('conta_exact', '6.02')]),
+            ('06.02.01 - Investimentos', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60201), ('descricao_contains_not', list_subtract(kw602, kw60201))]),
+            ('06.02.02 - Imobilizado e Intangível', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60202), ('descricao_contains_not', list_subtract(kw602, kw60202))]),
+            ('06.02.03 - Aplicações Financeiras', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60203), ('descricao_contains_not', list_subtract(kw602, kw60203))]),
+            ('06.02.04 - Coligadas e Controladas', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60204), ('descricao_contains_not', list_subtract(kw602, kw60204))]),
+            ('06.02.05 - Juros sobre Capital Próprio e Dividendos', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60205), ('descricao_contains_not', list_subtract(kw602, kw60205))]),
+            ('06.02.09 - Outros Caixas de Investimento', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains_not', kw602)]),
+            ('06.03 - Caixa de Financiamento', [('conta_exact', '6.03')]),
+            ('06.03.01 - Capital', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60301), ('descricao_contains_not', list_subtract(kw603, kw60301))]),
+            ('06.03.02 - Ações e Acionistas', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60302), ('descricao_contains_not', list_subtract(kw603, kw60302))]),
+            ('06.03.03 - Debêntures, empréstimos e financiamentos', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60303), ('descricao_contains_not', list_subtract(kw603, kw60303))]),
+            ('06.03.04 - Credores', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60304), ('descricao_contains_not', list_subtract(kw603, kw60304))]),
+            ('06.03.05 - Captações e Amortizações', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60305), ('descricao_contains_not', list_subtract(kw603, kw60305))]),
+            ('06.03.06 - Juros JCP e Dividendos', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60306), ('descricao_contains_not', list_subtract(kw603, kw60306))]),
+            ('06.03.09 - Outros Caixas de Financiamento', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains_not', kw603)]),
+            ('06.04 - Caixa da Variação Cambial', [('conta_exact', '6.04')]),
+            ('06.05 - Variação do Caixa', [('conta_exact', '6.05')]),
+            ('06.05.01 - Saldo Inicial do Caixa ', [('conta_exact', '6.05.01')]),
+            ('06.05.02 - Saldo Final do Caixa', [('conta_exact', '6.05.02')]),
+        ]
+        d6 = get_dtp_lines(df, d6_demo, d6_lines)
+
+        d7_demo = 'Demonstração de Valor Adiconado'
+        d7_lines = [
+              ('07.01 - Receitas', [('conta_startswith', '7.'), ('descricao_contains', ['receita']), ('descricao_contains_not', 'líquid')]),
+              ('07.01.01 - Vendas', [('conta_exact', '7.01.01')]),
+              ('07.01.02 - Outras Receitas', [('conta_exact', '7.01.02')]),
+              ('07.01.03 - Ativos Próprios', [('conta_exact', '7.01.03')]),
+              ('07.01.04 - Reversão de Créditos Podres', [('conta_exact', '7.01.04')]),
+              ('07.02 - Custos dos Insumos', [('conta_startswith', '7.'), ('descricao_contains', ['insumos adquiridos', 'intermediação financeira', 'provis'])]),
+              ('07.02.01 - Custo de Mercadorias', [('conta_exact', '7.02.01')]),
+              ('07.02.02 - Custo de Materiais, Energia e Terceiros', [('conta_exact', '7.02.02')]),
+              ('07.02.03 - Valores Ativos', [('conta_exact', '7.02.03')]),
+              ('07.02.04 - Outros', [('conta_exact', '7.02.04')]),
+              ('07.03 - Valor Adicionado Bruto', [('conta_startswith', '7.'), ('descricao_contains', ['valor adicionado bruto'])]),
+              ('07.04 - Retenções', [('conta_startswith', '7.'), ('descricao_contains', ['retenç', 'Benefíci', 'sinistr'])]),
+              ('07.04.01 - Depreciação e Amortização', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['deprecia', 'amortiza', 'exaust'])]),
+              ('07.04.02 - Outras retenções', [('conta_exact', '7.04.02')]),
+              ('07.05 - Valor Adicionado Líquido', [('conta_startswith', '7.'), ('descricao_contains', ['valor adicionado líquid', 'receita operacional']), ('conta_startswith_not', '7.01'), ('descricao_contains_not', 'transferência')]),
+              ('07.06 - Valor Adicionado em Transferência', [('conta_startswith', '7.'), ('descricao_contains', ['transferência'])]),
+              ('07.06.01 - Resultado de Equivalência Patrimonial', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['equivalencia patrimonial'])]),
+              ('07.06.02 - Receitas Financeiras', [('conta_exact', '7.06.02')]),
+              ('07.06.03 - Outros', [('conta_exact', '7.06.03')]),
+              ('07.07 - Valor Adicionado Total a Distribuir', [('conta_startswith', '7.'), ('descricao_contains', ['total a distribuir'])]),
+              ('07.08 - Distribuição do Valor Adicionado', [('conta_startswith', '7.'), ('descricao_contains', 'Distribuição do Valor Adicionado')]),
+              ('07.08.01 - Pessoal', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'pessoal')]),
+              ('07.08.01.01 - Remuneração Direta', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'remuneração direta')]),
+              ('07.08.01.02 - Benefícios', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'benefícios')]),
+              ('07.08.01.03 - FGTS', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['F.G.T.S.', 'fgts'])]),
+              ('07.08.01.04 - Outros', [('conta_exact', '7.08.01.04')]),
+              ('07.08.02 - Impostos, Taxas e Contribuições', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['imposto', 'taxa', 'contribuiç'])]),
+              ('07.08.02.01 - Federais', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'federa')]),
+              ('07.08.02.02 - Estaduais', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'estadua')]),
+              ('07.08.02.03 - Municipais', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'municipa')]),
+              ('07.08.03 - Remuneração de Capital de Terceiros', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['remuneraç', 'capital', 'terceir']), ('descricao_contains_not', 'própri')]),
+              ('07.08.03.01 - Juros Pagos', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['juro']), ('descricao_contains_not', 'propri')]),
+              ('07.08.03.02 - Aluguéis', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'alugue')]),
+              ('07.08.04 - Remuneração de Capital Próprio', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['remuneraç', 'capital', 'própri']), ('descricao_contains_not', 'terceir')]),
+              ('07.08.04.01 - Juros sobre o Capital Próprio', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['juros sobre', 'jcp'])]),
+              ('07.08.04.02 - Dividendos', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['dividend'])]),
+              ('07.08.04.03 - Lucros Retidos', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['lucros retidos'])]),
+              ('07.08.05 - Outros', [('conta_exact', '7.08.05')]),
+        ]
+        d7 = get_dtp_lines(df, d7_demo, d7_lines)
+        
+        result = pd.concat([d0, d1, d2, d3, d6, d7], ignore_index=True).drop_duplicates()
+    except Exception as e:
+        print('error', e)
+        result = pd.DataFrame()
+
+    return result
+
+def fundamentalist_dre(df, group):
+    try:
+      # create md_list (magic dre items list)
+      md = create_md_list(df)
+      md_list = [*md.keys()]
+
+      # create line
+      line = create_line(df, group)
+      line['Valor'] = None
+
+      # Relações Entre Ativos e Passivos
+      line['Demonstrativo'] = 'Relações entre Ativos e Passivos'
+      df = fundamentaline(df=df, line=line, title='11.01.01 - Capital de Giro (Ativos Circulantes - Passivos Circulantes)', valor=md['_0101_ativo_circulante_de_curto_prazo']-md['_0201_passivo_circulante_de_curto_prazo'])
+      df = fundamentaline(df=df, line=line, title='11.01.02 - Liquidez (Ativos Circulantes por Passivos Circulantes)', valor=division(md['_0101_ativo_circulante_de_curto_prazo'], md['_0201_passivo_circulante_de_curto_prazo']))
+      df = fundamentaline(df=df, line=line, title='11.01.03 - Ativos Circulantes de Curto Prazo por Ativos', valor=division(md['_0101_ativo_circulante_de_curto_prazo'],md['_01_ativo_total']))
+      df = fundamentaline(df=df, line=line, title='11.01.04 - Ativos Não Circulantes de Longo Prazo por Ativos', valor=division(md['_0102_ativo_nao_circulante_de_longo_prazo'],md['_01_ativo_total']))
+      df = fundamentaline(df=df, line=line, title='11.02 - Passivos por Ativos', valor=division((md['_02_passivo_total']-md['_0203_patrimonio_liquido']),md['_01_ativo_total']))
+      df = fundamentaline(df=df, line=line, title='11.02.01 - Passivos Circulantes de Curto Prazo por Ativos', valor=division(md['_0201_passivo_circulante_de_curto_prazo'],md['_01_ativo_total']))
+      df = fundamentaline(df=df, line=line, title='11.02.02 - Passivos Não Circulantes de Longo Prazo por Ativos', valor=division(md['_0202_passivo_circulante_de_longo_prazo'],md['_01_ativo_total']))
+      df = fundamentaline(df=df, line=line, title='11.02.03 - Passivos Circulantes de Curto Prazo por Passivos', valor=division(md['_0201_passivo_circulante_de_curto_prazo'],md['_02_passivo_total']))
+      df = fundamentaline(df=df, line=line, title='11.02.04 - Passivos Não Circulantes de Longo Prazo por Passivos', valor=division(md['_0202_passivo_circulante_de_longo_prazo'],md['_02_passivo_total']))
+      df = fundamentaline(df=df, line=line, title='11.03 - Patrimônio Líquido por Ativos', valor=division(md['_0203_patrimonio_liquido'],md['_01_ativo_total']))
+      df = fundamentaline(df=df, line=line, title='11.03.01 - Equity Multiplier (Ativos por Patrimônio Líquido)', valor=division(md['_01_ativo_total'],md['_0203_patrimonio_liquido']))
+      df = fundamentaline(df=df, line=line, title='11.03.02 - Passivos por Patrimônio Líquido', valor=division((md['_0201_passivo_circulante_de_curto_prazo']+md['_0202_passivo_circulante_de_longo_prazo']),md['_0203_patrimonio_liquido']))
+      df = fundamentaline(df=df, line=line, title='11.03.02.01 - Passivos Circulantes de Curto Prazo por Patrimônio Líquido', valor=division(md['_0201_passivo_circulante_de_curto_prazo'],md['_0203_patrimonio_liquido']))
+      df = fundamentaline(df=df, line=line, title='11.03.02.02 - Passivos Não Circulantes de Longo Prazo por Patrimônio Líquido', valor=division(md['_0202_passivo_circulante_de_longo_prazo'],md['_0203_patrimonio_liquido']))
+
+      # Patrimônio
+      line['Demonstrativo'] = 'Patrimônio'
+      r = md['_020302_reservas_de_capital'] + md['_020303_reservas_de_reavaliacao'] + md['_020304_reservas_de_lucros']
+      df = fundamentaline(df=df, line=line, title='11.04 - Capital Social por Patrimônio Líquido', valor=division(md['_020301_capital_social'],md['_0203_patrimonio_liquido']))
+      df = fundamentaline(df=df, line=line, title='11.05 - Reservas por Patrimônio Líquido', valor=division(r,md['_0203_patrimonio_liquido']))
+
+      # Dívida
+      line['Demonstrativo'] = 'Dívida'
+      dbcp = md['_0201040101_emprestimos_e_financiamentos_em_moeda_nacional']+md['_0201040102_emprestimos_e_financiamentos_em_moeda_estrangeira']+md['_02010402_debentures']+md['_02010403_arrendamentos']+md['_02010409_outros_emprestimos_financiamentos_e_debentures']
+      dblp = md['_0202010101_emprestimos_e_financiamentos_em_moeda_nacional']+md['_0202010102_emprestimos_e_financiamentos_em_moeda_estrangeira']+md['_02020102_debentures']+md['_02020103_arrendamentos']+md['_02020209_outros_emprestimos_financiamentos_e_debentures']
+      db = dbcp + dblp
+      dme = md['_0201040102_emprestimos_e_financiamentos_em_moeda_estrangeira'] + md['_0202010102_emprestimos_e_financiamentos_em_moeda_estrangeira']
+      dmn = db - dme
+      dl = -1*(db-md['_010101_caixa_e_disponibilidades_de_caixa'])
+      pi = md['_010202_investimentos_nao_capex']+md['_010203_imobilizados']+md['_010204_intangivel']
+      ebitda = md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'] + md['_070401_depreciacao_e_amortizacao']
+      df = fundamentaline(df=df, line=line, title='12.01 - Dívida Bruta', valor=db)
+      df = fundamentaline(df=df, line=line, title='12.01.01 - Dívida Bruta Circulante de Curto Prazo', valor=dbcp)
+      df = fundamentaline(df=df, line=line, title='12.01.02 - Dívida Bruta Não Circulante de Longo Prazo', valor=dblp)
+      df = fundamentaline(df=df, line=line, title='12.01.03 - Dívida Bruta Circulante de Curto Prazo por Dívida Bruta', valor=division(dbcp, db))
+      df = fundamentaline(df=df, line=line, title='12.01.04 - Dívida Bruta Não Circulante de Longo Prazo por Dívida Bruta', valor=division(dblp, db))
+      df = fundamentaline(df=df, line=line, title='12.01.05 - Dívida Bruta em Moeda Nacional', valor=dmn)
+      df = fundamentaline(df=df, line=line, title='12.01.06 - Dívida Bruta em Moeda Estrangeira', valor=dme)
+      df = fundamentaline(df=df, line=line, title='12.01.07 - Dívida Bruta em Moeda Nacional por Dívida Bruta', valor=division(dmn, db))
+      df = fundamentaline(df=df, line=line, title='12.01.08 - Dívida Bruta em Moeda Estrangeira por Dívdida Bruta', valor=division(dme, db))
+      df = fundamentaline(df=df, line=line, title='12.02.01 - Dívida Bruta por Patrimônio Líquido', valor=division(db,md['_0203_patrimonio_liquido']))
+      df = fundamentaline(df=df, line=line, title='12.02.02 - Endividamento Financeiro', valor=division(db,(db+md['_0203_patrimonio_liquido'])))
+      df = fundamentaline(df=df, line=line, title='12.03 - Patrimônio Imobilizado em Capex, Investimentos Não Capex e Intangível Não Capex', valor=pi)
+      df = fundamentaline(df=df, line=line, title='12.03.01 - Patrimônio Imobilizado por Patrimônio Líquido', valor=division(pi,md['_0203_patrimonio_liquido']))
+      df = fundamentaline(df=df, line=line, title='12.04 - Dívida Líquida', valor=dl)
+      df = fundamentaline(df=df, line=line, title='12.04.01 - Dívida Líquida por EBITDA', valor=division(dl,ebitda))
+      df = fundamentaline(df=df, line=line, title='12.04.01 - Serviço da Dívida (Dívida Líquida por Resultado)', valor=division(dl,md['_0311_lucro_liquido']))
+
+      # Resultados Fundamentalistas
+      line['Demonstrativo'] = 'Resultados Fundamentalistas'
+      df = fundamentaline(df=df, line=line, title='13.03 - Contas a Receber por Faturamento', valor=division((md['_010103_contas_a_receber']+md['_01020103_contas_a_receber']),md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.03.01 - Contas a Receber Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010103_contas_a_receber'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.03.02 - Contas a Receber Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020103_contas_a_receber'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.04 - Estoques por Faturamento', valor=division((md['_010104_estoques']+md['_01020104_estoques']),md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.04.01 - Estoques Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010104_estoques'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.04.02 - Estoques Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020104_estoques'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.05 - Ativos Biológicos por Faturamento', valor=division((md['_010105_ativos_biologicos']+md['_01020105_ativos_biologicos']),md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.05.01 - Ativos Biológicos Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010105_ativos_biologicos'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.05.02 - Ativos Biológicos Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020105_ativos_biologicos'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.06 - Tributos por Faturamento', valor=division((md['_010106_tributos']+md['_01020106_tributos']),md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.06.01 - Tributos Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010106_tributos'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.06.02 - Tributos Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020106_tributos'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.07 - Despesas por Faturamento', valor=division((md['_010107_despesas']+md['_01020107_despesas']),md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.07.01 - Despesas Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010107_despesas'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.07.02 - Despesas Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020107_despesas'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.09 - Outros Ativos por Faturamento', valor=division((md['_010109_outros_ativos_circulantes']+md['_01020109_outros_ativos_nao_circulantes']),md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.09.01 - Outros Ativos Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010109_outros_ativos_circulantes'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='13.09.02 - Outros Ativos Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020109_outros_ativos_nao_circulantes'],md['_0301_receita_bruta']))
+      ci = md['_0203_patrimonio_liquido']+db+md['_010101_caixa_e_disponibilidades_de_caixa']
+      df = fundamentaline(df=df, line=line, title='14.01.01 - Receita por Ativos', valor=division(md['_0301_receita_bruta'],md['_01_ativo_total']))
+      df = fundamentaline(df=df, line=line, title='14.01.02 - Receita por Patrimônio', valor=division(md['_0301_receita_bruta'],md['_0203_patrimonio_liquido']))
+      df = fundamentaline(df=df, line=line, title='14.02.01 - Coeficiente de Retorno (Resultado por Ativos)', valor=division(md['_0311_lucro_liquido'],md['_01_ativo_total']))
+      df = fundamentaline(df=df, line=line, title='14.02.02 - ROE (Resultado por Patrimônio)', valor=division(md['_0311_lucro_liquido'],md['_0203_patrimonio_liquido']))
+      df = fundamentaline(df=df, line=line, title='14.03 - Capital Investido', valor=ci)
+      df = fundamentaline(df=df, line=line, title='14.03.01 - ROIC (Retorno por Capital Investido)', valor=division(md['_0311_lucro_liquido'],ci))
+      df = fundamentaline(df=df, line=line, title='14.04.01 - ROAS (EBIT por Ativos)', valor=division(md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'],md['_01_ativo_total']))
+      rc = md['_070803_remuneracao_de_capital_de_terceiros'] + md['_070804_remuneracao_de_capital_proprio']
+      df = fundamentaline(df=df, line=line, title='15.01 - Remuneração de Capital', valor=rc)
+      df = fundamentaline(df=df, line=line, title='15.01.01 - Remuneração de Capital de Terceiros por Remuneração de Capital', valor=division(md['_070803_remuneracao_de_capital_de_terceiros'],rc))
+      df = fundamentaline(df=df, line=line, title='15.01.01.01 - Juros Pagos por Remuneração de Capital de Terceiros', valor=division(md['_07080301_juros_pagos'],md['_070803_remuneracao_de_capital_de_terceiros']))
+      df = fundamentaline(df=df, line=line, title='15.01.01.02 - Aluguéis por Remuneração de Capital de Terceiros', valor=division(md['_07080302_alugueis'],md['_070803_remuneracao_de_capital_de_terceiros']))
+      df = fundamentaline(df=df, line=line, title='15.01.02 - Remuneração de Capital Próprio por Remuneração de Capital', valor=division(md['_070804_remuneracao_de_capital_proprio'],rc))
+      df = fundamentaline(df=df, line=line, title='15.01.02.01 - Juros Sobre o Capital Próprio por Remuneração de Capital Próprio', valor=division(md['_07080401_juros_sobre_o_capital_proprio'],md['_070804_remuneracao_de_capital_proprio']))
+      df = fundamentaline(df=df, line=line, title='15.01.02.02 - Dividendos por Remuneração de Capital Próprio', valor=division(md['_07080402_dividendos'],md['_070804_remuneracao_de_capital_proprio']))
+      df = fundamentaline(df=df, line=line, title='15.01.02.03 - Lucros Retidos por Remuneração de Capital Próprio', valor=division(md['_07080403_lucros_retidos'],md['_070804_remuneracao_de_capital_proprio']))
+      df = fundamentaline(df=df, line=line, title='15.02 - Remuneração de Capital por EBIT', valor=division(rc,md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos']))
+      df = fundamentaline(df=df, line=line, title='15.02.01 - Impostos por EBIT', valor=division(md['_0308_impostos_irpj_e_csll'],md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos']))
+      df = fundamentaline(df=df, line=line, title='16.01 - Margem Bruta (Resultado Bruto (Receita Líquida) por Receita Bruto)', valor=division(md['_0303_resultado_bruto_receita_liquida'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='16.02 - Margem Operacional (Receitas Operacionais por Receita Bruta)', valor=division(md['_0304_despesas_operacionais'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='16.02.01 - Força de Vendas (Despesas com Vendas por Despesas Operacionais)', valor=division(md['_030401_despesas_com_vendas'],md['_0304_despesas_operacionais']))
+      df = fundamentaline(df=df, line=line, title='16.02.02 - Peso Administrativo (Despesas com Administração por Despesas Operacionais)', valor=division(md['_030402_despesas_gerais_e_administrativas'],md['_0304_despesas_operacionais']))
+      df = fundamentaline(df=df, line=line, title='16.03 - Margem EBITDA (EBITDA por Resultado Bruto (Receita Líquida))', valor=division(ebitda,md['_0303_resultado_bruto_receita_liquida']))
+      df = fundamentaline(df=df, line=line, title='16.03.01 - Margem EBIT (EBIT por Resultado Bruto (Receita Líquida))', valor=division(md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'],md['_0303_resultado_bruto_receita_liquida']))
+      df = fundamentaline(df=df, line=line, title='16.03.02 - Margem de Depreciação por Resultado Bruto (Receita Líquida)', valor=division(md['_070401_depreciacao_e_amortizacao'],md['_0303_resultado_bruto_receita_liquida']))
+      df = fundamentaline(df=df, line=line, title='16.04 - Margem Não Operacional (Resultado Não Operacional por Resultado Bruto (Receita Líquida))', valor=division(md['_0306_resultado_financeiro_nao_operacional'],md['_0303_resultado_bruto_receita_liquida']))
+      df = fundamentaline(df=df, line=line, title='16.05 - Margem Líquida (Lucro Líquido por Receita Bruta)', valor=division(md['_0311_lucro_liquido'],md['_0301_receita_bruta']))
+
+      # Análise do Fluxo de Caixa
+      line['Demonstrativo'] = 'Análise do Fluxo de Caixa'
+      cl = md['_0601_caixa_das_operacoes']+md['_0602_caixa_de_investimentos_capex']
+      ct = cl+md['_0603_caixa_de_financiamento']
+      ci = md['_060201_investimentos']+md['_060202_imobilizado_e_intangivel']
+      df = fundamentaline(df=df, line=line, title='17.01 - Caixa Total', valor=ct)
+      df = fundamentaline(df=df, line=line, title='17.02 - Caixa Livre', valor=cl)
+      df = fundamentaline(df=df, line=line, title='17.03.01 - Caixa de Investimentos por Caixa das Operações', valor=division(md['_0602_caixa_de_investimentos_capex'],md['_0601_caixa_das_operacoes']))
+      df = fundamentaline(df=df, line=line, title='17.03.02 - Caixa de Investimentos por EBIT', valor=division(md['_0602_caixa_de_investimentos_capex'],md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos']))
+      df = fundamentaline(df=df, line=line, title='17.04 - Caixa Imobilizado', valor=ci)
+      df = fundamentaline(df=df, line=line, title='17.05 - FCFF simplificado (Caixa Livre para a Firma)', valor=md['_0601_caixa_das_operacoes']-ci)
+      df = fundamentaline(df=df, line=line, title='17.06 - FCFF simplificado (Caixa Livre para a Firma)', valor=md['_0601_caixa_das_operacoes']-ci)
+
+
+      # Análise de Valor Agragado
+      line['Demonstrativo'] = 'Análise do Valor Agregado'
+      df = fundamentaline(df=df, line=line, title='18.01 - Margem de Vendas por Valor Agregado', valor=division(md['_070101_vendas'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.02 - Custo dos Insumos por Valor Agregado', valor=division(md['_0702_custos_dos_insumos'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.03 - Valor Adicionado Bruto por Valor Agregado', valor=division(md['_0703_valor_adicionado_bruto'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.04 - Retenções por Valor Agregado', valor=division(md['_0704_retencoes'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.05 - Valor Adicionado Líquido por Valor Agregado', valor=division(md['_0705_valor_adicionado_liquido'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.06 - Valor Adicionado em Transferência por Valor Agregado', valor=division(md['_0706_valor_adicionado_em_transferencia'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.07 - Recursos Humanos por Valor Agregado', valor=division(md['_070801_pessoal'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.07.01 - Remuneração Direta (Recursos Humanos) por Valor Agregado', valor=division(md['_07080101_remuneracao_direta'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.07.02 - Benefícios (Recursos Humanos) por Valor Agregado', valor=division(md['_07080102_beneficios'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.07.03 - FGTS (Recursos Humanos) por Valor Agregado', valor=division(md['_07080103_fgts'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.08 - Impostos por Valor Agregado', valor=division(md['_070802_impostos_taxas_e_contribuicoes'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.09 - Remuneração de Capital de Terceiros por Valor Agregado', valor=division(md['_070803_remuneracao_de_capital_de_terceiros'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.09.01 - Juros Pagos a Terceiros por Valor Agregado', valor=division(md['_07080301_juros_pagos'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.09.02 - Aluguéis Pagos a Terceiros por Valor Agregado', valor=division(md['_07080302_alugueis'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.10 - Remuneração de Capital Próprio por Valor Agregado', valor=division(md['_070804_remuneracao_de_capital_proprio'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.10.01 - Juros Sobre Capital Próprio por Valor Agregado', valor=division(md['_07080401_juros_sobre_o_capital_proprio'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.10.02 - Dividendos por Valor Agregado', valor=division(md['_07080402_dividendos'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.10.02 - Lucros Retidos por Valor Agregado', valor=division(md['_07080403_lucros_retidos'],md['_0707_valor_adicionado_total_a_distribuir']))
+      df = fundamentaline(df=df, line=line, title='18.11.01 - Alíquota de Impostos (Impostos, Taxas e Contribuições por Receita Bruta)', valor=division(md['_070802_impostos_taxas_e_contribuicoes'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='18.11.02 - Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta', valor=division(md['_070803_remuneracao_de_capital_de_terceiros'],md['_0301_receita_bruta']))
+      df = fundamentaline(df=df, line=line, title='18.11.03 - Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta', valor=division(md['_070804_remuneracao_de_capital_proprio'],md['_0301_receita_bruta']))
+
+    except Exception as e:
+       print(f'acorde e descubra o que houve com o valor da chave do dictionario MD que originouesse erro: {e}')
+       pass
+
+    return df
+
+
 # storage functions
 def upload_to_gcs(df, df_name):
     """Uploads a pandas DataFrame to Google Cloud Storage (GCS) as a zipped pickle file.
