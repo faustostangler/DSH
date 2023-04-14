@@ -521,6 +521,41 @@ def dre_intel(value):
     return value
 
 def dre_pivot(value):
-   
+    file_name = 'dre_intel'
+    dre_intel = run.read_or_create_dataframe(file_name, cols_dre_math)
+    dre_intel = run.clean_dre_math(dre_intel)
 
-   return value
+    dre_intel['CDD'] = dre_intel['Conta'].astype('str') + ' - ' + dre_intel['Descrição'].astype('str') + ' - ' + dre_intel['Demonstrativo'].astype('str')
+    groups = dre_intel.groupby(by='Companhia', group_keys=False)
+
+    file_name = 'dre_pivot'
+    dre_pivot = run.read_or_create_dataframe(file_name, cols_dre_math)
+
+    avpi = []
+    start_time = time.time()
+    size = len(groups)
+
+    # groupby intel to transform into pivot
+    for item, group in enumerate(groups):
+        progress = run.remaining_time(start_time, size, item)
+        company = group[0]
+        group = group[1]
+
+        avpi.append(f'{progress[0]:.6f}')
+
+        pivot = pd.pivot_table(data=group, index=['Trimestre'], columns=['CDD'], values=['Valor'], aggfunc='max', fill_value=0.0)
+        pivot.columns = pivot.columns.droplevel(0)
+        pivot['Companhia'] = company
+        pivot = pivot.reset_index()
+        cols = pivot.columns.to_list()
+        cols.insert(0, cols.pop())
+        pivot = pivot[cols]
+
+        dre_pivot = pd.concat([dre_pivot, pivot], ignore_index=True)
+        print(f'{item+1} {len(groups)-item-1} {(item+1)/(len(groups)):.2%} {progress[0]:.6f}s {progress[1]} {company} {group.shape}')
+
+    # save
+    dre_pivot = run.save_and_pickle(dre_pivot, file_name)
+    print('saved')
+
+    return value
