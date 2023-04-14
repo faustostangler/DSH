@@ -16,6 +16,7 @@ start = 1
 batch = 120
 bins = 20
 bin_size = 50
+chunksize = 10**6  # Adjust this value based on your available memory
 
 # variables 1
 app_folder = 'datasets/'
@@ -31,6 +32,9 @@ cols_dre_math = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descriçã
 demo = ['Demonstrações Financeiras Padronizadas', 'Informações Trimestrais']
 cmbGrupo = ['Dados da Empresa']
 cmbQuadro = ['Demonstração do Resultado', 'Balanço Patrimonial Ativo', 'Balanço Patrimonial Passivo', 'Demonstração do Fluxo de Caixa', 'Demonstração de Valor Adicionado', 'Demonstração do Resultado Abrangente']
+
+last_quarters = ['3', '4']
+all_quarters = ['6', '7']
 
 # variables 2
 driver_wait_time = 2
@@ -369,17 +373,17 @@ def get_dre(value):
 
     print(f'{l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {run.txt_cln(line[1])}, {line[5]}, {remaining_time_formatted}')
     
-    if (size-l+1) % (bin_size) == 0:
+    if (size-l-1) % (bin_size) == 0:
       dre = pd.concat([dre, df], ignore_index=True)
 
       dre = run.save_and_pickle(dre, file_name)
       df = pd.DataFrame(columns=cols_dre)
       print('partial save')
 
-  dre.drop_duplicates(inplace=True, keep='first')
   dre['Trimestre'] = pd.to_datetime(dre['Trimestre'], format='%d/%m/%Y')
   dre.sort_values(by=['Companhia', 'Trimestre', 'Url', 'Conta'], ascending=[True, False, True, True], inplace=True)
   dre['Trimestre'] = dre['Trimestre'].dt.strftime('%d/%m/%Y')
+  dre.drop_duplicates(inplace=True, keep='last')
   dre = run.save_and_pickle(dre, file_name)
   print('final save')
 
@@ -388,32 +392,53 @@ def get_dre(value):
 
 def dre_math(value):
   file_name = 'dre_raw'
-  dre_raw = run.read_or_create_dataframe(file_name, cols_dre)
-  # dre_raw = run.clean_dre_math(dre_raw)
+  dre_raw = run.read_or_create_dataframe(file_name, cols_dre_math)
+  dre_raw = run.clean_dre_math(dre_raw)
 
   file_name = 'dre_math'
-  dre_math = run.read_or_create_dataframe(file_name, cols_dre)
-  # dre_math = run.clean_dre_math(dre_math)
+  dre_math = run.read_or_create_dataframe(file_name, cols_dre_math)
+  dre_math = run.clean_dre_math(dre_math)
 
   dre_raw, dre_math = run.dre_prepare(dre_raw, dre_math)
 
   cias, math = run.get_math(dre_raw, dre_math)
-  df = pd.DataFrame(columns=cols_dre_math)
-  start_time = time.time()
   size = len(math)
+  print(f'Total of {size} items (items in company quarters) new to process')
+  df_temp = pd.DataFrame(columns=cols_dre_math)
+  start_time = time.time()
 
+  avpi = []
   for l, key in enumerate(math):
     # elapsed time
     running_time = (time.time() - start_time)
     avg_time_per_item = running_time / (l + 1)
-    elapsed_time = f'{running_time / (l + 1):.6f}'
     # remaining time
     remaining_time = size * avg_time_per_item
     hours, remainder = divmod(int(float(remaining_time)), 3600)
     minutes, seconds = divmod(remainder, 60)
-    remaining_time_formatted = f'{int(hours)}h {int(minutes)}m {int(seconds)}s'
-    # df, cias, status = run.math_magic(key[0], key[1], size, cias, l)
-    # df_temp = pd.concat([df_temp, df], axis=0, ignore_index=True)
-    print(f'{l+1}, {(size-l-1-1)}, {((l+1) / size) * 100:.6f}%, {avg_time_per_item:.6f}, {remaining_time_formatted}')
+    remaining_time_formatted = f'{int(hours)}h {int(minutes):02}m {int(seconds):02}s'
+    df, cias, status, key_cia = run.math_magic(key[0], key[1], size, cias, l)
+    df_temp = pd.concat([df_temp, df], axis=0, ignore_index=True)
+    # print(f'{l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {avg_time_per_item:.6f}s, {remaining_time_formatted} {key_cia[0]} {key_cia[1]} {key_cia[2]}')
+    avpi.append(f'{avg_time_per_item:.6f}')
+
+    if (size-l-1) % (bin_size*100) == 0 and status != True:
+        dre_math = pd.concat([dre_math, df_temp], axis=0, ignore_index=True)
+        df_temp = pd.DataFrame(columns=cols_dre_math)
+
+        dre_math.drop_duplicates(inplace=True)
+        file_name = 'dre_math'
+        dre_math = run.save_and_pickle(dre_math, file_name)
+        print(f'partial save {l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {avg_time_per_item:.6f}s, {remaining_time_formatted} {key_cia[0]} {key_cia[1]}')
+
+  dre_math = pd.concat([dre_math, df_temp], axis=0, ignore_index=True)
+  dre_math.drop_duplicates(inplace=True)
+  file_name = 'dre_math'
+  dre_math = run.save_and_pickle(dre_math, file_name)
+
 
   return value
+
+def dre_intel(value):
+   
+   return value

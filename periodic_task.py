@@ -13,11 +13,14 @@ def my_periodic_task():
     # value = 'nsd'
     # value = b3.get_nsd_links(value)
 
-    value = 'dre_raw'
-    value = b3.get_dre(value)
+    # value = 'dre_raw'
+    # value = b3.get_dre(value)
 
-    # value = 'dre_math'
-    # value = b3.dre_math(value)
+    value = 'dre_math'
+    value = b3.dre_math(value)
+
+    # value = 'dre_intel'
+    # value = b3.dre_intel(value)
 
     print("All updated!")
 
