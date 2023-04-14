@@ -19,8 +19,11 @@ def my_periodic_task():
     # value = 'dre_math'
     # value = b3.dre_math(value)
 
-    value = 'dre_intel'
-    value = b3.dre_intel(value)
+    # value = 'dre_intel'
+    # value = b3.dre_intel(value)
+
+    value = 'dre_pivot'
+    value = b3.dre_pivot(value)
 
     print("All updated!")
 
