@@ -36,6 +36,17 @@ cmbQuadro = ['Demonstração do Resultado', 'Balanço Patrimonial Ativo', 'Balan
 last_quarters = ['3', '4']
 all_quarters = ['6', '7']
 
+
+# dre new columns
+fsdemo = 'FS_Demonstrativo'
+fsdesc = 'FS_Descrição'
+fscol = 'FS_Conta'
+fsval = 'FS_Valor'
+
+columns = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor', 'Url', 'nsd', 'demosheet']
+columns = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor', 'Url', 'nsd']
+
+
 # variables 2
 driver_wait_time = 2
 driver = wait = None
@@ -371,7 +382,7 @@ def get_dre(value):
     quarter = run.read_quarter(line, driver, wait)
     df = pd.concat([df, quarter], ignore_index=True)
 
-    print(f'{l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {run.txt_cln(line[1])}, {line[5]}, {remaining_time_formatted}')
+    print(f'{l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {run.clean_text(line[1])}, {line[5]}, {remaining_time_formatted}')
     
     if (size-l-1) % (bin_size) == 0:
       dre = pd.concat([dre, df], ignore_index=True)
@@ -440,5 +451,64 @@ def dre_math(value):
   return value
 
 def dre_intel(value):
-   
-   return value
+    # existing dre_math (raw) to be converted by inteligence and then pivoted
+    file_name = 'dre_math'
+    dre_math = run.read_or_create_dataframe(file_name, cols_dre_math)
+    dre_math = run.clean_dre_math(dre_math)
+    
+    # try:
+    #     dre_math = dre_math.assign(demosheet=lambda x:x['Companhia'].astype(str) + ' ' + x['Trimestre'].dt.strftime('%d/%m/%Y').astype(str))
+    # except:
+    #     dre_math['demosheet'] = ''
+    # dre_math = dre_math[cols_dre_math]
+    file_name = 'dre_intel'
+    dre_intel = run.read_or_create_dataframe(file_name, cols_dre_math)
+
+    # demosheet contains ['Companhia', 'Trimestre']
+    ds = ['Companhia', 'Trimestre']
+
+    # get unique ds for dre_math (all ds)
+    ds_math = dre_math[ds].drop_duplicates()
+    ds_math = run.process_dataframe_trimestre(ds_math)
+
+    # get unique ds for dre_intel (processed ds)
+    ds_intel = dre_intel[ds].drop_duplicates()
+    ds_intel = run.process_dataframe_trimestre(ds_intel)
+
+    # get unprocessed ds for dre_math (dre_math[~mask]), mask = proccessed ds
+    try:
+        processed_ds = ds_intel['demosheet']
+        mask = dre_math['demosheet'].isin(processed_ds)
+        dre_processed = dre_math[mask].drop('demosheet', axis=1)
+        dre = dre_math[~mask].drop('demosheet', axis=1)
+    except Exception as e:
+        dre = dre_math
+
+    # demonstrativos trimestrais padronizados
+    demosheet = dre.groupby(ds, group_keys=False)
+    size = len(demosheet.groups.keys())
+    print(f'{size} demonstrativos diferentes para extrair as linhas padronizadas')
+
+    for item, group in enumerate(demosheet):
+        df = group[1]
+        group = group[0]
+        companhia = group[0]
+        trimestre = group[1].strftime('%d/%m/%Y')
+       
+        df1 = run.inteligence_dre(df)
+        df2 = run.fundamentalist_dre(df1, group)
+
+        dre_intel = pd.concat([dre_intel.reset_index(drop=True).drop_duplicates(), df2], ignore_index=True)
+        print(f'{item} {size-item} {((item+1)/(size)):.2%} {df2.shape[0]} {companhia} {trimestre}')
+
+        if (size-item) % 50 == 0:
+            dre_intel.reset_index(drop=True).drop_duplicates().drop_duplicates(inplace=True)
+            dre_intel = run.save_and_pickle(dre_intel, file_name)
+            print('partial save')
+
+
+    dre_intel.reset_index(drop=True).drop_duplicates().drop_duplicates(inplace=True)
+    dre_intel = run.save_and_pickle(dre_intel, file_name)
+    print('final save')
+
+    return value
