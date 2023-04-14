@@ -29,7 +29,7 @@ import string
 import datetime
 import time
 
-# text functions
+# general functions
 def wText(xpath: str, wait: WebDriverWait) -> str:
     """
     Finds and retrieves text from a web element using the provided xpath and wait object.
@@ -180,6 +180,18 @@ def clean_text(text):
     except Exception as e:
         print(e)
     return text
+
+def remaining_time(start_time, size, i):
+  # elapsed time
+  running_time = (time.time() - start_time)
+  avg_time_per_item = running_time / (i + 1)
+  # remaining time
+  remaining_time = size * avg_time_per_item
+  hours, remainder = divmod(int(float(remaining_time)), 3600)
+  minutes, seconds = divmod(remainder, 60)
+  remaining_time_formatted = f'{int(hours)}h {int(minutes):02}m {int(seconds):02}s'
+
+  return avg_time_per_item, remaining_time_formatted
 
 # selenium functions
 def load_browser():
@@ -833,9 +845,9 @@ def read_cmbGrupo(grupo, line, driver, wait):
 def clean_dre_math(dre):
   try:
     # clean
-    dre['Companhia'] = dre['Companhia'].str.replace(' EM RECUPERACAO JUDICIAL', '')
-    dre['Companhia'] = dre['Companhia'].str.replace(' EM LIQUIDACAO EXTRAJUDICIAL', '')
-    dre['Companhia'] = dre['Companhia'].str.replace(' EM LIQUIDACAO', '')
+    dre.loc[:, 'Companhia'] = dre['Companhia'].str.replace(' EM RECUPERACAO JUDICIAL', '')
+    dre.loc[:, 'Companhia'] = dre['Companhia'].str.replace(' EM LIQUIDACAO EXTRAJUDICIAL', '')
+    dre.loc[:, 'Companhia'] = dre['Companhia'].str.replace(' EM LIQUIDACAO', '')
 
     # standartization
     dre['Companhia'] = dre['Companhia'].astype('category')
@@ -899,10 +911,21 @@ def process_dataframe(df):
         pass
     return df_updated
 
+def fix_to_datetime(df, column):
+    
+  try:
+    df[column] = df[column].apply(lambda x: pd.to_datetime(x, format='%d/%m/%Y', errors='ignore'))
+  except Exception as e:
+     pass
+  try:
+    df[column] = df[column].apply(lambda x: pd.to_datetime(x, format='%Y-%m-%d', errors='ignore'))
+  except Exception as e:
+     pass
+  return df
+
 def process_dataframe_trimestre(df):
     try:
-      df['Trimestre'] = pd.to_datetime(df['Trimestre'], format='%d/%m/%Y')
-      # df = df.assign(updated = lambda x: x['Companhia'].astype('string') + ' ' + x['Trimestre'].dt.year.astype(str))
+      df = fix_to_datetime(df, 'Trimestre')
 
       num_chunks = int(np.ceil(len(df) / b3.chunksize))
       df_updated = pd.DataFrame()
@@ -1211,8 +1234,8 @@ def filter_df(df='', line='', exact='', exact_exclusion='', startswith='', start
     return mask
 
 def filter_conditions(df, line, conditions):
-    mask = pd.Series([True] * len(df))
-    
+    mask = pd.Series(True, index=df.index)
+
     for condition, value in conditions.items():
         operation = condition.split('_', 1)[1]
         if operation in ["startswith", "startswith_not", "endswith", "endswith_not", "contains", "contains_not"]:
@@ -1383,17 +1406,19 @@ def get_dtp_line(df, demo, name, **conditions):
     mask = mask_conta & mask_descricao
 
     # Populate result dataframe based on the mask
-    line = {
-        'Companhia': df.loc[df.index[0], 'Companhia'],
-        'Trimestre': df.loc[df.index[0], 'Trimestre'],
-        'Demonstrativo': demo,
-        'Conta': name.split(' - ')[0],
-        'Descrição': name.split(' - ')[1],
-        'Valor': df[mask]['Valor'].max() if len(df[mask]) > 0 else 0.0,
-        'Url': df.loc[df.index[0], 'Url'],
-        'nsd': df.loc[df.index[0], 'nsd']
-    }
-    
+    try:
+        line = {
+            'Companhia': df.loc[df.index[0], 'Companhia'],
+            'Trimestre': df.loc[df.index[0], 'Trimestre'],
+            'Demonstrativo': demo,
+            'Conta': name.split(' - ')[0],
+            'Descrição': name.split(' - ')[1],
+            'Valor': df[mask]['Valor'].max() if len(df[mask]) > 0 else 0.0,
+            'Url': df.loc[df.index[0], 'Url'],
+            'nsd': df.loc[df.index[0], 'nsd']
+        }
+    except Exception as e:
+       pass    
     return pd.DataFrame([line])
 
 def get_dtp_lines(df, demo, df_lines):
@@ -1410,7 +1435,15 @@ def get_dtp_lines(df, demo, df_lines):
     return pd.concat(dtp, ignore_index=True)
 
 # intel pre fundamentalist
-def fundamentaline(df, line, title='', valor=''):
+def eval_formula(md, formula):
+  try:
+    result = eval(formula)
+  except Exception as e:
+    result = None
+    # print(f'error {e} in {formula}')
+  return result
+     
+def fundamentaline(line, title='', valor=''):
     fsdesc = 'Descrição'
     fscol = 'Conta'
     fsval = 'Valor'
@@ -1423,8 +1456,7 @@ def fundamentaline(df, line, title='', valor=''):
     line[fscol] = conta
     line[fsval] = valor
 
-    df = pd.concat([df, pd.DataFrame([line])], ignore_index=True).drop_duplicates()
-    return df
+    return line
 
 def add_fundamental_line(df, line, title, valor=None):
     fsdesc = 'Descrição'
@@ -1442,6 +1474,182 @@ def add_fundamental_line(df, line, title, valor=None):
 
     df = pd.concat([df, pd.DataFrame([line])], ignore_index=True).drop_duplicates()
     return df
+
+def calc_fundamentalist(md, *keys):
+  try:
+    return sum(md[key] for key in keys)
+  except Exception as e:
+    return 0.0
+
+def get_new_lines(md, line):
+  try:
+    # formulas
+    formulas = [
+      # Relações Entre Ativos e Passivos
+        ('_020302_reservas_de_capital', '_020303_reservas_de_reavaliacao', '_020304_reservas_de_lucros'),
+      # Dívida
+        ('_0201040101_emprestimos_e_financiamentos_em_moeda_nacional', '_0201040102_emprestimos_e_financiamentos_em_moeda_estrangeira', '_02010402_debentures', '_02010403_arrendamentos', '_02010409_outros_emprestimos_financiamentos_e_debentures'),
+        ('_0202010101_emprestimos_e_financiamentos_em_moeda_nacional', '_0202010102_emprestimos_e_financiamentos_em_moeda_estrangeira', '_02020102_debentures', '_02020103_arrendamentos', '_02020209_outros_emprestimos_financiamentos_e_debentures'),
+        ('_0201040102_emprestimos_e_financiamentos_em_moeda_estrangeira', '_0202010102_emprestimos_e_financiamentos_em_moeda_estrangeira'),
+        ('_010101_caixa_e_disponibilidades_de_caixa',),
+        ('_010202_investimentos_nao_capex', '_010203_imobilizados', '_010204_intangivel'),
+        ('_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos', '_070401_depreciacao_e_amortizacao'),
+      # Resultados Fundamentalistas
+        ('_0203_patrimonio_liquido',),
+        ('_010101_caixa_e_disponibilidades_de_caixa',),
+        ('_070803_remuneracao_de_capital_de_terceiros', '_070804_remuneracao_de_capital_proprio'),
+      # Análise do Fluxo de Caixa
+        ('_0601_caixa_das_operacoes', '_0602_caixa_de_investimentos_capex'),
+        ('_0603_caixa_de_financiamento',),
+        ('_060201_investimentos', '_060202_imobilizado_e_intangivel'),
+    ]
+
+    results = [calc_fundamentalist(md, *keys) for keys in formulas]
+    r = results[0]
+    dbcp = results[1]
+    dblp = results[2]
+    dme = results[3]
+    dmn = dbcp + dblp - dme
+    dl = -1 * ((dbcp + dblp) - results[4])
+    pi = results[5]
+    ebitda = results[6]
+    ci_base = results[7]
+    caixa_e_disponibilidades_de_caixa = results[8]
+    rc = results[9]
+    cl = results[10]
+    ct = cl + results[11]
+    ci = results[12]
+  except Exception as e:
+    pass
+
+  # lines
+  try:
+    new_lines = []
+    # Relações Entre Ativos e Passivos
+    line['Demonstrativo'] = 'Relações entre Ativos e Passivos'
+    new_lines.append(fundamentaline(line=line.copy(), title='11.01.01 - Capital de Giro (Ativos Circulantes - Passivos Circulantes)', valor=eval_formula(md, "md['_0101_ativo_circulante_de_curto_prazo']-md['_0201_passivo_circulante_de_curto_prazo']")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.01.02 - Liquidez (Ativos Circulantes por Passivos Circulantes)', valor=eval_formula(md, "division(md['_0101_ativo_circulante_de_curto_prazo'], md['_0201_passivo_circulante_de_curto_prazo'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.01.03 - Ativos Circulantes de Curto Prazo por Ativos', valor=eval_formula(md, "division(md['_0101_ativo_circulante_de_curto_prazo'],md['_01_ativo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.01.04 - Ativos Não Circulantes de Longo Prazo por Ativos', valor=eval_formula(md, "division(md['_0102_ativo_nao_circulante_de_longo_prazo'],md['_01_ativo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.02 - Passivos por Ativos', valor=eval_formula(md, "division((md['_02_passivo_total']-md['_0203_patrimonio_liquido']),md['_01_ativo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.02.01 - Passivos Circulantes de Curto Prazo por Ativos', valor=eval_formula(md, "division(md['_0201_passivo_circulante_de_curto_prazo'],md['_01_ativo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.02.02 - Passivos Não Circulantes de Longo Prazo por Ativos', valor=eval_formula(md, "division(md['_0202_passivo_circulante_de_longo_prazo'],md['_01_ativo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.02.03 - Passivos Circulantes de Curto Prazo por Passivos', valor=eval_formula(md, "division(md['_0201_passivo_circulante_de_curto_prazo'],md['_02_passivo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.02.04 - Passivos Não Circulantes de Longo Prazo por Passivos', valor=eval_formula(md, "division(md['_0202_passivo_circulante_de_longo_prazo'],md['_02_passivo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.03 - Patrimônio Líquido por Ativos', valor=eval_formula(md, "division(md['_0203_patrimonio_liquido'],md['_01_ativo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.03.01 - Equity Multiplier (Ativos por Patrimônio Líquido)', valor=eval_formula(md, "division(md['_01_ativo_total'],md['_0203_patrimonio_liquido'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.03.02 - Passivos por Patrimônio Líquido', valor=eval_formula(md, "division((md['_0201_passivo_circulante_de_curto_prazo']+md['_0202_passivo_circulante_de_longo_prazo']),md['_0203_patrimonio_liquido'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.03.02.01 - Passivos Circulantes de Curto Prazo por Patrimônio Líquido', valor=eval_formula(md, "division(md['_0201_passivo_circulante_de_curto_prazo'],md['_0203_patrimonio_liquido'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.03.02.02 - Passivos Não Circulantes de Longo Prazo por Patrimônio Líquido', valor=eval_formula(md, "division(md['_0202_passivo_nao_circulante_de_longo_prazo'],md['_0203_patrimonio_liquido'])")))
+
+    # Patrimônio
+    line['Demonstrativo'] = 'Patrimônio'
+    new_lines.append(fundamentaline(line=line.copy(), title='11.04 - Capital Social por Patrimônio Líquido', valor=eval_formula(md, "division(md['_020301_capital_social'],md['_0203_patrimonio_liquido'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='11.05 - Reservas por Patrimônio Líquido', valor=eval_formula(md, "division(r,md['_0203_patrimonio_liquido'])")))
+
+    # Dívida
+    line['Demonstrativo'] = 'Dívida'
+    new_lines.append(fundamentaline(line=line.copy(), title='12.01 - Dívida Bruta', valor=eval_formula(md, "db")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.01.01 - Dívida Bruta Circulante de Curto Prazo', valor=eval_formula(md, "dbcp")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.01.02 - Dívida Bruta Não Circulante de Longo Prazo', valor=eval_formula(md, "dblp")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.01.03 - Dívida Bruta Circulante de Curto Prazo por Dívida Bruta', valor=eval_formula(md, "division(dbcp, db)")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.01.04 - Dívida Bruta Não Circulante de Longo Prazo por Dívida Bruta', valor=eval_formula(md, "division(dblp, db)")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.01.05 - Dívida Bruta em Moeda Nacional', valor=eval_formula(md, "dmn")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.01.06 - Dívida Bruta em Moeda Estrangeira', valor=eval_formula(md, "dme")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.01.07 - Dívida Bruta em Moeda Nacional por Dívida Bruta', valor=eval_formula(md, "division(dmn, db")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.01.08 - Dívida Bruta em Moeda Estrangeira por Dívdida Bruta', valor=eval_formula(md, "division(dme, db")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.02.01 - Dívida Bruta por Patrimônio Líquido', valor=eval_formula(md, "division(db,md['_0203_patrimonio_liquido'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.02.02 - Endividamento Financeiro', valor=eval_formula(md, "division(db,(db+md['_0203_patrimonio_liquido'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.03 - Patrimônio Imobilizado em Capex, Investimentos Não Capex e Intangível Não Capex', valor=eval_formula(md, "pi")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.03.01 - Patrimônio Imobilizado por Patrimônio Líquido', valor=eval_formula(md, "division(pi,md['_0203_patrimonio_liquido'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.04 - Dívida Líquida', valor=eval_formula(md, "dl")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.04.01 - Dívida Líquida por EBITDA', valor=eval_formula(md, "division(dl,ebitda")))
+    new_lines.append(fundamentaline(line=line.copy(), title='12.04.01 - Serviço da Dívida (Dívida Líquida por Resultado)', valor=eval_formula(md, "division(dl,md['_0311_lucro_liquido'])")))
+
+    # Resultados Fundamentalistas
+    line['Demonstrativo'] = 'Resultados Fundamentalistas'
+    new_lines.append(fundamentaline(line=line.copy(), title='13.03 - Contas a Receber por Faturamento', valor=eval_formula(md, "division((md['_010103_contas_a_receber']+md['_01020103_contas_a_receber']),md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.03.01 - Contas a Receber Não Circulantes de Curto Prazo por Faturamento', valor=eval_formula(md, "division(md['_010103_contas_a_receber'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.03.02 - Contas a Receber Circulantes de Longo Prazo por Faturamento', valor=eval_formula(md, "division(md['_01020103_contas_a_receber'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.04 - Estoques por Faturamento', valor=eval_formula(md, "division((md['_010104_estoques']+md['_01020104_estoques']),md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.04.01 - Estoques Não Circulantes de Curto Prazo por Faturamento', valor=eval_formula(md, "division(md['_010104_estoques'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.04.02 - Estoques Circulantes de Longo Prazo por Faturamento', valor=eval_formula(md, "division(md['_01020104_estoques'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.05 - Ativos Biológicos por Faturamento', valor=eval_formula(md, "division((md['_010105_ativos_biologicos']+md['_01020105_ativos_biologicos']),md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.05.01 - Ativos Biológicos Não Circulantes de Curto Prazo por Faturamento', valor=eval_formula(md, "division(md['_010105_ativos_biologicos'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.05.02 - Ativos Biológicos Circulantes de Longo Prazo por Faturamento', valor=eval_formula(md, "division(md['_01020105_ativos_biologicos'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.06 - Tributos por Faturamento', valor=eval_formula(md, "division((md['_010106_tributos']+md['_01020106_tributos']),md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.06.01 - Tributos Não Circulantes de Curto Prazo por Faturamento', valor=eval_formula(md, "division(md['_010106_tributos'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.06.02 - Tributos Circulantes de Longo Prazo por Faturamento', valor=eval_formula(md, "division(md['_01020106_tributos'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.07 - Despesas por Faturamento', valor=eval_formula(md, "division((md['_010107_despesas']+md['_01020107_despesas']),md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.07.01 - Despesas Não Circulantes de Curto Prazo por Faturamento', valor=eval_formula(md, "division(md['_010107_despesas'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.07.02 - Despesas Circulantes de Longo Prazo por Faturamento', valor=eval_formula(md, "division(md['_01020107_despesas'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.09 - Outros Ativos por Faturamento', valor=eval_formula(md, "division((md['_010109_outros_ativos_circulantes']+md['_01020109_outros_ativos_nao_circulantes']),md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.09.01 - Outros Ativos Não Circulantes de Curto Prazo por Faturamento', valor=eval_formula(md, "division(md['_010109_outros_ativos_circulantes'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='13.09.02 - Outros Ativos Não Circulantes de Longo Prazo por Faturamento', valor=eval_formula(md, "division(md['_01020109_outros_ativos_nao_circulantes'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='14.01.01 - Receita por Ativos', valor=eval_formula(md, "division(md['_0301_receita_bruta'],md['_01_ativo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='14.01.02 - Receita por Patrimônio', valor=eval_formula(md, "division(md['_0301_receita_bruta'],md['_0203_patrimonio_liquido'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='14.02.01 - Coeficiente de Retorno (Resultado por Ativos)', valor=eval_formula(md, "division(md['_0311_lucro_liquido'],md['_01_ativo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='14.02.02 - ROE (Resultado por Patrimônio)', valor=eval_formula(md, "division(md['_0311_lucro_liquido'],md['_0203_patrimonio_liquido'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='14.03 - Capital Investido', valor=eval_formula(md, "ci")))
+    new_lines.append(fundamentaline(line=line.copy(), title='14.03.01 - ROIC (Retorno por Capital Investido)', valor=eval_formula(md, "division(md['_0311_lucro_liquido'],ci")))
+    new_lines.append(fundamentaline(line=line.copy(), title='14.04.01 - ROAS (EBIT por Ativos)', valor=eval_formula(md, "division(md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'],md['_01_ativo_total'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='15.01 - Remuneração de Capital', valor=eval_formula(md, "rc")))
+    new_lines.append(fundamentaline(line=line.copy(), title='15.01.01 - Remuneração de Capital de Terceiros por Remuneração de Capital', valor=eval_formula(md, "division(md['_070803_remuneracao_de_capital_de_terceiros'],rc")))
+    new_lines.append(fundamentaline(line=line.copy(), title='15.01.01.01 - Juros Pagos por Remuneração de Capital de Terceiros', valor=eval_formula(md, "division(md['_07080301_juros_pagos'],md['_070803_remuneracao_de_capital_de_terceiros'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='15.01.01.02 - Aluguéis por Remuneração de Capital de Terceiros', valor=eval_formula(md, "division(md['_07080302_alugueis'],md['_070803_remuneracao_de_capital_de_terceiros'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='15.01.02 - Remuneração de Capital Próprio por Remuneração de Capital', valor=eval_formula(md, "division(md['_070804_remuneracao_de_capital_proprio'],rc")))
+    new_lines.append(fundamentaline(line=line.copy(), title='15.01.02.01 - Juros Sobre o Capital Próprio por Remuneração de Capital Próprio', valor=eval_formula(md, "division(md['_07080401_juros_sobre_o_capital_proprio'],md['_070804_remuneracao_de_capital_proprio'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='15.01.02.02 - Dividendos por Remuneração de Capital Próprio', valor=eval_formula(md, "division(md['_07080402_dividendos'],md['_070804_remuneracao_de_capital_proprio'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='15.01.02.03 - Lucros Retidos por Remuneração de Capital Próprio', valor=eval_formula(md, "division(md['_07080403_lucros_retidos'],md['_070804_remuneracao_de_capital_proprio'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='15.02 - Remuneração de Capital por EBIT', valor=eval_formula(md, "division(rc,md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='15.02.01 - Impostos por EBIT', valor=eval_formula(md, "division(md['_0308_impostos_irpj_e_csll'],md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.01 - Margem Bruta (Resultado Bruto (Receita Líquida) por Receita Bruto)', valor=eval_formula(md, "division(md['_0303_resultado_bruto_receita_liquida'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.02 - Margem Operacional (Receitas Operacionais por Receita Bruta)', valor=eval_formula(md, "division(md['_0304_despesas_operacionais'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.02.01 - Força de Vendas (Despesas com Vendas por Despesas Operacionais)', valor=eval_formula(md, "division(md['_030401_despesas_com_vendas'],md['_0304_despesas_operacionais'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.02.02 - Peso Administrativo (Despesas com Administração por Despesas Operacionais)', valor=eval_formula(md, "division(md['_030402_despesas_gerais_e_administrativas'],md['_0304_despesas_operacionais'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.03 - Margem EBITDA (EBITDA por Resultado Bruto (Receita Líquida))', valor=eval_formula(md, "division(ebitda,md['_0303_resultado_bruto_receita_liquida'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.03.01 - Margem EBIT (EBIT por Resultado Bruto (Receita Líquida))', valor=eval_formula(md, "division(md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'],md['_0303_resultado_bruto_receita_liquida'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.03.02 - Margem de Depreciação por Resultado Bruto (Receita Líquida)', valor=eval_formula(md, "division(md['_070401_depreciacao_e_amortizacao'],md['_0303_resultado_bruto_receita_liquida'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.04 - Margem Não Operacional (Resultado Não Operacional por Resultado Bruto (Receita Líquida))', valor=eval_formula(md, "division(md['_0306_resultado_financeiro_nao_operacional'],md['_0303_resultado_bruto_receita_liquida'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.05 - Margem Líquida (Lucro Líquido por Receita Bruta)', valor=eval_formula(md, "division(md['_0311_lucro_liquido'],md['_0301_receita_bruta'])")))
+
+    # Análise do Fluxo de Caixa
+    line['Demonstrativo'] = 'Análise do Fluxo de Caixa'
+    new_lines.append(fundamentaline(line=line.copy(), title='17.01 - Caixa Total', valor=eval_formula(md, "ct")))
+    new_lines.append(fundamentaline(line=line.copy(), title='17.02 - Caixa Livre', valor=eval_formula(md, "cl")))
+    new_lines.append(fundamentaline(line=line.copy(), title='17.03.01 - Caixa de Investimentos por Caixa das Operações', valor=eval_formula(md, "division(md['_0602_caixa_de_investimentos_capex'],md['_0601_caixa_das_operacoes'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='17.03.02 - Caixa de Investimentos por EBIT', valor=eval_formula(md, "division(md['_0602_caixa_de_investimentos_capex'],md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='17.04 - Caixa Imobilizado', valor=eval_formula(md, "ci")))
+    new_lines.append(fundamentaline(line=line.copy(), title='17.05 - FCFF simplificado (Caixa Livre para a Firma)', valor=eval_formula(md, "md['_0601_caixa_das_operacoes']-ci")))
+    new_lines.append(fundamentaline(line=line.copy(), title='17.06 - FCFE simplificado (Caixa Livre para os Acionistas)', valor=eval_formula(md, "md['_0601_caixa_das_operacoes']-ci-md['_0801_dividendos_minimos_obrigatorios'])")))
+
+    # Análise de Valor Agragado
+    line['Demonstrativo'] = 'Análise do Valor Agregado'
+    new_lines.append(fundamentaline(line=line.copy(), title='18.01 - Margem de Vendas por Valor Agregado', valor=eval_formula(md, "division(md['_070101_vendas'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.02 - Custo dos Insumos por Valor Agregado', valor=eval_formula(md, "division(md['_0702_custos_dos_insumos'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.03 - Valor Adicionado Bruto por Valor Agregado', valor=eval_formula(md, "division(md['_0703_valor_adicionado_bruto'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.04 - Retenções por Valor Agregado', valor=eval_formula(md, "division(md['_0704_retencoes'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.05 - Valor Adicionado Líquido por Valor Agregado', valor=eval_formula(md, "division(md['_0705_valor_adicionado_liquido'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.06 - Valor Adicionado em Transferência por Valor Agregado', valor=eval_formula(md, "division(md['_0706_valor_adicionado_em_transferencia'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.07 - Recursos Humanos por Valor Agregado', valor=eval_formula(md, "division(md['_070801_pessoal'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.07.01 - Remuneração Direta (Recursos Humanos) por Valor Agregado', valor=eval_formula(md, "division(md['_07080101_remuneracao_direta'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.07.02 - Benefícios (Recursos Humanos) por Valor Agregado', valor=eval_formula(md, "division(md['_07080102_beneficios'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.07.03 - FGTS (Recursos Humanos) por Valor Agregado', valor=eval_formula(md, "division(md['_07080103_fgts'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.08 - Impostos por Valor Agregado', valor=eval_formula(md, "division(md['_070802_impostos_taxas_e_contribuicoes'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.09 - Remuneração de Capital de Terceiros por Valor Agregado', valor=eval_formula(md, "division(md['_070803_remuneracao_de_capital_de_terceiros'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.09.01 - Juros Pagos a Terceiros por Valor Agregado', valor=eval_formula(md, "division(md['_07080301_juros_pagos'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.09.02 - Aluguéis Pagos a Terceiros por Valor Agregado', valor=eval_formula(md, "division(md['_07080302_alugueis'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.10 - Remuneração de Capital Próprio por Valor Agregado', valor=eval_formula(md, "division(md['_070804_remuneracao_de_capital_proprio'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.10.01 - Juros Sobre Capital Próprio por Valor Agregado', valor=eval_formula(md, "division(md['_07080401_juros_sobre_o_capital_proprio'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.10.02 - Dividendos por Valor Agregado', valor=eval_formula(md, "division(md['_07080402_dividendos'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.10.02 - Lucros Retidos por Valor Agregado', valor=eval_formula(md, "division(md['_07080403_lucros_retidos'],md['_0707_valor_adicionado_total_a_distribuir'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.11.01 - Alíquota de Impostos (Impostos, Taxas e Contribuições por Receita Bruta)', valor=eval_formula(md, "division(md['_070802_impostos_taxas_e_contribuicoes'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.11.02 - Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta', valor=eval_formula(md, "division(md['_070803_remuneracao_de_capital_de_terceiros'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.11.03 - Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta', valor=eval_formula(md, "division(md['_070804_remuneracao_de_capital_proprio'],md['_0301_receita_bruta'])")))
+  except Exception as e:
+    pass
+
+  return new_lines
 
 # intel
 def inteligence_dre_old(df):
@@ -1958,8 +2166,8 @@ def inteligence_dre(df):
     return result
 
 def fundamentalist_dre(df, group):
-    new_lines = []
     try:
+      new_lines = []
       # create md_list (magic dre items list)
       md = {}
       for _, row in df.iterrows():
@@ -1972,148 +2180,15 @@ def fundamentalist_dre(df, group):
       line = {col:df[col][df.index[0]] for col in df.columns.to_list()}
       line['Valor'] = None
 
-      # Relações Entre Ativos e Passivos
-      line['Demonstrativo'] = 'Relações entre Ativos e Passivos'
-      df = fundamentaline(df=df, line=line, title='11.01.01 - Capital de Giro (Ativos Circulantes - Passivos Circulantes)', valor=md['_0101_ativo_circulante_de_curto_prazo']-md['_0201_passivo_circulante_de_curto_prazo'])
-      df = fundamentaline(df=df, line=line, title='11.01.02 - Liquidez (Ativos Circulantes por Passivos Circulantes)', valor=division(md['_0101_ativo_circulante_de_curto_prazo'], md['_0201_passivo_circulante_de_curto_prazo']))
-      df = fundamentaline(df=df, line=line, title='11.01.03 - Ativos Circulantes de Curto Prazo por Ativos', valor=division(md['_0101_ativo_circulante_de_curto_prazo'],md['_01_ativo_total']))
-      df = fundamentaline(df=df, line=line, title='11.01.04 - Ativos Não Circulantes de Longo Prazo por Ativos', valor=division(md['_0102_ativo_nao_circulante_de_longo_prazo'],md['_01_ativo_total']))
-      df = fundamentaline(df=df, line=line, title='11.02 - Passivos por Ativos', valor=division((md['_02_passivo_total']-md['_0203_patrimonio_liquido']),md['_01_ativo_total']))
-      df = fundamentaline(df=df, line=line, title='11.02.01 - Passivos Circulantes de Curto Prazo por Ativos', valor=division(md['_0201_passivo_circulante_de_curto_prazo'],md['_01_ativo_total']))
-      df = fundamentaline(df=df, line=line, title='11.02.02 - Passivos Não Circulantes de Longo Prazo por Ativos', valor=division(md['_0202_passivo_circulante_de_longo_prazo'],md['_01_ativo_total']))
-      df = fundamentaline(df=df, line=line, title='11.02.03 - Passivos Circulantes de Curto Prazo por Passivos', valor=division(md['_0201_passivo_circulante_de_curto_prazo'],md['_02_passivo_total']))
-      df = fundamentaline(df=df, line=line, title='11.02.04 - Passivos Não Circulantes de Longo Prazo por Passivos', valor=division(md['_0202_passivo_circulante_de_longo_prazo'],md['_02_passivo_total']))
-      df = fundamentaline(df=df, line=line, title='11.03 - Patrimônio Líquido por Ativos', valor=division(md['_0203_patrimonio_liquido'],md['_01_ativo_total']))
-      df = fundamentaline(df=df, line=line, title='11.03.01 - Equity Multiplier (Ativos por Patrimônio Líquido)', valor=division(md['_01_ativo_total'],md['_0203_patrimonio_liquido']))
-      df = fundamentaline(df=df, line=line, title='11.03.02 - Passivos por Patrimônio Líquido', valor=division((md['_0201_passivo_circulante_de_curto_prazo']+md['_0202_passivo_circulante_de_longo_prazo']),md['_0203_patrimonio_liquido']))
-      df = fundamentaline(df=df, line=line, title='11.03.02.01 - Passivos Circulantes de Curto Prazo por Patrimônio Líquido', valor=division(md['_0201_passivo_circulante_de_curto_prazo'],md['_0203_patrimonio_liquido']))
-      df = fundamentaline(df=df, line=line, title='11.03.02.02 - Passivos Não Circulantes de Longo Prazo por Patrimônio Líquido', valor=division(md['_0202_passivo_circulante_de_longo_prazo'],md['_0203_patrimonio_liquido']))
+      new_lines = pd.DataFrame(get_new_lines(md, line))
 
-      # Patrimônio
-      line['Demonstrativo'] = 'Patrimônio'
-      r = md['_020302_reservas_de_capital'] + md['_020303_reservas_de_reavaliacao'] + md['_020304_reservas_de_lucros']
-      df = fundamentaline(df=df, line=line, title='11.04 - Capital Social por Patrimônio Líquido', valor=division(md['_020301_capital_social'],md['_0203_patrimonio_liquido']))
-      df = fundamentaline(df=df, line=line, title='11.05 - Reservas por Patrimônio Líquido', valor=division(r,md['_0203_patrimonio_liquido']))
-
-      # Dívida
-      line['Demonstrativo'] = 'Dívida'
-      dbcp = md['_0201040101_emprestimos_e_financiamentos_em_moeda_nacional']+md['_0201040102_emprestimos_e_financiamentos_em_moeda_estrangeira']+md['_02010402_debentures']+md['_02010403_arrendamentos']+md['_02010409_outros_emprestimos_financiamentos_e_debentures']
-      dblp = md['_0202010101_emprestimos_e_financiamentos_em_moeda_nacional']+md['_0202010102_emprestimos_e_financiamentos_em_moeda_estrangeira']+md['_02020102_debentures']+md['_02020103_arrendamentos']+md['_02020209_outros_emprestimos_financiamentos_e_debentures']
-      db = dbcp + dblp
-      dme = md['_0201040102_emprestimos_e_financiamentos_em_moeda_estrangeira'] + md['_0202010102_emprestimos_e_financiamentos_em_moeda_estrangeira']
-      dmn = db - dme
-      dl = -1*(db-md['_010101_caixa_e_disponibilidades_de_caixa'])
-      pi = md['_010202_investimentos_nao_capex']+md['_010203_imobilizados']+md['_010204_intangivel']
-      ebitda = md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'] + md['_070401_depreciacao_e_amortizacao']
-      df = fundamentaline(df=df, line=line, title='12.01 - Dívida Bruta', valor=db)
-      df = fundamentaline(df=df, line=line, title='12.01.01 - Dívida Bruta Circulante de Curto Prazo', valor=dbcp)
-      df = fundamentaline(df=df, line=line, title='12.01.02 - Dívida Bruta Não Circulante de Longo Prazo', valor=dblp)
-      df = fundamentaline(df=df, line=line, title='12.01.03 - Dívida Bruta Circulante de Curto Prazo por Dívida Bruta', valor=division(dbcp, db))
-      df = fundamentaline(df=df, line=line, title='12.01.04 - Dívida Bruta Não Circulante de Longo Prazo por Dívida Bruta', valor=division(dblp, db))
-      df = fundamentaline(df=df, line=line, title='12.01.05 - Dívida Bruta em Moeda Nacional', valor=dmn)
-      df = fundamentaline(df=df, line=line, title='12.01.06 - Dívida Bruta em Moeda Estrangeira', valor=dme)
-      df = fundamentaline(df=df, line=line, title='12.01.07 - Dívida Bruta em Moeda Nacional por Dívida Bruta', valor=division(dmn, db))
-      df = fundamentaline(df=df, line=line, title='12.01.08 - Dívida Bruta em Moeda Estrangeira por Dívdida Bruta', valor=division(dme, db))
-      df = fundamentaline(df=df, line=line, title='12.02.01 - Dívida Bruta por Patrimônio Líquido', valor=division(db,md['_0203_patrimonio_liquido']))
-      df = fundamentaline(df=df, line=line, title='12.02.02 - Endividamento Financeiro', valor=division(db,(db+md['_0203_patrimonio_liquido'])))
-      df = fundamentaline(df=df, line=line, title='12.03 - Patrimônio Imobilizado em Capex, Investimentos Não Capex e Intangível Não Capex', valor=pi)
-      df = fundamentaline(df=df, line=line, title='12.03.01 - Patrimônio Imobilizado por Patrimônio Líquido', valor=division(pi,md['_0203_patrimonio_liquido']))
-      df = fundamentaline(df=df, line=line, title='12.04 - Dívida Líquida', valor=dl)
-      df = fundamentaline(df=df, line=line, title='12.04.01 - Dívida Líquida por EBITDA', valor=division(dl,ebitda))
-      df = fundamentaline(df=df, line=line, title='12.04.01 - Serviço da Dívida (Dívida Líquida por Resultado)', valor=division(dl,md['_0311_lucro_liquido']))
-
-      # Resultados Fundamentalistas
-      line['Demonstrativo'] = 'Resultados Fundamentalistas'
-      df = fundamentaline(df=df, line=line, title='13.03 - Contas a Receber por Faturamento', valor=division((md['_010103_contas_a_receber']+md['_01020103_contas_a_receber']),md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.03.01 - Contas a Receber Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010103_contas_a_receber'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.03.02 - Contas a Receber Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020103_contas_a_receber'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.04 - Estoques por Faturamento', valor=division((md['_010104_estoques']+md['_01020104_estoques']),md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.04.01 - Estoques Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010104_estoques'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.04.02 - Estoques Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020104_estoques'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.05 - Ativos Biológicos por Faturamento', valor=division((md['_010105_ativos_biologicos']+md['_01020105_ativos_biologicos']),md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.05.01 - Ativos Biológicos Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010105_ativos_biologicos'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.05.02 - Ativos Biológicos Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020105_ativos_biologicos'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.06 - Tributos por Faturamento', valor=division((md['_010106_tributos']+md['_01020106_tributos']),md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.06.01 - Tributos Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010106_tributos'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.06.02 - Tributos Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020106_tributos'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.07 - Despesas por Faturamento', valor=division((md['_010107_despesas']+md['_01020107_despesas']),md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.07.01 - Despesas Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010107_despesas'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.07.02 - Despesas Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020107_despesas'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.09 - Outros Ativos por Faturamento', valor=division((md['_010109_outros_ativos_circulantes']+md['_01020109_outros_ativos_nao_circulantes']),md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.09.01 - Outros Ativos Não Circulantes de Curto Prazo por Faturamento', valor=division(md['_010109_outros_ativos_circulantes'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='13.09.02 - Outros Ativos Circulantes de Longo Prazo por Faturamento', valor=division(md['_01020109_outros_ativos_nao_circulantes'],md['_0301_receita_bruta']))
-      ci = md['_0203_patrimonio_liquido']+db+md['_010101_caixa_e_disponibilidades_de_caixa']
-      df = fundamentaline(df=df, line=line, title='14.01.01 - Receita por Ativos', valor=division(md['_0301_receita_bruta'],md['_01_ativo_total']))
-      df = fundamentaline(df=df, line=line, title='14.01.02 - Receita por Patrimônio', valor=division(md['_0301_receita_bruta'],md['_0203_patrimonio_liquido']))
-      df = fundamentaline(df=df, line=line, title='14.02.01 - Coeficiente de Retorno (Resultado por Ativos)', valor=division(md['_0311_lucro_liquido'],md['_01_ativo_total']))
-      df = fundamentaline(df=df, line=line, title='14.02.02 - ROE (Resultado por Patrimônio)', valor=division(md['_0311_lucro_liquido'],md['_0203_patrimonio_liquido']))
-      df = fundamentaline(df=df, line=line, title='14.03 - Capital Investido', valor=ci)
-      df = fundamentaline(df=df, line=line, title='14.03.01 - ROIC (Retorno por Capital Investido)', valor=division(md['_0311_lucro_liquido'],ci))
-      df = fundamentaline(df=df, line=line, title='14.04.01 - ROAS (EBIT por Ativos)', valor=division(md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'],md['_01_ativo_total']))
-      rc = md['_070803_remuneracao_de_capital_de_terceiros'] + md['_070804_remuneracao_de_capital_proprio']
-      df = fundamentaline(df=df, line=line, title='15.01 - Remuneração de Capital', valor=rc)
-      df = fundamentaline(df=df, line=line, title='15.01.01 - Remuneração de Capital de Terceiros por Remuneração de Capital', valor=division(md['_070803_remuneracao_de_capital_de_terceiros'],rc))
-      df = fundamentaline(df=df, line=line, title='15.01.01.01 - Juros Pagos por Remuneração de Capital de Terceiros', valor=division(md['_07080301_juros_pagos'],md['_070803_remuneracao_de_capital_de_terceiros']))
-      df = fundamentaline(df=df, line=line, title='15.01.01.02 - Aluguéis por Remuneração de Capital de Terceiros', valor=division(md['_07080302_alugueis'],md['_070803_remuneracao_de_capital_de_terceiros']))
-      df = fundamentaline(df=df, line=line, title='15.01.02 - Remuneração de Capital Próprio por Remuneração de Capital', valor=division(md['_070804_remuneracao_de_capital_proprio'],rc))
-      df = fundamentaline(df=df, line=line, title='15.01.02.01 - Juros Sobre o Capital Próprio por Remuneração de Capital Próprio', valor=division(md['_07080401_juros_sobre_o_capital_proprio'],md['_070804_remuneracao_de_capital_proprio']))
-      df = fundamentaline(df=df, line=line, title='15.01.02.02 - Dividendos por Remuneração de Capital Próprio', valor=division(md['_07080402_dividendos'],md['_070804_remuneracao_de_capital_proprio']))
-      df = fundamentaline(df=df, line=line, title='15.01.02.03 - Lucros Retidos por Remuneração de Capital Próprio', valor=division(md['_07080403_lucros_retidos'],md['_070804_remuneracao_de_capital_proprio']))
-      df = fundamentaline(df=df, line=line, title='15.02 - Remuneração de Capital por EBIT', valor=division(rc,md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos']))
-      df = fundamentaline(df=df, line=line, title='15.02.01 - Impostos por EBIT', valor=division(md['_0308_impostos_irpj_e_csll'],md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos']))
-      df = fundamentaline(df=df, line=line, title='16.01 - Margem Bruta (Resultado Bruto (Receita Líquida) por Receita Bruto)', valor=division(md['_0303_resultado_bruto_receita_liquida'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='16.02 - Margem Operacional (Receitas Operacionais por Receita Bruta)', valor=division(md['_0304_despesas_operacionais'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='16.02.01 - Força de Vendas (Despesas com Vendas por Despesas Operacionais)', valor=division(md['_030401_despesas_com_vendas'],md['_0304_despesas_operacionais']))
-      df = fundamentaline(df=df, line=line, title='16.02.02 - Peso Administrativo (Despesas com Administração por Despesas Operacionais)', valor=division(md['_030402_despesas_gerais_e_administrativas'],md['_0304_despesas_operacionais']))
-      df = fundamentaline(df=df, line=line, title='16.03 - Margem EBITDA (EBITDA por Resultado Bruto (Receita Líquida))', valor=division(ebitda,md['_0303_resultado_bruto_receita_liquida']))
-      df = fundamentaline(df=df, line=line, title='16.03.01 - Margem EBIT (EBIT por Resultado Bruto (Receita Líquida))', valor=division(md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'],md['_0303_resultado_bruto_receita_liquida']))
-      df = fundamentaline(df=df, line=line, title='16.03.02 - Margem de Depreciação por Resultado Bruto (Receita Líquida)', valor=division(md['_070401_depreciacao_e_amortizacao'],md['_0303_resultado_bruto_receita_liquida']))
-      df = fundamentaline(df=df, line=line, title='16.04 - Margem Não Operacional (Resultado Não Operacional por Resultado Bruto (Receita Líquida))', valor=division(md['_0306_resultado_financeiro_nao_operacional'],md['_0303_resultado_bruto_receita_liquida']))
-      df = fundamentaline(df=df, line=line, title='16.05 - Margem Líquida (Lucro Líquido por Receita Bruta)', valor=division(md['_0311_lucro_liquido'],md['_0301_receita_bruta']))
-
-      # Análise do Fluxo de Caixa
-      line['Demonstrativo'] = 'Análise do Fluxo de Caixa'
-      cl = md['_0601_caixa_das_operacoes']+md['_0602_caixa_de_investimentos_capex']
-      ct = cl+md['_0603_caixa_de_financiamento']
-      ci = md['_060201_investimentos']+md['_060202_imobilizado_e_intangivel']
-      df = fundamentaline(df=df, line=line, title='17.01 - Caixa Total', valor=ct)
-      df = fundamentaline(df=df, line=line, title='17.02 - Caixa Livre', valor=cl)
-      df = fundamentaline(df=df, line=line, title='17.03.01 - Caixa de Investimentos por Caixa das Operações', valor=division(md['_0602_caixa_de_investimentos_capex'],md['_0601_caixa_das_operacoes']))
-      df = fundamentaline(df=df, line=line, title='17.03.02 - Caixa de Investimentos por EBIT', valor=division(md['_0602_caixa_de_investimentos_capex'],md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos']))
-      df = fundamentaline(df=df, line=line, title='17.04 - Caixa Imobilizado', valor=ci)
-      df = fundamentaline(df=df, line=line, title='17.05 - FCFF simplificado (Caixa Livre para a Firma)', valor=md['_0601_caixa_das_operacoes']-ci)
-      df = fundamentaline(df=df, line=line, title='17.06 - FCFF simplificado (Caixa Livre para a Firma)', valor=md['_0601_caixa_das_operacoes']-ci)
-
-
-      # Análise de Valor Agragado
-      line['Demonstrativo'] = 'Análise do Valor Agregado'
-      df = fundamentaline(df=df, line=line, title='18.01 - Margem de Vendas por Valor Agregado', valor=division(md['_070101_vendas'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.02 - Custo dos Insumos por Valor Agregado', valor=division(md['_0702_custos_dos_insumos'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.03 - Valor Adicionado Bruto por Valor Agregado', valor=division(md['_0703_valor_adicionado_bruto'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.04 - Retenções por Valor Agregado', valor=division(md['_0704_retencoes'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.05 - Valor Adicionado Líquido por Valor Agregado', valor=division(md['_0705_valor_adicionado_liquido'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.06 - Valor Adicionado em Transferência por Valor Agregado', valor=division(md['_0706_valor_adicionado_em_transferencia'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.07 - Recursos Humanos por Valor Agregado', valor=division(md['_070801_pessoal'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.07.01 - Remuneração Direta (Recursos Humanos) por Valor Agregado', valor=division(md['_07080101_remuneracao_direta'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.07.02 - Benefícios (Recursos Humanos) por Valor Agregado', valor=division(md['_07080102_beneficios'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.07.03 - FGTS (Recursos Humanos) por Valor Agregado', valor=division(md['_07080103_fgts'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.08 - Impostos por Valor Agregado', valor=division(md['_070802_impostos_taxas_e_contribuicoes'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.09 - Remuneração de Capital de Terceiros por Valor Agregado', valor=division(md['_070803_remuneracao_de_capital_de_terceiros'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.09.01 - Juros Pagos a Terceiros por Valor Agregado', valor=division(md['_07080301_juros_pagos'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.09.02 - Aluguéis Pagos a Terceiros por Valor Agregado', valor=division(md['_07080302_alugueis'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.10 - Remuneração de Capital Próprio por Valor Agregado', valor=division(md['_070804_remuneracao_de_capital_proprio'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.10.01 - Juros Sobre Capital Próprio por Valor Agregado', valor=division(md['_07080401_juros_sobre_o_capital_proprio'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.10.02 - Dividendos por Valor Agregado', valor=division(md['_07080402_dividendos'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.10.02 - Lucros Retidos por Valor Agregado', valor=division(md['_07080403_lucros_retidos'],md['_0707_valor_adicionado_total_a_distribuir']))
-      df = fundamentaline(df=df, line=line, title='18.11.01 - Alíquota de Impostos (Impostos, Taxas e Contribuições por Receita Bruta)', valor=division(md['_070802_impostos_taxas_e_contribuicoes'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='18.11.02 - Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta', valor=division(md['_070803_remuneracao_de_capital_de_terceiros'],md['_0301_receita_bruta']))
-      df = fundamentaline(df=df, line=line, title='18.11.03 - Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta', valor=division(md['_070804_remuneracao_de_capital_proprio'],md['_0301_receita_bruta']))
+      result = pd.concat([df, new_lines], ignore_index=True).drop_duplicates()
 
     except Exception as e:
-       print(f'acorde e descubra o que houve com o valor da chave do dictionario MD que originouesse erro: {e}')
+       print(f'error {e}')
        pass
 
-    return df
+    return result
 
 # storage functions
 def upload_to_gcs(df, df_name):

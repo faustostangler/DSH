@@ -409,6 +409,13 @@ def dre_math(value):
   file_name = 'dre_math'
   dre_math = run.read_or_create_dataframe(file_name, cols_dre_math)
   dre_math = run.clean_dre_math(dre_math)
+  # last company fix
+  try:
+    dre_math['Companhia'] = dre_math['Companhia'].astype('category').cat.as_ordered()
+    dre_math = dre_math[dre_math['Companhia'] != dre_math['Companhia'].max()]
+    # print(f"{dre_math['Companhia'].max()} is out!")
+  except Exception as e:
+     print(e)
 
   dre_raw, dre_math = run.dre_prepare(dre_raw, dre_math)
 
@@ -416,31 +423,26 @@ def dre_math(value):
   size = len(math)
   print(f'Total of {size} items (items in company quarters) new to process')
   df_temp = pd.DataFrame(columns=cols_dre_math)
-  start_time = time.time()
 
   avpi = []
+  start_time = time.time()
   for l, key in enumerate(math):
-    # elapsed time
-    running_time = (time.time() - start_time)
-    avg_time_per_item = running_time / (l + 1)
-    # remaining time
-    remaining_time = size * avg_time_per_item
-    hours, remainder = divmod(int(float(remaining_time)), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    remaining_time_formatted = f'{int(hours)}h {int(minutes):02}m {int(seconds):02}s'
+    progress = run.remaining_time(start_time, size, l)
+
     df, cias, status, key_cia = run.math_magic(key[0], key[1], size, cias, l)
     df_temp = pd.concat([df_temp, df], axis=0, ignore_index=True)
-    # print(f'{l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {avg_time_per_item:.6f}s, {remaining_time_formatted} {key_cia[0]} {key_cia[1]} {key_cia[2]}')
-    avpi.append(f'{avg_time_per_item:.6f}')
 
+    avpi.append(f'{progress[0]:.6f}')
     if (size-l-1) % (bin_size*100) == 0 and status != True:
+        pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
+
         dre_math = pd.concat([dre_math, df_temp], axis=0, ignore_index=True)
         df_temp = pd.DataFrame(columns=cols_dre_math)
 
         dre_math.drop_duplicates(inplace=True)
         file_name = 'dre_math'
         dre_math = run.save_and_pickle(dre_math, file_name)
-        print(f'partial save {l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {avg_time_per_item:.6f}s, {remaining_time_formatted} {key_cia[0]} {key_cia[1]}')
+        print(f'partial save {l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {progress[0]:.6f}s, {progress[1]} {key_cia[0]} {key_cia[1]}')
 
   dre_math = pd.concat([dre_math, df_temp], axis=0, ignore_index=True)
   dre_math.drop_duplicates(inplace=True)
@@ -456,11 +458,6 @@ def dre_intel(value):
     dre_math = run.read_or_create_dataframe(file_name, cols_dre_math)
     dre_math = run.clean_dre_math(dre_math)
     
-    # try:
-    #     dre_math = dre_math.assign(demosheet=lambda x:x['Companhia'].astype(str) + ' ' + x['Trimestre'].dt.strftime('%d/%m/%Y').astype(str))
-    # except:
-    #     dre_math['demosheet'] = ''
-    # dre_math = dre_math[cols_dre_math]
     file_name = 'dre_intel'
     dre_intel = run.read_or_create_dataframe(file_name, cols_dre_math)
 
@@ -469,15 +466,15 @@ def dre_intel(value):
 
     # get unique ds for dre_math (all ds)
     ds_math = dre_math[ds].drop_duplicates()
-    ds_math = run.process_dataframe_trimestre(ds_math)
+    dre_math = run.process_dataframe_trimestre(dre_math)
 
     # get unique ds for dre_intel (processed ds)
     ds_intel = dre_intel[ds].drop_duplicates()
-    ds_intel = run.process_dataframe_trimestre(ds_intel)
+    dre_intel = run.process_dataframe_trimestre(dre_intel)
 
     # get unprocessed ds for dre_math (dre_math[~mask]), mask = proccessed ds
     try:
-        processed_ds = ds_intel['demosheet']
+        processed_ds = dre_intel['demosheet']
         mask = dre_math['demosheet'].isin(processed_ds)
         dre_processed = dre_math[mask].drop('demosheet', axis=1)
         dre = dre_math[~mask].drop('demosheet', axis=1)
@@ -487,9 +484,15 @@ def dre_intel(value):
     # demonstrativos trimestrais padronizados
     demosheet = dre.groupby(ds, group_keys=False)
     size = len(demosheet.groups.keys())
-    print(f'{size} demonstrativos diferentes para extrair as linhas padronizadas')
-
+    unique_companies = dre['Companhia'].nunique()
+    trimestres_by_company = int(size/unique_companies)
+    print(f'{size} DTP únicos, de {unique_companies} Companhias com em média {trimestres_by_company} Trimestres cada')
+    
+    avpi = []
+    start_time = time.time()
     for item, group in enumerate(demosheet):
+        progress = run.remaining_time(start_time, size, item)
+
         df = group[1]
         group = group[0]
         companhia = group[0]
@@ -499,15 +502,19 @@ def dre_intel(value):
         df2 = run.fundamentalist_dre(df1, group)
 
         dre_intel = pd.concat([dre_intel.reset_index(drop=True).drop_duplicates(), df2], ignore_index=True)
-        print(f'{item} {size-item} {((item+1)/(size)):.2%} {df2.shape[0]} {companhia} {trimestre}')
+        print(f'{item+1} {size-item-1} {((item+1)/(size)):.2%} {progress[0]:.6f}s, {progress[1]} {df2.shape[0]} {companhia} {trimestre}')
 
-        if (size-item) % 50 == 0:
-            dre_intel.reset_index(drop=True).drop_duplicates().drop_duplicates(inplace=True)
+        avpi.append(f'{progress[0]:.6f}')
+        if (size-item-1) % (bin_size/10) == 0:
+            pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
+
+            dre_intel = dre_intel.astype(str)
+            dre_intel = dre_intel.reset_index(drop=True).drop_duplicates().fillna(0)
             dre_intel = run.save_and_pickle(dre_intel, file_name)
             print('partial save')
 
 
-    dre_intel.reset_index(drop=True).drop_duplicates().drop_duplicates(inplace=True)
+    dre_intel = dre_intel.reset_index(drop=True).drop_duplicates().fillna(0)
     dre_intel = run.save_and_pickle(dre_intel, file_name)
     print('final save')
 
