@@ -17,6 +17,7 @@ import string
 import os
 
 import pandas as pd
+import numpy as np
 
 from google.cloud import storage
 from io import BytesIO
@@ -417,12 +418,12 @@ def read_or_create_dataframe(file_name, cols):
         # df = upload_to_gcs(df, file_name)
       except Exception as e:
         # print(f'Error occurred while reading file {file_name}: {e}')
-        df = pd.DataFrame(columns=b3.cols_nsd)
+        df = pd.DataFrame(columns=cols)
         
     df.drop_duplicates(inplace=True)  # Remove any duplicate rows (if any).
     
     print(f'{file_name}: total {len(df)} items')
-    return df
+    return df[cols]
 
 def save_and_pickle(df, df_name):
   df.to_pickle(b3.data_path + f'{df_name}.zip')
@@ -666,7 +667,7 @@ def get_new_dre_links(dre):
         nsd_recent_old = nsd_dre.copy()
         nsd_recent_new = nsd_dre.copy()
 
-    nsd = nsd_recent_new
+    nsd = nsd_recent_new.copy()
 
     nsd['data'] = pd.to_datetime(nsd['data'], format='%d/%m/%Y')
     nsd = nsd.sort_values(by=['company', 'data'])
@@ -836,7 +837,6 @@ def clean_dre_math(dre):
     dre['Companhia'] = dre['Companhia'].str.replace(' EM LIQUIDACAO EXTRAJUDICIAL', '')
     dre['Companhia'] = dre['Companhia'].str.replace(' EM LIQUIDACAO', '')
 
-
     # standartization
     dre['Companhia'] = dre['Companhia'].astype('category')
     dre['Demonstrativo'] = dre['Demonstrativo'].astype('category')
@@ -874,24 +874,37 @@ def get_dre_years(dre_raw, dre_math):
 
   years = []
   for key in difference:
-      item = f'{key[0]} {key[1].year}'
+      try:
+        item = f'{key[0]} {datetime.datetime.strptime(key[1], "%d/%m/%Y").year}'
+      except Exception as e:
+        item = f'{key[0]} {key[1].year}'
       if item not in years:
           years.append(item)
-  
+
   return years
+
+def process_dataframe(df):
+    try:
+      df['Trimestre'] = pd.to_datetime(df['Trimestre'], format='%d/%m/%Y')
+      # df = df.assign(updated = lambda x: x['Companhia'].astype('string') + ' ' + x['Trimestre'].dt.year.astype(str))
+
+      num_chunks = int(np.ceil(len(df) / b3.chunksize))
+      df_updated = pd.DataFrame()
+      for i in range(num_chunks):
+          df_chunk = df.iloc[i * b3.chunksize: (i + 1) * b3.chunksize]
+          df_chunk = df_chunk.assign(updated = lambda x: x['Companhia'].astype('string') + ' ' + x['Trimestre'].dt.year.astype('string'))
+          df_updated = pd.concat([df_updated, df_chunk], ignore_index=True)
+
+    except Exception as e:
+        pass
+    return df_updated
 
 def dre_prepare(dre_raw, dre_math):
   years = get_dre_years(dre_raw, dre_math)
 
   # create 'update' columns
-  dre_raw = dre_raw.assign(updated = lambda x: x['Companhia'].astype(str) + ' ' + x['Trimestre'].dt.year.astype(str))
-  try:
-      dre_math = dre_math.assign(updated = lambda x: x['Companhia'].astype(str) + ' ' + x['Trimestre'].dt.year.astype(str))
-  except Exception as e:
-    try:
-      dre_math = dre_math.assign(updated = lambda x: x['Companhia'].astype(str) + ' ' + x['Trimestre'].astype(str))
-    except Exception as e:
-       pass
+  dre_raw = process_dataframe(dre_raw)
+  dre_math = process_dataframe(dre_math)
 
   # remove years from dre_math = remove years from existing dataframe
   try:
@@ -907,16 +920,21 @@ def dre_prepare(dre_raw, dre_math):
   except Exception as e:
      dre_raw = dre_raw
 
+  # # format to string
+  # try:
+  #   dre_raw['Trimestre'] = dre_raw['Trimestre'].dt.strftime('%d/%m/%Y')
+  # except Exception as e:
+  #   pass
+  # try:
+  #   dre_math['Trimestre'] = dre_math['Trimestre'].dt.strftime('%d/%m/%Y')
+  # except Exception as e:
+  #   pass
+
   return dre_raw, dre_math
 
 def get_math(dre_raw, dre_math):
-    # do the math
-  last_quarters = ['3', '4']
-  all_quarters = ['6', '7']
-
+   # do the math
   math = dre_raw.groupby([dre_raw['Companhia'], dre_raw['Trimestre'].dt.year, dre_raw['Conta']], group_keys=False)
-  size = len(math)
-  print(f'Total of {size} items (items in company quarters) new to process')
 
   try:
       cias_grouped = dre_math.groupby([dre_math['Companhia'], dre_math['Trimestre'].dt.year, dre_math['Conta']], group_keys=False)
@@ -935,6 +953,85 @@ def get_math(dre_raw, dre_math):
 
   return cias, math
 
+def math_magic(key, df, size, cias, l):
+  progress = (l/size)
+  if key in cias:
+      status = True
+      if l % (b3.bin_size*10) == 0:
+          print(f'{l} {(size-l)} {progress:.4%}')
+      # print(key, 'done')
+      pass
+  else:
+      status = False
+      # print(f'{l} {(size-l)} {progress:.4%} {key[0]} {key[1]} {key[2]}')
+      cias.append(key)
+
+      # remove df duplicates Trimestres and keep higher/newer nsd values
+      df = df.drop_duplicates(subset=['Trimestre'], keep='last').sort_values('Url', ascending=False)
+      if df.iloc[0,3][:1] in b3.last_quarters or df.iloc[0,3][:1] in b3.all_quarters:
+          i3 = i6 = i9 = i12 = 0
+          v3 = v6 = v9 = v12 = 0
+
+          # find out values for each month
+          try:
+              df_march = df[df['Trimestre'].dt.month == 3]
+              i3 = df_march.index[0]
+              v3 = df_march['Valor'].max()
+          except Exception as e:
+              pass
+          try:
+              df_june = df[df['Trimestre'].dt.month == 6]
+              i6 = df_june.index[0]
+              v6 = df_june['Valor'].max()
+          except Exception as e:
+              pass
+          try:
+              df_september = df[df['Trimestre'].dt.month == 9]
+              i9 = df_september.index[0]
+              v9 = df_september['Valor'].max()
+
+          except Exception as e:
+              pass
+          try:
+              df_december = df[df['Trimestre'].dt.month == 12]
+              i12 = df_december.index[0]
+              v12 = df_december['Valor'].max()
+          except Exception as e:
+              pass
+
+          # do the @#$%&! b3 math
+          try:
+              if df.iloc[0,3][:1] in b3.last_quarters:
+                  v12 = v12 - (v9 + v6 + v3)
+          except Exception as e:
+              print('last_quarters', e, df.iloc[0])
+
+          try:
+              if df.iloc[0,3][:1] in b3.all_quarters:
+                  v3 = v3 - 0
+                  v6 = v6 - (v3)
+                  v9 = v9 - (v6 + v3)
+                  v12 = v12 - (v9 + v6 + v3)
+
+          except Exception as e:
+              print('all_quarters', e, df.iloc[0])
+
+          # update values
+          if i3 != 0 and v3:
+              df.loc[i3, 'Valor'] = [v3]
+          if i6 != 0 and v6:
+              df.loc[i6, 'Valor'] = [v6]
+          if i9 != 0 and v9:
+              df.loc[i9, 'Valor'] = [v9]
+          if i12 != 0 and v12:
+              df.loc[i12, 'Valor'] = [v12]
+
+  return df, cias, status, key
+  
+
+
+
+  
 # storage functions
 def upload_to_gcs(df, df_name):
     """Uploads a pandas DataFrame to Google Cloud Storage (GCS) as a zipped pickle file.

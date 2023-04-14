@@ -3,3 +3,6 @@
 __pycache__/*
 __pycache__/index.cpython-310.pyc
 */credentials/*
+/*datasets/*
+temporary_task.py
+*.7z
