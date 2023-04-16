@@ -25,9 +25,17 @@ cols_b3_tickers = ['ticker', 'company_name']
 cols_world_markets = ['symbol', 'shortName', 'longName', 'exchange', 'market', 'quoteType']
 cols_yahoo = {'symbol': 'str', 'shortName': 'str', 'longName': 'str', 'exchange': 'category', 'market': 'category', 'quoteType': 'category', 'ticker': 'str', 'exchange_y': 'category', 'tick_y': 'str', 'tick': 'str'}
 cols_info = ['symbol', 'shortName', 'longName', 'longBusinessSummary', 'exchange', 'quoteType', 'market', 'sector', 'industry', 'website', 'logo_url', 'country', 'state', 'city', 'address1', 'phone', 'returnOnEquity', 'beta3Year', 'beta', 'recommendationKey', 'recommendationMean']
+cols_cotahist = ['TICKER', 'tick', 'Symbol', 'Symbol Type', 'Exchange', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close', 'Dividends', 'Stock Splits']
+company_info_cols = ['market', 'sector', 'industry', 'country', 'state', 'city', 'zip', 'quoteType', 'exchange', 'financialCurrency', 'symbol', 'shortName', 'longName', 'longBusinessSummary', 'currency', 'recommendationKey', 'recommendationMean', 'fullTimeEmployees', 'website', 'logo_url', 'address1', 'address2', 'phone']
 cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
 cols_dre = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor','Url']
 cols_dre_math = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor', 'Url', 'nsd']
+cols_all =  cols_b3_companies + company_info_cols + cols_cotahist + cols_dre
+
+# Remove specific elements from the list using list comprehension
+to_move = ['Companhia', 'Trimestre', 'Date', 'ticker']
+cols_all = [col for col in cols_all if col not in to_move]
+cols_all = to_move + cols_all
 
 demo = ['Demonstrações Financeiras Padronizadas', 'Informações Trimestrais']
 cmbGrupo = ['Dados da Empresa']
@@ -110,7 +118,7 @@ def update_b3_companies(value: str) -> str:
         b3_tickers = run.get_ticker_keywords(raw_code)
 
         # Update the missing companies from the database
-        df_name = 'b3_companies'
+        file_name = df_name = 'b3_companies'
         b3_companies = run.read_or_create_dataframe(df_name, cols_b3_companies)
         b3_keywords = []
 
@@ -122,12 +130,16 @@ def update_b3_companies(value: str) -> str:
                 print(row)
                 pass
 
-        counter = 0
         size = len(b3_tickers)
 
         # Loop through each company in the b3_tickers dataframe
-        for index, row in b3_tickers.iterrows():
-            counter +=1
+        avpi = []
+        start_time = time.time()
+        for i, row in b3_tickers.iterrows():
+            progress = run.remaining_time(start_time, size, i)
+            avpi.append(progress.split(',')[3])
+            pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
+            
             keyword = str(row['ticker']) + ' ' + str(row['company_name'])
             if keyword not in b3_keywords:
                 driver.get(url)
@@ -138,9 +150,9 @@ def update_b3_companies(value: str) -> str:
                 company = run.get_company(1, driver, wait)
                 b3_companies = pd.concat([b3_companies, pd.DataFrame([company], columns=cols_b3_companies)])
 
-                print(counter, size-counter, company)
+                print(f'{progress}, {company}')
             else:
-                print(counter, size-counter, keyword)
+                print(f'{progress}, {keyword}')
         b3_companies.fillna('', inplace=True)
         b3_companies.reset_index(drop=True, inplace=True)
         b3_companies.drop_duplicates(inplace=True)
@@ -196,15 +208,21 @@ def update_world_markets(value):
   except Exception as e:
     abbreviation = []
 
-  df_name = 'world_companies'
+  file_name = df_name = 'world_companies'
   world_companies = pd.DataFrame(columns=cols_world_markets)
 
+  avpi = []
+  start_time = time.time()
+  size = len(abbreviation)
   # world companies
   for index, abbrv in enumerate(abbreviation):
+    progress = run.remaining_time(start_time, size, index)
+    avpi.append(progress.split(',')[3])
+    pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
     try:
       df = pd.DataFrame(ss.get_symbol_list(market=abbrv)) # "us" or "america" will also work
       world_companies = pd.concat([world_companies, df], ignore_index=True)
-      print(f'{abbrv} {index}+{len(abbreviation)-1-index} markets {index/(len(abbreviation)-1):.2%}, {len(df)} new, {len(world_companies)} total companies')
+      print(f'{progress}, {abbrv}, {len(df)} new, {len(world_companies)} total companies')
     except Exception as e:
       pass
 
@@ -222,7 +240,7 @@ def update_world_markets(value):
   br_world_companies = world_companies[mask]
 
   # adjustments
-  br_world_companies['ticker_type'] = br_world_companies['ticker'].str[4:]
+  br_world_companies.loc[:, 'ticker_type'] = br_world_companies['ticker'].str[4:]
   br_world_companies = br_world_companies.copy()
   br_world_companies['ticker'] = br_world_companies['ticker'].str[:4]
 
@@ -232,7 +250,6 @@ def update_world_markets(value):
   # Save
   world_companies = run.save_and_pickle(world_companies, df_name)
 
-  value = 'done ' + value
   return value
 
 def yahoo_cotahist(value):
@@ -308,7 +325,6 @@ def get_nsd_links(value):
     safety_factor = 1.8
 
     gap = 0
-    start_time = time.time()
 
     file_name = 'nsd_links'
     cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
@@ -318,33 +334,34 @@ def get_nsd_links(value):
     start, end = run.nsd_range(nsd, safety_factor)
     print(f'from {start} to {end}')
 
+    avpi = []
+    start_time = time.time()
+    size = (end-start)
     for i, n in enumerate(range(start, end)):
+        progress = run.remaining_time(start_time, size, i)
+        avpi.append(progress.split(',')[3])
+        pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
         # interrupt conditions
         last_date, limit_date, max_gap = run.nsd_dates(nsd, safety_factor)
         if last_date > limit_date:
             if gap == max_gap:
                 break
 
-        # elapsed time
-        running_time = (time.time() - start_time)
-        elapsed_time = '{:.6f}'.format(running_time/(i+1))
-        minutes, seconds = divmod(round(float(running_time)), 60)
-        elapsed_time_formatted = f'{int(minutes)}m {int(seconds)}s'
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         try:
             # add nsd row to dataframe
             row = run.get_nsd(n)
             nsd = pd.concat([nsd, pd.DataFrame([row], columns=cols_nsd)])
-            print(row[-1], row[10], now, elapsed_time, row[4], row[3], row[0], elapsed_time_formatted)
+            print(f'{progress}, {row[-1]}, {row[10]}, {row[4]}, {row[3]}, {row[0]}')
             # reset gap
             gap = 0
         except Exception as e:
             # increase gap count
             gap += 1
-            print(n, elapsed_time)
+            print(progress, n)
 
-        if n % bin_size == 0:
+        if (n-1) % bin_size == 0:
             nsd = run.save_and_pickle(nsd, file_name)
             print('partial save')
 
@@ -368,21 +385,13 @@ def get_dre(value):
   size = len(nsd)
   start_time = time.time()
   for l, line in enumerate(nsd.itertuples()):
-    # elapsed time
-    running_time = (time.time() - start_time)
-    avg_time_per_item = running_time / (l + 1)
-    elapsed_time = f'{running_time / (l + 1):.6f}'
-    # remaining time
-    remaining_time = size * avg_time_per_item
-    hours, remainder = divmod(int(float(remaining_time)), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    remaining_time_formatted = f'{int(hours)}h {int(minutes)}m {int(seconds)}s'
+    progress = run.remaining_time(start_time, size, l)
 
     # read and concat quarters from nsd (and all dre in each quarter)
     quarter = run.read_quarter(line, driver, wait)
     df = pd.concat([df, quarter], ignore_index=True)
 
-    print(f'{l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {run.clean_text(line[1])}, {line[5]}, {remaining_time_formatted}')
+    print(f'{progress}, {run.clean_text(line[1])}, {line[5]}')
     
     if (size-l-1) % (bin_size) == 0:
       dre = pd.concat([dre, df], ignore_index=True)
@@ -428,11 +437,11 @@ def dre_math(value):
   start_time = time.time()
   for l, key in enumerate(math):
     progress = run.remaining_time(start_time, size, l)
+    avpi.append(progress.split(',')[3])
 
     df, cias, status, key_cia = run.math_magic(key[0], key[1], size, cias, l)
     df_temp = pd.concat([df_temp, df], axis=0, ignore_index=True)
 
-    avpi.append(f'{progress[0]:.6f}')
     if (size-l-1) % (bin_size*100) == 0 and status != True:
         pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
 
@@ -442,7 +451,7 @@ def dre_math(value):
         dre_math.drop_duplicates(inplace=True)
         file_name = 'dre_math'
         dre_math = run.save_and_pickle(dre_math, file_name)
-        print(f'partial save {l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {progress[0]:.6f}s, {progress[1]} {key_cia[0]} {key_cia[1]}')
+        print(f'partial save {progress} {key_cia[0]} {key_cia[1]}')
 
   dre_math = pd.concat([dre_math, df_temp], axis=0, ignore_index=True)
   dre_math.drop_duplicates(inplace=True)
@@ -492,6 +501,7 @@ def dre_intel(value):
     start_time = time.time()
     for item, group in enumerate(demosheet):
         progress = run.remaining_time(start_time, size, item)
+        avpi.append(progress.split(',')[3])
 
         df = group[1]
         group = group[0]
@@ -502,9 +512,8 @@ def dre_intel(value):
         df2 = run.fundamentalist_dre(df1, group)
 
         dre_intel = pd.concat([dre_intel.reset_index(drop=True).drop_duplicates(), df2], ignore_index=True)
-        print(f'{item+1} {size-item-1} {((item+1)/(size)):.2%} {progress[0]:.6f}s, {progress[1]} {df2.shape[0]} {companhia} {trimestre}')
+        print(f'{progress} {df2.shape[0]} {companhia} {trimestre}')
 
-        avpi.append(f'{progress[0]:.6f}')
         if (size-item-1) % (bin_size/10) == 0:
             pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
 
@@ -538,11 +547,11 @@ def dre_pivot(value):
     # groupby intel to transform into pivot
     for item, group in enumerate(groups):
         progress = run.remaining_time(start_time, size, item)
+        avpi.append(progress.split(',')[3])
+    
         company = group[0]
         group = group[1]
-
-        avpi.append(f'{progress[0]:.6f}')
-
+    
         pivot = pd.pivot_table(data=group, index=['Trimestre'], columns=['CDD'], values=['Valor'], aggfunc='max', fill_value=0.0)
         pivot.columns = pivot.columns.droplevel(0)
         pivot['Companhia'] = company
@@ -552,10 +561,57 @@ def dre_pivot(value):
         pivot = pivot[cols]
 
         dre_pivot = pd.concat([dre_pivot, pivot], ignore_index=True)
-        print(f'{item+1} {len(groups)-item-1} {(item+1)/(len(groups)):.2%} {progress[0]:.6f}s {progress[1]} {company} {group.shape}')
+        print(f'{progress} {company} {group.shape}')
+        pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
 
     # save
     dre_pivot = run.save_and_pickle(dre_pivot, file_name)
     print('saved')
+
+    return value
+
+def dre_merge(value):
+   
+    dre_pivot, b3_companies, cotahist, company_info = run.load_and_clean_basic_dfs()
+
+    # part 1 - LOAD CHUNKS
+    # Load dre_merge by concat chunks
+    file_name = f'dre_merge'
+    dre_merge = run.concat_chunks(file_name)
+    
+    cias = dre_merge['Companhia'].unique().tolist() if 'Companhia' in dre_merge.columns else []
+    # get all part files in data folder
+    processed_files = [file for file in os.listdir(data_path) if file.startswith(file_name + '_part_') and file.endswith('.zip')]
+
+    # check if the new directory exists, and create it if it does not
+    merge_path = f'{data_path}/merged'
+    if not os.path.exists(merge_path):
+        os.makedirs(merge_path)
+
+    # read each file and concat only new (not in cia) company
+    df_temp = []
+    df_size = 0
+    for i, current_file in enumerate(processed_files):
+        print(f'{i+1} {len(processed_files)-(i+1)} {(i+1)/len(processed_files):.2%} {current_file}')
+        df = run.read_or_create_dataframe(current_file, cols_dre_math)
+        dfs = df['Companhia'].unique()
+        for j, company in enumerate(dfs):
+            if company not in cias:
+                df_company = df[df['Companhia'] == company]
+                df_size += df_company.shape[0]
+                df_company = df_company.sort_values(by=['Trimestre'], ascending=[True])
+                df_company.to_pickle(merge_path + '/' + company + '.zip')
+            print(j+1, len(dfs)-j, company, df_company.shape[0], df_size)
+
+    # save df by company
+    dre_merge.groupby(['Companhia'])
+    # Save in chunks
+    dre_merge = run.save_chunks(dre_merge, file_name)
+
+    # part 2 - FILTER NEW dre_pivot
+
+    file_name = f'dre_merge'
+    dre_merge = run.concat_chunks(file_name)
+
 
     return value

@@ -182,6 +182,10 @@ def clean_text(text):
     return text
 
 def remaining_time(start_time, size, i):
+  counter = i + 1
+  remaining_items = size - counter
+  remaining_percentage = (counter)/(size)
+
   # elapsed time
   running_time = (time.time() - start_time)
   avg_time_per_item = running_time / (i + 1)
@@ -191,7 +195,9 @@ def remaining_time(start_time, size, i):
   minutes, seconds = divmod(remainder, 60)
   remaining_time_formatted = f'{int(hours)}h {int(minutes):02}m {int(seconds):02}s'
 
-  return avg_time_per_item, remaining_time_formatted
+  progress = f'{counter}, {remaining_items}, {remaining_percentage:.2%}%, {avg_time_per_item:.6f}s, {remaining_time_formatted}'
+
+  return progress
 
 # selenium functions
 def load_browser():
@@ -203,7 +209,7 @@ def load_browser():
     """
     # Define the options for the ChromeDriver.
     options = Options()
-    options.add_argument('--headless')  # Run in headless mode.
+    # options.add_argument('--headless')  # Run in headless mode.
     options.add_argument('--no-sandbox')  # Avoid sandboxing.
     options.add_argument('--disable-dev-shm-usage')  # Disable shared memory usage.
     options.add_argument('--disable-blink-features=AutomationControlled')  # Disable automated control.
@@ -378,7 +384,7 @@ def get_ticker_keywords(raw_code):
         # Append the ticker and company name to the keyword list
         keyword = [ticker, company_name]
         keywords.append(keyword)
-        print(keyword)
+        # print(keyword)
       except Exception as e:
         # print(e)
         pass
@@ -474,7 +480,7 @@ def nsd_range(nsd, safety_factor):
   start = start
   end = start + expected_nsd 
 
-  return start-1, end
+  return start, end
 
 def nsd_dates(nsd, safety_factor):
   # find the gap in days from today to max 'envio' date
@@ -2189,6 +2195,118 @@ def fundamentalist_dre(df, group):
        pass
 
     return result
+
+# merge
+def load_and_clean_basic_dfs():
+    # dre_pivot + b3_companies + cotahist + company_info
+    # dre_pivot
+    file_name = 'dre_pivot'
+    dre_pivot = read_or_create_dataframe(file_name, b3.cols_dre_math)
+    if file_name:
+      dre_pivot['Companhia'] = dre_pivot['Companhia'].astype('category')
+      dre_pivot['Trimestre'] = dre_pivot['Trimestre'].astype('datetime64[ns]')
+
+      dre_cols = dre_pivot.columns.to_list()
+      dre_cols2 = [col for col in dre_cols if col not in ['Companhia', 'Trimestre']]
+      for col in dre_cols2:
+          try:
+              dre_pivot[col] = dre_pivot[col].astype('float')
+          except:
+              pass
+
+    # b3_companies
+    file_name = f'b3_companies'
+    b3_companies = read_or_create_dataframe(file_name, b3.cols_b3_companies)
+    if file_name:
+      b3_companies['listagem'] = b3_companies['listagem'].astype('category')
+      b3_companies['ticker'] = b3_companies['ticker'].astype('category')
+      b3_companies['tickers'] = b3_companies['tickers'].astype('category')
+      b3_companies['asin'] = b3_companies['asin'].astype('category')
+      b3_companies['cnpj'] = b3_companies['cnpj'].astype('category')
+      b3_companies['site'] = b3_companies['site'].astype('category')
+      b3_companies['setor'] = b3_companies['setor'].astype('category')
+      b3_companies['subsetor'] = b3_companies['subsetor'].astype('category')
+      b3_companies['segmento'] = b3_companies['segmento'].astype('category')
+      # b3_companies['atividade'] = b3_companies['atividade'].astype('category')
+      b3_companies['escriturador'] = b3_companies['escriturador'].astype('category')
+      b3_companies['url'] = b3_companies['url'].astype('category')
+
+      b3_companies = b3_companies[b3.cols_b3_companies]
+
+    # cotahist
+    file_name = f'cotahist'
+    cotahist = read_or_create_dataframe(file_name, b3.cols_cotahist)
+    if file_name:
+      cotahist['tick'] = cotahist['Symbol'].str[:4]
+      cotahist['TICKER'] = cotahist['TICKER'].astype('category')
+      cotahist['Symbol Type'] = cotahist['Symbol Type'].astype('category')
+      cotahist['Symbol'] = cotahist['Symbol'].astype('category')
+      cotahist['Exchange'] = cotahist['Exchange'].astype('category')
+      cotahist['tick'] = cotahist['tick'].astype('category')
+      cotahist['Date'] = pd.to_datetime(pd.to_datetime(cotahist['Date'].astype(str).str[:10], format='%Y/%m/%d'))
+      cotahist['Open'] = pd.to_numeric(cotahist['Open']).astype('float')
+      cotahist['High'] = pd.to_numeric(cotahist['High']).astype('float')
+      cotahist['Low'] = pd.to_numeric(cotahist['Low']).astype('float')
+      cotahist['Close'] = pd.to_numeric(cotahist['Close']).astype('float')
+      cotahist['Adj Close'] = pd.to_numeric(cotahist['Adj Close']).astype('float')
+      cotahist['Volume'] = pd.to_numeric(cotahist['Volume']).astype('float')
+      cotahist['Dividends'] = pd.to_numeric(cotahist['Dividends']).astype('float')
+      cotahist['Stock Splits'] = pd.to_numeric(cotahist['Stock Splits']).astype('float')
+
+      cotahist = cotahist[b3.cols_cotahist]
+
+    # company_info
+    file_name = f'company_info'
+    company_info = read_or_create_dataframe(file_name, b3.company_info_cols)
+    if file_name:
+      company_info['exchange'] = company_info['exchange'].astype('category')
+      company_info['quoteType'] = company_info['quoteType'].astype('category')
+      company_info['market'] = company_info['market'].astype('category')
+      company_info['sector'] = company_info['sector'].astype('category')
+      company_info['industry'] = company_info['industry'].astype('category')
+      company_info['country'] = company_info['country'].astype('category')
+      company_info['state'] = company_info['state'].astype('category')
+      company_info['city'] = company_info['city'].astype('category')
+
+      company_info = company_info[b3.company_info_cols]
+
+    return dre_pivot, b3_companies, cotahist, company_info
+
+def concat_chunks(file_name):
+    # file_name = f'dre_merge'
+    # load in chunks
+    df = pd.DataFrame(columns=b3.cols_dre_math)
+    try: 
+        chunk_files = [file for file in os.listdir(b3.data_path) if file.startswith(file_name + '_chunk_') and file.endswith('.zip')]
+        for current_file in chunk_files:
+            df_file = read_or_create_dataframe(file_name, b3.cols_dre_math)
+            df = pd.concat([df, df_file])
+            print(f'{current_file} loaded', len(df))
+    except Exception as e:
+        print(e)
+        df = pd.DataFrame(columns=b3.cols_dre_math)
+
+    return df
+
+def save_chunks(df, file_name):
+    chunk_files = [file for file in os.listdir(b3.data_path) if file.startswith(file_name + '_chunk_') and file.endswith('.zip')]
+    # delete previous chunks
+    try:
+        for f in chunk_files:
+            os.remove(b3.data_path + f)
+    except Exception as e:
+        pass
+
+    # save in chunks
+    num_chunks = len(df) // b3.chunk_size + 1
+    for i in range(num_chunks):
+        # Create a chunk
+        chunk = df.iloc[i*b3.chunk_size:(i+1)*b3.chunk_size]
+        # Save the chunk
+        chunk = save_and_pickle(chunk, f'{file_name}_chunk_{i+1}.zip')
+        print(f'{file_name}_chunk_{i+1}.zip saved')
+
+    return df
 
 # storage functions
 def upload_to_gcs(df, df_name):
