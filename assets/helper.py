@@ -26,6 +26,8 @@ cols_world_markets = ['symbol', 'shortName', 'longName', 'exchange', 'market', '
 cols_yahoo = {'symbol': 'str', 'shortName': 'str', 'longName': 'str', 'exchange': 'category', 'market': 'category', 'quoteType': 'category', 'ticker': 'str', 'exchange_y': 'category', 'tick_y': 'str', 'tick': 'str'}
 cols_info = ['symbol', 'shortName', 'longName', 'longBusinessSummary', 'exchange', 'quoteType', 'market', 'sector', 'industry', 'website', 'logo_url', 'country', 'state', 'city', 'address1', 'phone', 'returnOnEquity', 'beta3Year', 'beta', 'recommendationKey', 'recommendationMean']
 cols_cotahist = ['TICKER', 'tick', 'Symbol', 'Symbol Type', 'Exchange', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close', 'Dividends', 'Stock Splits']
+# cols_cotahist = ['Date', 'open', 'high', 'low', 'close', 'volume', 'adjusted close', 'dividend amount', 'split coefficient']
+cols_cotahist = ['company', 'symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume', 'Dividends', 'Stock Splits']
 company_info_cols = ['market', 'sector', 'industry', 'country', 'state', 'city', 'zip', 'quoteType', 'exchange', 'financialCurrency', 'symbol', 'shortName', 'longName', 'longBusinessSummary', 'currency', 'recommendationKey', 'recommendationMean', 'fullTimeEmployees', 'website', 'logo_url', 'address1', 'address2', 'phone']
 cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
 cols_dre = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor','Url']
@@ -151,6 +153,13 @@ def update_b3_companies(value: str) -> str:
                 b3_companies = pd.concat([b3_companies, pd.DataFrame([company], columns=cols_b3_companies)])
 
                 print(f'{progress}, {company}')
+                if (size - i -1) % (bin_size) == 0:
+                    b3_companies.fillna('', inplace=True)
+                    b3_companies.reset_index(drop=True, inplace=True)
+                    b3_companies.drop_duplicates(inplace=True)
+                    
+                    b3_companies = run.save_and_pickle(b3_companies, df_name)
+                    print(f'partial save')
             else:
                 print(f'{progress}, {keyword}')
         b3_companies.fillna('', inplace=True)
@@ -208,8 +217,8 @@ def update_world_markets(value):
   except Exception as e:
     abbreviation = []
 
-  file_name = df_name = 'world_companies'
-  world_companies = pd.DataFrame(columns=cols_world_markets)
+  file_name = df_name = 'world_markets'
+  world_markets = pd.DataFrame(columns=cols_world_markets)
 
   avpi = []
   start_time = time.time()
@@ -221,34 +230,34 @@ def update_world_markets(value):
     pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
     try:
       df = pd.DataFrame(ss.get_symbol_list(market=abbrv)) # "us" or "america" will also work
-      world_companies = pd.concat([world_companies, df], ignore_index=True)
-      print(f'{progress}, {abbrv}, {len(df)} new, {len(world_companies)} total companies')
+      world_markets = pd.concat([world_markets, df], ignore_index=True)
+      print(f'{progress}, {abbrv}, {len(df)} new, {len(world_markets)} total companies')
     except Exception as e:
       pass
 
-  world_companies = world_companies.copy()
-  world_companies['market'] = world_companies['market'].map(lambda x: x.replace('_market', ''))
-  world_companies.fillna('', inplace=True)
-  world_companies.drop_duplicates(inplace=True)
+  world_markets = world_markets.copy()
+  world_markets['market'] = world_markets['market'].map(lambda x: x.replace('_market', ''))
+  world_markets.fillna('', inplace=True)
+  world_markets.drop_duplicates(inplace=True)
   
   # expand sufixes
-  world_companies[['ticker', 'exchange_country']] = world_companies['symbol'].str.split('.', expand=True)
-  world_companies['ticker_type'] = ''
+  world_markets[['ticker', 'exchange_country']] = world_markets['symbol'].str.split('.', expand=True)
+  world_markets['ticker_type'] = ''
 
   # expand Brazil Ticker Sufixes
-  mask = (world_companies['market'] == 'br')
-  br_world_companies = world_companies[mask]
+  mask = (world_markets['market'] == 'br')
+  br_world_markets = world_markets[mask]
 
   # adjustments
-  br_world_companies.loc[:, 'ticker_type'] = br_world_companies['ticker'].str[4:]
-  br_world_companies = br_world_companies.copy()
-  br_world_companies['ticker'] = br_world_companies['ticker'].str[:4]
+  br_world_markets.loc[:, 'ticker_type'] = br_world_markets['ticker'].str[4:]
+  br_world_markets = br_world_markets.copy()
+  br_world_markets['ticker'] = br_world_markets['ticker'].str[:4]
 
-  world_companies = pd.merge(world_companies, br_world_companies, how='left')
-  world_companies.fillna('', inplace=True)
+  world_markets = pd.merge(world_markets, br_world_markets, how='left')
+  world_markets.fillna('', inplace=True)
 
   # Save
-  world_companies = run.save_and_pickle(world_companies, df_name)
+  world_markets = run.save_and_pickle(world_markets, df_name)
 
   return value
 
@@ -320,6 +329,69 @@ def yahoo_cotahist(value):
 
     value='please refactor using yahooquery, nothing done here'
     return value
+
+import pandas as pd
+import datetime
+import time
+import itertools
+from alpha_vantage.timeseries import TimeSeries
+import credentials.keys
+
+def historical_quotes(value):
+    # Create an API key rotator
+    alpha_vantage = credentials.keys.alpha_vantage
+    api_key_rotator = itertools.cycle(alpha_vantage)
+
+    def get_api_key():
+        key = next(api_key_rotator)
+        return key
+
+    file_name = 'world_markets'
+    world_markets = run.read_or_create_dataframe(file_name, cols_world_markets)
+    file_name = 'cotahist'
+    cotahist = run.read_or_create_dataframe(file_name, cols_cotahist)
+    file_name = 'b3_companies'
+    b3_companies = run.read_or_create_dataframe(file_name, cols_b3_companies)
+    ticker_pairs = [(pregao, ticker.strip()) for i, pregao in b3_companies['pregao'].items() for ticker in str(b3_companies.loc[i, 'tickers']).split('/') if ticker]
+
+    def get_alpha_vantage_data(pregao, ticker):
+        # Initialize the TimeSeries object with the first API key
+        api_key = get_api_key()
+        try:
+            ts = TimeSeries(key=api_key, output_format='pandas')
+            data, metadata = ts.get_daily_adjusted(ticker, outputsize='full')
+            data.reset_index(inplace=True)
+            data.columns = cols_cotahist[2:]
+            # data['symbol'] = ticker
+            data.insert(0, 'company', pregao)
+            data.insert(1, 'symbol', ticker)
+        except Exception as e:
+            data = pd.DataFrame()
+            print(f'failed {api_key} {pregao} {ticker}')
+            pass
+        return data, api_key
+
+    size = len(ticker_pairs)
+    start_time = time.time()
+    # Perform the main loop and download required data
+    for i, ticker in enumerate(ticker_pairs):
+        pregao = ticker[0]
+        ticker = ticker[1] + '.SAO'
+        progress = run.remaining_time(start_time, size, i)
+
+        try:
+            data, key = get_alpha_vantage_data(pregao, ticker)
+            cotahist = pd.concat([cotahist, data], ignore_index=True).drop_duplicates()
+            file_name = 'cotahist'
+            cotahist = run.save_and_pickle(cotahist, file_name)
+            print(f'{progress}, {key} {pregao} {ticker}')
+        except Exception as e:
+            print(f'{key} {pregao} {ticker} failed')
+            pass
+        time.sleep(2)
+
+    return value
+
 
 def get_nsd_links(value):
     safety_factor = 1.8
