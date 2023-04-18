@@ -184,18 +184,18 @@ def clean_text(text):
 def remaining_time(start_time, size, i):
   counter = i + 1
   remaining_items = size - counter
-  remaining_percentage = (counter)/(size)
+  percentage = (counter)/(size)
 
   # elapsed time
   running_time = (time.time() - start_time)
   avg_time_per_item = running_time / (i + 1)
   # remaining time
-  remaining_time = size * avg_time_per_item
+  remaining_time = remaining_items * avg_time_per_item
   hours, remainder = divmod(int(float(remaining_time)), 3600)
   minutes, seconds = divmod(remainder, 60)
   remaining_time_formatted = f'{int(hours)}h {int(minutes):02}m {int(seconds):02}s'
 
-  progress = f'{counter}, {remaining_items}, {remaining_percentage:.2%}%, {avg_time_per_item:.6f}s, {remaining_time_formatted}'
+  progress = f'{counter}, {remaining_items}, {percentage:.2%}%, {avg_time_per_item:.6f}s, {remaining_time_formatted}'
 
   return progress
 

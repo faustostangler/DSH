@@ -25,9 +25,10 @@ cols_b3_tickers = ['ticker', 'company_name']
 cols_world_markets = ['symbol', 'shortName', 'longName', 'exchange', 'market', 'quoteType']
 cols_yahoo = {'symbol': 'str', 'shortName': 'str', 'longName': 'str', 'exchange': 'category', 'market': 'category', 'quoteType': 'category', 'ticker': 'str', 'exchange_y': 'category', 'tick_y': 'str', 'tick': 'str'}
 cols_info = ['symbol', 'shortName', 'longName', 'longBusinessSummary', 'exchange', 'quoteType', 'market', 'sector', 'industry', 'website', 'logo_url', 'country', 'state', 'city', 'address1', 'phone', 'returnOnEquity', 'beta3Year', 'beta', 'recommendationKey', 'recommendationMean']
-cols_cotahist = ['TICKER', 'tick', 'Symbol', 'Symbol Type', 'Exchange', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close', 'Dividends', 'Stock Splits']
+# cols_cotahist = ['TICKER', 'tick', 'Symbol', 'Symbol Type', 'Exchange', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close', 'Dividends', 'Stock Splits']
 # cols_cotahist = ['Date', 'open', 'high', 'low', 'close', 'volume', 'adjusted close', 'dividend amount', 'split coefficient']
-cols_cotahist = ['company', 'symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume', 'Dividends', 'Stock Splits']
+cols_tickers = ['company', 'symbol', ]
+cols_cotahist = cols_tickers + ['Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume', 'Dividends', 'Stock Splits']
 company_info_cols = ['market', 'sector', 'industry', 'country', 'state', 'city', 'zip', 'quoteType', 'exchange', 'financialCurrency', 'symbol', 'shortName', 'longName', 'longBusinessSummary', 'currency', 'recommendationKey', 'recommendationMean', 'fullTimeEmployees', 'website', 'logo_url', 'address1', 'address2', 'phone']
 cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
 cols_dre = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor','Url']
@@ -352,9 +353,12 @@ def historical_quotes(value):
     cotahist = run.read_or_create_dataframe(file_name, cols_cotahist)
     file_name = 'b3_companies'
     b3_companies = run.read_or_create_dataframe(file_name, cols_b3_companies)
-    ticker_pairs = [(pregao, ticker.strip()) for i, pregao in b3_companies['pregao'].items() for ticker in str(b3_companies.loc[i, 'tickers']).split('/') if ticker]
+    file_name = 'failed_tickers'
+    failed_tickers = run.read_or_create_dataframe(file_name, cols_tickers)
 
-    def get_alpha_vantage_data(pregao, ticker):
+    ticker_pairs = [(pregao, ticker.strip()) for i, pregao in b3_companies['pregao'].items() for ticker in str(b3_companies.loc[i, 'tickers']).split('/') if ticker and ticker.strip() not in set(failed_tickers['symbol'])]
+
+    def get_alpha_vantage_data(pregao, ticker, failed_tickers):
         # Initialize the TimeSeries object with the first API key
         api_key = get_api_key()
         try:
@@ -363,13 +367,19 @@ def historical_quotes(value):
             data.reset_index(inplace=True)
             data.columns = cols_cotahist[2:]
             # data['symbol'] = ticker
-            data.insert(0, 'company', pregao)
-            data.insert(1, 'symbol', ticker)
+            data.insert(0, cols_tickers[0], pregao)
+            data.insert(1, cols_tickers[1], ticker)
         except Exception as e:
             data = pd.DataFrame()
             print(f'failed {api_key} {pregao} {ticker}')
+            try:
+                file_name = 'failed_tickers'
+                failed_tickers = pd.concat([failed_tickers, pd.DataFrame([[pregao, ticker]], columns=cols_tickers)], ignore_index=True).drop_duplicates()
+                failed_tickers = run.save_and_pickle(failed_tickers, file_name)
+            except Exception as e:
+                pass
             pass
-        return data, api_key
+        return data, api_key, failed_tickers
 
     size = len(ticker_pairs)
     start_time = time.time()
@@ -380,7 +390,7 @@ def historical_quotes(value):
         progress = run.remaining_time(start_time, size, i)
 
         try:
-            data, key = get_alpha_vantage_data(pregao, ticker)
+            data, key, failed_tickers = get_alpha_vantage_data(pregao, ticker, failed_tickers)
             cotahist = pd.concat([cotahist, data], ignore_index=True).drop_duplicates()
             file_name = 'cotahist'
             cotahist = run.save_and_pickle(cotahist, file_name)
