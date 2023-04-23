@@ -4,10 +4,13 @@ from typing import Any
 from selenium import webdriver
 
 import pandas as pd
+import numpy as np
 
 import os
 import time
 import datetime
+
+import assets.dre_pivot as var_dre_pivot
 
 # variables 0
 url = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/?language=pt-br' 
@@ -379,7 +382,7 @@ def historical_quotes(value):
             except Exception as e:
                 pass
             pass
-        return data, api_key, failed_tickers
+        return data, failed_tickers
 
     size = len(ticker_pairs)
     start_time = time.time()
@@ -390,18 +393,17 @@ def historical_quotes(value):
         progress = run.remaining_time(start_time, size, i)
 
         try:
-            data, key, failed_tickers = get_alpha_vantage_data(pregao, ticker, failed_tickers)
+            data, failed_tickers = get_alpha_vantage_data(pregao, ticker, failed_tickers)
             cotahist = pd.concat([cotahist, data], ignore_index=True).drop_duplicates()
             file_name = 'cotahist'
             cotahist = run.save_and_pickle(cotahist, file_name)
-            print(f'{progress}, {key} {pregao} {ticker}')
+            print(f'{progress}, {pregao} {ticker}')
         except Exception as e:
-            print(f'{key} {pregao} {ticker} failed')
+            print(f'{pregao} {ticker} failed')
             pass
         time.sleep(2)
 
     return value
-
 
 def get_nsd_links(value):
     safety_factor = 1.8
@@ -620,7 +622,8 @@ def dre_pivot(value):
     groups = dre_intel.groupby(by='Companhia', group_keys=False)
 
     file_name = 'dre_pivot'
-    dre_pivot = run.read_or_create_dataframe(file_name, cols_dre_math)
+    # dre_pivot = run.read_or_create_dataframe(file_name, var_dre_pivot.columns)
+    dre_pivot = pd.DataFrame(columns=var_dre_pivot.columns)
 
     avpi = []
     start_time = time.time()
@@ -632,24 +635,22 @@ def dre_pivot(value):
         avpi.append(progress.split(',')[3])
     
         company = group[0]
-        group = group[1]
-    
-        pivot = pd.pivot_table(data=group, index=['Trimestre'], columns=['CDD'], values=['Valor'], aggfunc='max', fill_value=0.0)
-        pivot.columns = pivot.columns.droplevel(0)
-        pivot['Companhia'] = company
-        pivot = pivot.reset_index()
-        cols = pivot.columns.to_list()
-        cols.insert(0, cols.pop())
-        pivot = pivot[cols]
+        df = group[1]
+        df.reset_index(drop=True, inplace=True)
 
-        dre_pivot = pd.concat([dre_pivot, pivot], ignore_index=True)
-        print(f'{progress} {company} {group.shape}')
+        pivot = pd.pivot_table(data=df, index=['Trimestre'], columns=['CDD'], values=['Valor'], aggfunc='max', fill_value=0)
+
+        pivot = pivot.reset_index(col_level=1)
+        pivot.columns = ['Trimestre', *['{}{}'.format(col, '') for _, col in pivot.columns[1:]]]
+        pivot.insert(0, 'Companhia', company)
+
+        dre_pivot = pd.concat([dre_pivot, pivot], ignore_index=True).fillna(0)
+        print(f'{progress} {company} {df.shape[0]} lines in {pivot.shape[0]} trimestres')
         pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
 
     # save
     dre_pivot = run.save_and_pickle(dre_pivot, file_name)
     print('saved')
-
     return value
 
 def dre_merge(value):
@@ -694,6 +695,141 @@ def dre_merge(value):
 
     file_name = f'dre_merge'
     dre_merge = run.concat_chunks(file_name)
+
+    # 2.1 calculate the difference (only news) in pivot but not in merge
+    pivot = dre_pivot.groupby(['Companhia', 'Trimestre'], group_keys=False)
+    merge = dre_merge.groupby(['Companhia', 'Trimestre'], group_keys=False)
+
+    difference = set(pivot.groups.keys()) - set(merge.groups.keys())
+
+    print(len(difference), 'trimestres in dre_pivot and not in dre_merge')
+
+    # Filter-out from dre_pivot existing items in dre_merge
+    df_list = []
+    for key in difference:
+        df_list.append(pivot.get_group(key))
+    dre_groups_to_merge = pd.concat(df_list).groupby('Companhia')
+
+    merge_list = []
+    for i, (key, df) in enumerate(dre_groups_to_merge):
+        merge_list.append(df)
+    dre_to_merge = pd.concat(merge_list)
+    print(dre_to_merge.shape)
+    dre_to_merge = dre_to_merge.groupby('Companhia')
+
+    cias = dre_merge['Companhia'].unique().tolist() if 'Companhia' in dre_merge.columns else []
+
+    # Filter-out existing companies from dre_pivot
+    mask = dre_pivot['Companhia'].isin(cias)
+    dre_to_merge2 = dre_pivot[~mask].groupby('Companhia')
+    size = len(dre_to_merge)
+
+
+    # 2.2 Populate new dre_merge from missing parts
+    file_name = f'dre_merge'
+    # load in parts
+    import assets.columns
+    loaded_parts = []
+    try:
+        part_files = [file for file in os.listdir(data_path) if file.startswith(file_name + '_part_') and file.endswith('.zip')]
+        for current_file in part_files:
+            loaded_parts.append(pd.read_pickle(data_path + current_file))
+            print(f'{current_file} loaded')
+        print(f'populating dre_merge...')
+        if loaded_parts:
+            dre_parts = pd.concat(loaded_parts)
+        else:
+            dre_parts = pd.DataFrame(columns=assets.columns.merge)
+    except Exception as e:
+        print(e)
+
+    pop = []
+    for company in dre_parts['Companhia'].unique():
+        if company not in cias:
+            pop.append(dre_parts[dre_parts['Companhia'] == company])
+
+    if pop:
+        dre_merge = pd.concat([dre_merge, pd.concat(pop)])
+    print(len(pop), 'companies updated')
+
+    # get a list of unique companies in dre_merge
+    cias = dre_merge['Companhia'].unique().tolist() if 'Companhia' in dre_merge.columns else []
+
+    # 2.3 CREATE NEW MERGE
+    # 2.3 CREATE NEW MERGE
+    # 2.3 CREATE NEW MERGE
+    # do THE MERGE and create dre_merge in parts
+    temp = []
+    df_size = 0
+
+    for i, (company, df) in enumerate(dre_to_merge):
+        # for fast debug
+        if i > 10:
+            pass
+            # break
+
+        # do the merge
+        # if company not in cias: # == 'ALPARGATAS SA': # 
+        if 1 == 1: # do it for all dre_to_merge (filtered dre_pivot)
+            # print('ALPARGATAS ONLY')
+            # first filters
+            df_pivot = dre_pivot[dre_pivot['Companhia'] == company]
+            df_b3_companies = b3_companies[b3_companies['company_name'] == company]
+            
+            # dre_b3 - first merge dre_pivot+df_companies
+            df_pivot_b3 = pd.merge(df_pivot, df_b3_companies, how='outer', left_on='Companhia', right_on='company_name', suffixes=("_dre", "_b3"))
+            df_pivot_b3 = df_pivot_b3.set_index("Trimestre").fillna(np.nan)
+
+            # filtering
+            if df_b3_companies.empty:
+                ticker = ''
+            else:
+                ticker = df_b3_companies['tickers'].str.split("/", expand=True).iat[0,0]
+
+            # second filters - the cotahist by the first ticker in the 'tickers' column of the b3_companies filtered by company
+            mask_cotahist = cotahist['symbol'].str.split('.').str[0] == ticker
+            df_cotahist = cotahist[mask_cotahist]
+            df_cotahist = df_cotahist.copy()
+            df_cotahist['ticker'] = ticker
+
+            mask_company_info = company_info['symbol'].str.split('.').str[0] == ticker
+            df_info = company_info[mask_company_info]
+            if df_info.empty:
+                df_info = pd.DataFrame(columns=company_info.columns)
+            df_info = df_info.copy()
+            df_info['ticker'] = ticker
+
+            # cotainfo - second merge df_cotahist+company_info
+            df_cotainfo = pd.merge(df_cotahist, df_info, how='outer', left_on='ticker', right_on='ticker')
+            df_cotainfo = df_cotainfo.set_index("Date").fillna(np.nan)
+
+            # get company timeseries ** this is THE merge magic
+            df_company = run.merge_all(df_pivot_b3, df_cotainfo, interpolation=True)
+            df_company['Trimestre'] = df_company['Trimestre'].dt.to_period('Q').apply(lambda x: x.to_timestamp() + pd.offsets.QuarterEnd())
+
+            df_size += df_company.shape[0]
+            temp.append(df_company)
+            print(f'{i+1} {size-1-i} {(i+1)/(size):.2%} {company} {df_company.shape[0]} {df_size} {dre_merge.shape[0]}')
+            # # df_pivot_b3.resample('Q').last()
+
+            # countdown and partial save
+            if (size-i-1) % (bin_size*4) == 0:
+                # save partial dre_merge to file
+                # dre_merge = pd.concat([dre_merge, df_temp])
+                dre_merge = pd.concat([dre_merge, *temp])
+                # df_temp.to_pickle(data_path + f'{file_name}_part_{size-1-i}.zip') 
+                pd.concat([*temp]).to_pickle(data_path + f'{file_name}_part_{size-1-i}.zip') 
+                # df_temp = pd.DataFrame()
+                temp = []
+                df_size = 0
+                print(f'partial save {size-1-i}')
+        else:
+            print(f'{i+1} {size-1-i} {(i+1)/(size):.2%} {company} {dre_merge.shape[0]} already processed')
+    print('done')
+
+    # return dre_merge
+
+
 
 
     return value

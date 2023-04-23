@@ -2201,7 +2201,7 @@ def load_and_clean_basic_dfs():
     # dre_pivot + b3_companies + cotahist + company_info
     # dre_pivot
     file_name = 'dre_pivot'
-    dre_pivot = read_or_create_dataframe(file_name, b3.cols_dre_math)
+    dre_pivot = read_or_create_dataframe(file_name, b3.var_dre_pivot.columns)
     if file_name:
       dre_pivot['Companhia'] = dre_pivot['Companhia'].astype('category')
       dre_pivot['Trimestre'] = dre_pivot['Trimestre'].astype('datetime64[ns]')
@@ -2237,12 +2237,13 @@ def load_and_clean_basic_dfs():
     file_name = f'cotahist'
     cotahist = read_or_create_dataframe(file_name, b3.cols_cotahist)
     if file_name:
-      cotahist['tick'] = cotahist['Symbol'].str[:4]
-      cotahist['TICKER'] = cotahist['TICKER'].astype('category')
-      cotahist['Symbol Type'] = cotahist['Symbol Type'].astype('category')
-      cotahist['Symbol'] = cotahist['Symbol'].astype('category')
-      cotahist['Exchange'] = cotahist['Exchange'].astype('category')
-      cotahist['tick'] = cotahist['tick'].astype('category')
+      # cotahist['tick'] = cotahist['Symbol'].str[:4]
+      # cotahist['TICKER'] = cotahist['TICKER'].astype('category')
+      # cotahist['Symbol Type'] = cotahist['Symbol Type'].astype('category')
+      # cotahist['Exchange'] = cotahist['Exchange'].astype('category')
+      # cotahist['tick'] = cotahist['tick'].astype('category')
+      cotahist['company'] = cotahist['company'].astype('category')
+      cotahist['symbol'] = cotahist['symbol'].astype('category')
       cotahist['Date'] = pd.to_datetime(pd.to_datetime(cotahist['Date'].astype(str).str[:10], format='%Y/%m/%d'))
       cotahist['Open'] = pd.to_numeric(cotahist['Open']).astype('float')
       cotahist['High'] = pd.to_numeric(cotahist['High']).astype('float')
@@ -2279,7 +2280,7 @@ def concat_chunks(file_name):
     try: 
         chunk_files = [file for file in os.listdir(b3.data_path) if file.startswith(file_name + '_chunk_') and file.endswith('.zip')]
         for current_file in chunk_files:
-            df_file = read_or_create_dataframe(file_name, b3.cols_dre_math)
+            df_file = read_or_create_dataframe(current_file, b3.cols_dre_math)
             df = pd.concat([df, df_file])
             print(f'{current_file} loaded', len(df))
     except Exception as e:
@@ -2298,15 +2299,45 @@ def save_chunks(df, file_name):
         pass
 
     # save in chunks
-    num_chunks = len(df) // b3.chunk_size + 1
+    num_chunks = len(df) // b3.chunksize + 1
     for i in range(num_chunks):
         # Create a chunk
-        chunk = df.iloc[i*b3.chunk_size:(i+1)*b3.chunk_size]
+        chunk = df.iloc[i*b3.chunksize:(i+1)*b3.chunksize]
         # Save the chunk
-        chunk = save_and_pickle(chunk, f'{file_name}_chunk_{i+1}.zip')
+        chunk = save_and_pickle(chunk, f'{file_name}_chunk_{i+1}')
         print(f'{file_name}_chunk_{i+1}.zip saved')
 
     return df
+
+def merge_all(df_pivot_b3, df_cotainfo, interpolation=False, forwardfill=True, backfill=True):
+    # reset_index
+    if 'Trimestre' not in df_pivot_b3:
+        df_pivot_b3.reset_index(inplace=True)
+    if 'Date' not in df_cotainfo:
+        df_cotainfo.reset_index(inplace=True)
+
+    # set start_date
+    min_df_pivot_b3 = pd.to_datetime('today')
+    min_df_cotainfo = pd.to_datetime('today')
+    if 'Trimestre' in df_pivot_b3.columns:
+        min_df_pivot_b3 = df_pivot_b3['Trimestre'].min()
+    if 'Date' in df_cotainfo.columns and not df_cotainfo.empty:
+        min_df_cotainfo = df_cotainfo['Date'].min()
+    start_date = min([min_df_pivot_b3, min_df_cotainfo]).normalize()
+
+    # set timeseries
+    timeseries = pd.date_range(start_date, pd.to_datetime('today'),freq='d').to_series().rename('Data')
+
+    # superfill
+    interpolation = True
+    forwardfill = True
+    backfill = True
+    df_pivot_b3 = fill_merge(df_pivot_b3, 'Trimestre', timeseries, interpolation=interpolation, forwardfill=forwardfill, backfill=backfill)
+    df_cotainfo = fill_merge(df_cotainfo, 'Date', timeseries, interpolation=interpolation, forwardfill=forwardfill, backfill=backfill)
+
+    df_company = pd.merge(df_pivot_b3, df_cotainfo, how='outer', left_index=True, right_index=True, suffixes=("_pvb3", "_ctnf"))
+
+    return df_company
 
 # storage functions
 def upload_to_gcs(df, df_name):

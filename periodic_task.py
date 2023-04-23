@@ -10,8 +10,9 @@ def my_periodic_task():
     # value = 'yahoo_cotahist'
     # value = b3.yahoo_cotahist(value)
 
-    value = 'historical_quotes'
-    value = b3.historical_quotes(value)
+    # value = 'historical_quotes'
+    # value = b3.historical_quotes(value)
+
     # value = 'nsd'
     # value = b3.get_nsd_links(value)
 
