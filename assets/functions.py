@@ -2276,11 +2276,11 @@ def load_and_clean_basic_dfs():
 def concat_chunks(file_name):
     # file_name = f'dre_merge'
     # load in chunks
-    df = pd.DataFrame(columns=b3.cols_dre_math)
+    df = pd.DataFrame(columns=b3.var_dre_merge.columns)
     try: 
         chunk_files = [file for file in os.listdir(b3.data_path) if file.startswith(file_name + '_chunk_') and file.endswith('.zip')]
         for current_file in chunk_files:
-            df_file = read_or_create_dataframe(current_file, b3.cols_dre_math)
+            df_file = read_or_create_dataframe(current_file, b3.var_dre_merge.columns)
             df = pd.concat([df, df_file])
             print(f'{current_file} loaded', len(df))
     except Exception as e:
@@ -2338,6 +2338,34 @@ def merge_all(df_pivot_b3, df_cotainfo, interpolation=False, forwardfill=True, b
     df_company = pd.merge(df_pivot_b3, df_cotainfo, how='outer', left_index=True, right_index=True, suffixes=("_pvb3", "_ctnf"))
 
     return df_company
+
+def fill_merge(df, right_on, timeseries, interpolation, forwardfill, backfill):
+  df = pd.merge(timeseries, df, left_index=True, right_on=right_on, how='outer').set_index('Data')
+  all_columns = df.columns.to_list()
+
+  df_raw = df
+  df_interpol = df.drop_duplicates().resample('D').mean().interpolate()
+
+  if forwardfill:
+    df_raw = df_raw.ffill()
+    df_interpol = df_interpol.ffill()
+
+  if backfill:
+    df_raw = df_raw.bfill()
+    df_interpol = df_interpol.bfill()
+
+
+  interpolated_columns = df_interpol.columns.to_list()
+  not_interpolated_columns = list_subtract(all_columns, interpolated_columns)
+
+  df_interpol = pd.concat([df_interpol[interpolated_columns], df_raw[not_interpolated_columns]], axis=1)
+
+  if interpolation:
+    df = df_interpol[all_columns]
+  else:
+    df = df_raw[all_columns]
+
+  return df
 
 # storage functions
 def upload_to_gcs(df, df_name):
