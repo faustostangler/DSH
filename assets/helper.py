@@ -66,9 +66,11 @@ bucket_name = 'b3_bovespa_bucket'
 
 # dre_cvm variables
 base_cvm = "https://dados.cvm.gov.br/dados/CIA_ABERTA/"
+xpath_cvm = '/html/body/div[1]/pre'
+
 start_year = 2010
 session = run.requests.Session() # Inicializar uma sessão
-files_list = [] # Lista para armazenar links de arquivos CSV e ZIP
+filelist = [] # Lista para armazenar links de arquivos CSV e ZIP
 visited_subfolders = set() # Conjunto para armazenar subpastas já visitadas
 # system stages
 def update_b3_companies(value: str) -> str:
@@ -313,9 +315,9 @@ def get_nsd_links(value):
     gap = 0
     start_time = time.time()
 
-    file_name = 'nsd_links'
+    filename = 'nsd_links'
     cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
-    nsd = run.read_or_create_dataframe(file_name, cols_nsd)
+    nsd = run.read_or_create_dataframe(filename, cols_nsd)
     nsd['envio'] = pd.to_datetime(nsd['envio'], dayfirst=True)
 
     start, end = run.nsd_range(nsd, safety_factor)
@@ -348,10 +350,10 @@ def get_nsd_links(value):
             print(n, elapsed_time)
 
         if n % bin_size == 0:
-            nsd = run.save_and_pickle(nsd, file_name)
+            nsd = run.save_and_pickle(nsd, filename)
             print('partial save')
 
-    nsd = run.save_and_pickle(nsd, file_name)
+    nsd = run.save_and_pickle(nsd, filename)
     print('final save')
 
 
@@ -359,8 +361,8 @@ def get_nsd_links(value):
 
 def get_dre(value):
   # download new dre from nsd list
-  file_name = f'dre_raw'
-  dre = run.read_or_create_dataframe(file_name, cols_dre)
+  filename = f'dre_raw'
+  dre = run.read_or_create_dataframe(filename, cols_dre)
   df = pd.DataFrame(columns=cols_dre)
 
   # get new nsd links to download not yet downloaded in dre
@@ -390,7 +392,7 @@ def get_dre(value):
     if (size-l-1) % (bin_size) == 0:
       dre = pd.concat([dre, df], ignore_index=True)
 
-      dre = run.save_and_pickle(dre, file_name)
+      dre = run.save_and_pickle(dre, filename)
       df = pd.DataFrame(columns=cols_dre)
       print('partial save')
 
@@ -398,19 +400,19 @@ def get_dre(value):
   dre.sort_values(by=['Companhia', 'Trimestre', 'Url', 'Conta'], ascending=[True, False, True, True], inplace=True)
   dre['Trimestre'] = dre['Trimestre'].dt.strftime('%d/%m/%Y')
   dre.drop_duplicates(inplace=True, keep='last')
-  dre = run.save_and_pickle(dre, file_name)
+  dre = run.save_and_pickle(dre, filename)
   print('final save')
 
 
   return value
 
 def dre_math(value):
-  file_name = 'dre_raw'
-  dre_raw = run.read_or_create_dataframe(file_name, cols_dre_math)
+  filename = 'dre_raw'
+  dre_raw = run.read_or_create_dataframe(filename, cols_dre_math)
   dre_raw = run.clean_dre_math(dre_raw)
 
-  file_name = 'dre_math'
-  dre_math = run.read_or_create_dataframe(file_name, cols_dre_math)
+  filename = 'dre_math'
+  dre_math = run.read_or_create_dataframe(filename, cols_dre_math)
   dre_math = run.clean_dre_math(dre_math)
   # last company fix
   try:
@@ -437,32 +439,32 @@ def dre_math(value):
 
     avpi.append(f'{progress[0]:.6f}')
     if (size-l-1) % (bin_size*100) == 0 and status != True:
-        pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
+        pd.DataFrame(avpi).to_csv(app_folder + filename + '.csv', index=False)
 
         dre_math = pd.concat([dre_math, df_temp], axis=0, ignore_index=True)
         df_temp = pd.DataFrame(columns=cols_dre_math)
 
         dre_math.drop_duplicates(inplace=True)
-        file_name = 'dre_math'
-        dre_math = run.save_and_pickle(dre_math, file_name)
+        filename = 'dre_math'
+        dre_math = run.save_and_pickle(dre_math, filename)
         print(f'partial save {l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {progress[0]:.6f}s, {progress[1]} {key_cia[0]} {key_cia[1]}')
 
   dre_math = pd.concat([dre_math, df_temp], axis=0, ignore_index=True)
   dre_math.drop_duplicates(inplace=True)
-  file_name = 'dre_math'
-  dre_math = run.save_and_pickle(dre_math, file_name)
+  filename = 'dre_math'
+  dre_math = run.save_and_pickle(dre_math, filename)
 
 
   return value
 
 def dre_intel(value):
     # existing dre_math (raw) to be converted by inteligence and then pivoted
-    file_name = 'dre_math'
-    dre_math = run.read_or_create_dataframe(file_name, cols_dre_math)
+    filename = 'dre_math'
+    dre_math = run.read_or_create_dataframe(filename, cols_dre_math)
     dre_math = run.clean_dre_math(dre_math)
     
-    file_name = 'dre_intel'
-    dre_intel = run.read_or_create_dataframe(file_name, cols_dre_math)
+    filename = 'dre_intel'
+    dre_intel = run.read_or_create_dataframe(filename, cols_dre_math)
 
     # demosheet contains ['Companhia', 'Trimestre']
     ds = ['Companhia', 'Trimestre']
@@ -509,30 +511,30 @@ def dre_intel(value):
 
         avpi.append(f'{progress[0]:.6f}')
         if (size-item-1) % (bin_size/10) == 0:
-            pd.DataFrame(avpi).to_csv(app_folder + file_name + '.csv', index=False)
+            pd.DataFrame(avpi).to_csv(app_folder + filename + '.csv', index=False)
 
             dre_intel = dre_intel.astype(str)
             dre_intel = dre_intel.reset_index(drop=True).drop_duplicates().fillna(0)
-            dre_intel = run.save_and_pickle(dre_intel, file_name)
+            dre_intel = run.save_and_pickle(dre_intel, filename)
             print('partial save')
 
 
     dre_intel = dre_intel.reset_index(drop=True).drop_duplicates().fillna(0)
-    dre_intel = run.save_and_pickle(dre_intel, file_name)
+    dre_intel = run.save_and_pickle(dre_intel, filename)
     print('final save')
 
     return value
 
 def dre_pivot(value):
-    file_name = 'dre_intel'
-    dre_intel = run.read_or_create_dataframe(file_name, cols_dre_math)
+    filename = 'dre_intel'
+    dre_intel = run.read_or_create_dataframe(filename, cols_dre_math)
     dre_intel = run.clean_dre_math(dre_intel)
 
     dre_intel['CDD'] = dre_intel['Conta'].astype('str') + ' - ' + dre_intel['Descrição'].astype('str') + ' - ' + dre_intel['Demonstrativo'].astype('str')
     groups = dre_intel.groupby(by='Companhia', group_keys=False)
 
-    file_name = 'dre_pivot'
-    dre_pivot = run.read_or_create_dataframe(file_name, cols_dre_math)
+    filename = 'dre_pivot'
+    dre_pivot = run.read_or_create_dataframe(filename, cols_dre_math)
 
     avpi = []
     start_time = time.time()
@@ -558,19 +560,87 @@ def dre_pivot(value):
         print(f'{item+1} {len(groups)-item-1} {(item+1)/(len(groups)):.2%} {progress[0]:.6f}s {progress[1]} {company} {group.shape}')
 
     # save
-    dre_pivot = run.save_and_pickle(dre_pivot, file_name)
+    dre_pivot = run.save_and_pickle(dre_pivot, filename)
     print('saved')
 
     return value
 
 def dre_cvm(value):
-  # initialize demo
-  # demo_cvm = run.create_demo_file()
+  # Get demo_cvm new files
+  try:
+    # Get the DataFrame containing file links from the base_cvm URL
+    filelist_df = run.get_filelink_df(base_cvm)
+    filelist = filelist_df['filename'].to_list()
+    
+    # Read last update date from 'last_update.csv' if available
+    try:
+      with open(f'{app_folder}last_update.txt', 'r') as f:
+        last_update = f.read().strip()
+        if not last_update:
+          last_update = '1970-01-01'
+    except Exception as e:
+      last_update = '1970-01-01'
+    
+    # Filter the filelist_df to include only files with dates greater than last_update
+    filelist_df = filelist_df[filelist_df['date'] > (pd.to_datetime(last_update) + pd.DateOffset(days=1))]
+    try:
+    # Write the maximum date from the filtered filelist_df to 'last_update.csv'
+      last_update = filelist_df['date'].max().strftime('%Y-%m-%d')
+      with open(f'{app_folder}last_update.txt', 'w') as f:
+        f.write(last_update)
+    except Exception as e:
+      pass
 
-  # update demo
-  files_list = run.gather_links(base_cvm)
-  meta_dict = run.get_metadados(files_list)
-  categories = get_categories(files_list)
+    # List of demo_cvm types to download
+    demo_cvms = ['itr', 'dfp']
+    
+    # Download the database files for demo_cvms and store them in dataframes
+    dataframes = run.download_database(demo_cvms, filelist_df)
+    
+    # Group dataframes by year using the run.group_by_year function
+    demo_cvm, links = run.group_by_year(dataframes)
+    
+    # Clean the DT_INI_EXERC column in demo_cvm using run.clean_DT_INI_EXERC function
+    demo_cvm = run.clean_DT_INI_EXERC(demo_cvm)
+    
+    # Create a demo_cvm_existing dictionary using run.create_demo_file function
+    # demo_cvm_existing = run.create_demo_file() # old one
+    print('updating saved database')
+    demo_cvm_existing = run.load_pkl(f'{app_folder}dataframes')
+    
+    # Update demo_cvm with values from demo_cvm_existing if missing
+    for year, df in demo_cvm_existing.items():
+      if year not in demo_cvm:
+        demo_cvm[year] = df
+    
+    # demo_cvm save pkl
+    demo_cvm = run.save_pkl(demo_cvm, f'{app_folder}dataframes')
+
+  except Exception as e:
+    print(e)
+
+
+
+
+  # concat demo_cvm and demo_cvm_new
+  try:
+     filelist_df.to_pickle(f'{app_folder}filelist_df.pkl')
+  except Exception as e:
+     pass
+  meta_dict = run.get_metadados(filelist)
+  categories = run.get_categories(filelist)
+  demonstrativos_cvm = []
+  for cat in categories:
+    term = 'DOC/'
+    if term in cat:
+      demonstrativos_cvm.append(cat.replace(term,'').lower())
+
+  # Imprimir resultados
+  total_fields = sum((i + 1) * len(d) for i, d in enumerate(meta_dict.values()))
+  print(f'{base_cvm}')
+  print(f'Encontradas {len(categories)} categorias com {len(meta_dict)} arquivos meta contendo {total_fields} campos')
+  print(demonstrativos_cvm)
+
 
 
   return value

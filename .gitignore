@@ -6,3 +6,5 @@ __pycache__/index.cpython-310.pyc
 /*datasets/*
 temporary_task.py
 *.7z
+*.pkl
+*.csv
