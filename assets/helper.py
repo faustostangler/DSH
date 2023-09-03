@@ -36,7 +36,6 @@ cmbQuadro = ['Demonstração do Resultado', 'Balanço Patrimonial Ativo', 'Balan
 last_quarters = ['3', '4']
 all_quarters = ['6', '7']
 
-
 # dre new columns
 fsdemo = 'FS_Demonstrativo'
 fsdesc = 'FS_Descrição'
@@ -45,7 +44,6 @@ fsval = 'FS_Valor'
 
 columns = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor', 'Url', 'nsd', 'demosheet']
 columns = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor', 'Url', 'nsd']
-
 
 # variables 2
 driver_wait_time = 2
@@ -66,7 +64,12 @@ data_path = run.check_or_create_folder(data_path)
 json_key_file = 'credentials\storage admin.json'
 bucket_name = 'b3_bovespa_bucket'
 
-
+# dre_cvm variables
+base_cvm = "https://dados.cvm.gov.br/dados/CIA_ABERTA/"
+start_year = 2010
+session = run.requests.Session() # Inicializar uma sessão
+files_list = [] # Lista para armazenar links de arquivos CSV e ZIP
+visited_subfolders = set() # Conjunto para armazenar subpastas já visitadas
 # system stages
 def update_b3_companies(value: str) -> str:
     """
@@ -559,3 +562,15 @@ def dre_pivot(value):
     print('saved')
 
     return value
+
+def dre_cvm(value):
+  # initialize demo
+  # demo_cvm = run.create_demo_file()
+
+  # update demo
+  files_list = run.gather_links(base_cvm)
+  meta_dict = run.get_metadados(files_list)
+  categories = get_categories(files_list)
+
+
+  return value
