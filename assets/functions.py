@@ -2800,6 +2800,7 @@ def group_by_year(dataframes):
     demo_cvm = [df for df in dataframes if len(df) > 0 and ('con' in df['FILENAME'][0] or 'ind' in df['FILENAME'][0])]
     links = [df for df in dataframes if len(df) > 0 and ('con' not in df['FILENAME'][0] and 'ind' not in df['FILENAME'][0])]
 
+    print('split by year')
     demo_cvm = yearly(demo_cvm)
     links = yearly(links)
 
@@ -2819,7 +2820,6 @@ def clean_DT_INI_EXERC(demo_cvm):
 
     This function takes a dictionary of DataFrames and filters each DataFrame based on the 'DT_INI_EXERC' column.
     It keeps rows where the 'DT_INI_EXERC' column matches the year's starting date (January 1) or is NaN.
-    The 'MATH_MAGIC' column is updated for the filtered rows.
 
     Args:
         demo_cvm (dict): A dictionary where keys are years and values are DataFrames.
@@ -2836,9 +2836,6 @@ def clean_DT_INI_EXERC(demo_cvm):
             mask = (df['DT_INI_EXERC'] == pd.to_datetime(str(year) + '-01-01')) | df['DT_INI_EXERC'].isna()
             df_filtered = df[mask].copy()  # Make a copy to avoid modifying the original DataFrame
             
-            # Update the 'MATH_MAGIC' column for the filtered rows using .loc indexer
-            df_filtered.loc[:, 'MATH_MAGIC'] = False
-            
             # Update the dictionary with the filtered DataFrame
             demo_cvm[year] = df_filtered
             
@@ -2852,67 +2849,66 @@ def clean_DT_INI_EXERC(demo_cvm):
     return demo_cvm
 
 def update_cvm_files():
-  """
-  Update the demo_cvm files based on new data from filelist_df.
+    """
+    Update the demo_cvm files based on new data from filelist_df.
 
-  Args:
+    Args:
     filelist_df (pd.DataFrame): DataFrame containing file links and dates.
 
-  Returns:
+    Returns:
     dict: Updated demo_cvm data.
 
-  This function updates the demo_cvm files by downloading new data based on filelist_df.
-  It first retrieves the DataFrame containing file links from the base_cvm URL.
-  It reads the last update date from 'last_update.txt' and filters the filelist_df to include only files
-  with dates greater than the last update. The last update date is then updated in 'last_update.txt'.
-  The function downloads the database files for 'itr' and 'dfp' demo_cvm types, groups the dataframes by year,
-  and cleans the DT_INI_EXERC column in the demo_cvm data. It also loads the existing demo_cvm data and
-  updates missing years with data from demo_cvm_existing. The updated demo_cvm data is saved and returned.
+    This function updates the demo_cvm files by downloading new data based on filelist_df.
+    It first retrieves the DataFrame containing file links from the base_cvm URL.
+    It reads the last update date from 'last_update.txt' and filters the filelist_df to include only files
+    with dates greater than the last update. The last update date is then updated in 'last_update.txt'.
+    The function downloads the database files for 'itr' and 'dfp' demo_cvm types, groups the dataframes by year,
+    and cleans the DT_INI_EXERC column in the demo_cvm data. It also loads the existing demo_cvm data and
+    updates missing years with data from demo_cvm_existing. The updated demo_cvm data is saved and returned.
 
-  Additionally, the function retrieves metadata and categories from the filelist. It extracts specific
-  demonstrativos_cvm and prints the results including base_cvm URL, the number of categories,
-  the count of meta files, and the total fields. Finally, it prints the list of demonstrativos_cvm.
+    Additionally, the function retrieves metadata and categories from the filelist. It extracts specific
+    demonstrativos_cvm and prints the results including base_cvm URL, the number of categories,
+    the count of meta files, and the total fields. Finally, it prints the list of demonstrativos_cvm.
 
-  """
-  try:
+    """
     # Retrieve DataFrame containing file links from base_cvm URL
     filelist_df = get_filelink_df(b3.base_cvm)
     last_update2 = filelist_df['date'].max().strftime('%Y-%m-%d')
     filelist = filelist_df['filename'].to_list()
 
     try:
-      # Read last update date from 'last_update.txt' if available, else set to '1970-01-01'
-      with open(f'{b3.app_folder}last_update.txt', 'r') as f:
-        last_update = f.read().strip()
+        # Read last update date from 'last_update.txt' if available, else set to '1970-01-01'
+        with open(f'{b3.app_folder}last_update.txt', 'r') as f:
+            last_update = f.read().strip()
         if not last_update:
-          last_update = '1970-01-01'
+            last_update = '1970-01-01'
     except Exception as e:
-      last_update = '1970-01-01'
+        last_update = '1970-01-01'
 
     # Filter filelist_df to include only files with dates greater than last_update
     filelist_df = filelist_df[filelist_df['date'] > (pd.to_datetime(last_update) + pd.DateOffset(days=1))]
 
     # List of demo_cvm types to download
     demo_cvms = ['itr', 'dfp']
-    
+
     # Download database files for demo_cvms and group dataframes by year
     dataframes = download_database(demo_cvms, filelist_df)
     demo_cvm, links = group_by_year(dataframes)
-    
+
     # Clean the DT_INI_EXERC column in demo_cvm data
     demo_cvm = clean_DT_INI_EXERC(demo_cvm)
 
     print('saving updated database (may take up to 5 min)')
     # Load existing demo_cvm data
     try:
-       demo_cvm_existing = load_pkl(f'{b3.app_folder}database')
+        demo_cvm_existing = load_pkl(f'{b3.app_folder}database')
     except Exception as e:
-       demo_cvm_existing = {}
-    
+        demo_cvm_existing = {}
+
     # Update demo_cvm with values from demo_cvm_existing if missing years
     for year, df in demo_cvm_existing.items():
-      if year not in demo_cvm:
-        demo_cvm[year] = df
+        if year not in demo_cvm:
+            demo_cvm[year] = df
     demo_cvm = OrderedDict(sorted(demo_cvm.items()))
 
     # Save updated demo_cvm data
@@ -2923,55 +2919,51 @@ def update_cvm_files():
 
     # Change data types for columns
     for year, df in demo_cvm.items():
-      for column in df.columns:
-        if column in category_columns:
-            try:
-              df[column] = df[column].astype('category')
-            except Exception as e:
-              pass
-        elif column in datetime_columns:
-            try:
-              df[column] = pd.to_datetime(df[column])
-            except Exception as e:
-              pass
-        elif column in numeric_columns:
-            try:
-              df[column] = pd.to_numeric(df[column], errors='ignore')
-            except Exception as e:
-              pass
+        for column in df.columns:
+            if column in category_columns:
+                try:
+                    df[column] = df[column].astype('category')
+                except Exception as e:
+                    pass
+            elif column in datetime_columns:
+                try:
+                    df[column] = pd.to_datetime(df[column])
+                except Exception as e:
+                    pass
+            elif column in numeric_columns:
+                try:
+                    df[column] = pd.to_numeric(df[column], errors='ignore')
+                except Exception as e:
+                    pass
 
     # print('not saved')
     if not filelist_df.empty:
         demo_cvm = save_pkl(demo_cvm, f'{b3.app_folder}database')
 
     try:
-      # Write the maximum date from filtered filelist_df to 'last_update.txt'
-      print('last update', last_update2)
-      with open(f'{b3.app_folder}last_update.txt', 'w') as f:
-        f.write(last_update2)
+        # Write the maximum date from filtered filelist_df to 'last_update.txt'
+        print('last update', last_update2)
+        with open(f'{b3.app_folder}last_update.txt', 'w') as f:
+            f.write(last_update2)
     except Exception as e:
-      pass
+        pass
 
-  except Exception as e:
-    # print(e)
-    pass
+    # Get metadata and categories from filelist
+    meta_dict = get_metadados(filelist)
+    categories = get_categories(filelist)
+    demonstrativos_cvm = []
+    for cat in categories:
+        term = 'DOC/'
+        if term in cat:
+            demonstrativos_cvm.append(cat.replace(term,'').lower())
 
-  # Get metadata and categories from filelist
-  meta_dict = get_metadados(filelist)
-  categories = get_categories(filelist)
-  demonstrativos_cvm = []
-  for cat in categories:
-    term = 'DOC/'
-    if term in cat:
-      demonstrativos_cvm.append(cat.replace(term,'').lower())
+    # Print results
+    total_fields = sum((i + 1) * len(d) for i, d in enumerate(meta_dict.values()))
+    print(f'{b3.base_cvm}')
+    print(f'Encontradas {len(categories)} categorias com {len(meta_dict)} arquivos meta contendo {total_fields} campos')
+    print(demonstrativos_cvm)
 
-  # Print results
-  total_fields = sum((i + 1) * len(d) for i, d in enumerate(meta_dict.values()))
-  print(f'{b3.base_cvm}')
-  print(f'Encontradas {len(categories)} categorias com {len(meta_dict)} arquivos meta contendo {total_fields} campos')
-  print(demonstrativos_cvm)
-
-  return demo_cvm, meta_dict, demonstrativos_cvm
+    return demo_cvm, meta_dict, demonstrativos_cvm
 
 def get_companies_by_str_port(df):
     """
@@ -3036,17 +3028,17 @@ def perform_math_magic(demo_cvm, max_iterations=20000000):
         dict: Updated demo_cvm with 'magic' calculations.
 
     This function iterates through the provided demo_cvm DataFrames, performs calculations based on specified quarters,
-    and updates the 'VL_CONTA' values and 'MATH_MAGIC' flag where necessary.
+    and updates the 'VL_CONTA' values where necessary.
     """
     try:
         start_time = time.time()
-
         # Iterate through each year's DataFrame
         for n1, (year, demonstrativo_cvm) in enumerate(demo_cvm.items()):
-          if year == 2018:
             companies_by_str_port = get_companies_by_str_port(demonstrativo_cvm)
             print(f"{year} {len(demonstrativo_cvm):,.0f} lines, {len(demonstrativo_cvm['DENOM_CIA'].unique())} companies, {'/'.join([f'{len(companies)} {key}' for key, companies in companies_by_str_port.items()])}")
             print(year, remaining_time(start_time, len(demo_cvm), n1))
+            # Convert DT_REFER to datetime
+            demonstrativo_cvm['DT_REFER'] = pd.to_datetime(demonstrativo_cvm['DT_REFER'])
             groups = demonstrativo_cvm.groupby(['DENOM_CIA', 'AGRUPAMENTO'], group_keys=False)
             start_time_2 = time.time()
             for n2, (key, group) in enumerate(groups):
@@ -3059,15 +3051,7 @@ def perform_math_magic(demo_cvm, max_iterations=20000000):
                 for n3, (index, df) in enumerate(subgroups):
                     # print('  ', '  ', remaining_time(start_time_3, len(subgroups), n3))
                     conta_first = index[0][0]
-                    if conta_first == '3' and year > 2010:
-                        pass
-                    # Convert DT_REFER to datetime
-                    df['DT_REFER'] = pd.to_datetime(df['DT_REFER'])
-                    
-                    # Create 'MATH_MAGIC' column if not exists
-                    if 'MATH_MAGIC' not in demonstrativo_cvm.columns:
-                        demonstrativo_cvm['MATH_MAGIC'] = False
-
+                   
                     try:
                         i1 = df[df['DT_REFER'].dt.quarter == 1].index[0]
                         q1 = df[df['DT_REFER'].dt.quarter == 1]['VL_CONTA'].iloc[0]
@@ -3080,7 +3064,7 @@ def perform_math_magic(demo_cvm, max_iterations=20000000):
                         q2 = 0
                     try:
                         i3 = df[df['DT_REFER'].dt.quarter == 3].index[0]
-                        q3 = df[df['DT_REFER'].dt.quarter == 4]['VL_CONTA'].iloc[0]
+                        q3 = df[df['DT_REFER'].dt.quarter == 3]['VL_CONTA'].iloc[0]
                     except Exception:
                         q3 = 0
                     try:
@@ -3093,30 +3077,40 @@ def perform_math_magic(demo_cvm, max_iterations=20000000):
                     try:
                         # Perform calculations based on specified quarters and update flag
                         if conta_first in b3.last_quarters and i4:
-                            if not demonstrativo_cvm.loc[i4, 'MATH_MAGIC']:
-                                q4 = q4 - (q3 + q2 + q1)
+                            q4 = q4 - (q3)
                             update = True
                         elif conta_first in b3.all_quarters and i2 and i3 and i4:
-                            if not demonstrativo_cvm.loc[i2, 'MATH_MAGIC']:
-                                q2 = q2 - (q1)
-                            if not demonstrativo_cvm.loc[i3, 'MATH_MAGIC']:
-                                q3 = q3 - (q2 + q1)
-                            if not demonstrativo_cvm.loc[i4, 'MATH_MAGIC']:
-                                q4 = q4 - (q3 + q2 + q1)
+                            q4 = q4 - (q3)
+                            q3 = q3 - (q2)
+                            q2 = q2 - (q1)
                             update = True
                     except Exception as e:
                         update = False
 
                     if update:
-                        # Update 'VL_CONTA' values and 'MATH_MAGIC' flag
-                        demonstrativo_cvm.loc[i2, ['VL_CONTA', 'MATH_MAGIC']] = [q2, True]
-                        demonstrativo_cvm.loc[i3, ['VL_CONTA', 'MATH_MAGIC']] = [q3, True]
-                        demonstrativo_cvm.loc[i4, ['VL_CONTA', 'MATH_MAGIC']] = [q4, True]
+                        # Update 'VL_CONTA' values
+                        try:
+                           demonstrativo_cvm.loc[i1, 'VL_CONTA'] = q1
+                        except Exception as e:
+                            pass
+                        try:
+                           demonstrativo_cvm.loc[i2, 'VL_CONTA'] = q2
+                        except Exception as e:
+                            pass
+                        try:
+                           demonstrativo_cvm.loc[i3, 'VL_CONTA'] = q3
+                        except Exception as e:
+                            pass
+                        try:
+                           demonstrativo_cvm.loc[i4, 'VL_CONTA'] = q4
+                        except Exception as e:
+                            pass
 
                     if n3 > max_iterations:
                         break
                 if n2 > max_iterations:
                     break
+            demo_cvm[year] = demonstrativo_cvm
             if n1 > max_iterations:
                 break
     except Exception as e:
@@ -3134,15 +3128,18 @@ def year_to_company(demo_cvm):
 
     # Populate the company_dict
     start_time = time.time()
-    for i, company in enumerate(all_companies):
-        print(remaining_time(start_time, len(all_companies), i))
-        company_df = []  # This will hold dataframes for each year for the company
-        for j, (year, df) in demo_cvm.items():
-            company_data = df[df['DENOM_CIA'] == company]
-            company_df.append(company_data)
-        
+    try:
+        for i, company in enumerate(all_companies):
+          if company == 'ALPARGATAS SA':
+            print(remaining_time(start_time, len(all_companies), i))
+            company_df = []  # This will hold dataframes for each year for the company
+            for j, (year, df) in enumerate(demo_cvm.items()):
+                company_data = df[df['DENOM_CIA'] == company]
+                company_df.append(company_data)
+            companies[company] = pd.concat(company_df, ignore_index=True)
+    except Exception as e:
+        pass    
         # Concatenate the data for the company across all years
-        companies[company] = pd.concat(company_df, ignore_index=True)
 
 
     return companies
