@@ -2371,6 +2371,11 @@ def save_pkl(data, filename):
     """
     with open(f'{filename}.pkl', 'wb') as f:
         pickle.dump(data, f)
+    # with zipfile.ZipFile(f'{filename}.zip', 'w', compression=zipfile.ZIP_DEFLATED) as zipf:
+    #     # Save the data as a Pickle file within the zip archive
+    #     with zipf.open(f'{filename}.pkl', 'w') as data_file:
+    #         pickle.dump(data, data_file)
+
     return data
 
 def load_pkl(filename):
@@ -2384,6 +2389,10 @@ def load_pkl(filename):
     """
     with open(f'{filename}.pkl', 'rb') as f:
         data = pickle.load(f)
+    # with zipfile.ZipFile(f'{filename}.zip', 'r') as zipf:
+    #     with zipf.open(f'{filename}.pkl', 'r') as data_file:
+    #         data = pickle.load(data_file)
+
     return data
 
 def create_demo_file():
@@ -2841,4 +2850,258 @@ def clean_DT_INI_EXERC(demo_cvm):
 
     return demo_cvm
 
+def update_cvm_files():
+  """
+  Update the demo_cvm files based on new data from filelist_df.
 
+  Args:
+    filelist_df (pd.DataFrame): DataFrame containing file links and dates.
+
+  Returns:
+    dict: Updated demo_cvm data.
+
+  This function updates the demo_cvm files by downloading new data based on filelist_df.
+  It first retrieves the DataFrame containing file links from the base_cvm URL.
+  It reads the last update date from 'last_update.txt' and filters the filelist_df to include only files
+  with dates greater than the last update. The last update date is then updated in 'last_update.txt'.
+  The function downloads the database files for 'itr' and 'dfp' demo_cvm types, groups the dataframes by year,
+  and cleans the DT_INI_EXERC column in the demo_cvm data. It also loads the existing demo_cvm data and
+  updates missing years with data from demo_cvm_existing. The updated demo_cvm data is saved and returned.
+
+  Additionally, the function retrieves metadata and categories from the filelist. It extracts specific
+  demonstrativos_cvm and prints the results including base_cvm URL, the number of categories,
+  the count of meta files, and the total fields. Finally, it prints the list of demonstrativos_cvm.
+
+  """
+  try:
+    # Retrieve DataFrame containing file links from base_cvm URL
+    filelist_df = get_filelink_df(b3.base_cvm)
+    filelist = filelist_df['filename'].to_list()
+
+    try:
+      # Read last update date from 'last_update.txt' if available, else set to '1970-01-01'
+      with open(f'{b3.app_folder}last_update.txt', 'r') as f:
+        last_update = f.read().strip()
+        if not last_update:
+          last_update = '1970-01-01'
+    except Exception as e:
+      last_update = '1970-01-01'
+
+    # Filter filelist_df to include only files with dates greater than last_update
+    filelist_df = filelist_df[filelist_df['date'] > (pd.to_datetime(last_update) + pd.DateOffset(days=1))]
+
+    # List of demo_cvm types to download
+    demo_cvms = ['itr', 'dfp']
+    
+    # Download database files for demo_cvms and group dataframes by year
+    dataframes = download_database(demo_cvms, filelist_df)
+    demo_cvm, links = group_by_year(dataframes)
+    
+    # Clean the DT_INI_EXERC column in demo_cvm data
+    demo_cvm = clean_DT_INI_EXERC(demo_cvm)
+
+    print('saving updated database (may take up to 5 min)')
+    # Load existing demo_cvm data
+    demo_cvm_existing = load_pkl(f'{b3.app_folder}database')
+    
+    # Update demo_cvm with values from demo_cvm_existing if missing years
+    for year, df in demo_cvm_existing.items():
+      if year not in demo_cvm:
+        demo_cvm[year] = df
+    
+    # Save updated demo_cvm data
+
+    category_columns = ['FILENAME', 'DEMONSTRATIVO', 'BALANCE_SHEET', 'ANO', 'AGRUPAMENTO', 'CNPJ_CIA', 'VERSAO', 'DENOM_CIA', 'CD_CVM', 'GRUPO_DFP', 'MOEDA', 'ESCALA_MOEDA', 'CD_CONTA', 'DS_CONTA','ST_CONTA_FIXA', 'COLUNA_DF', ]
+    datetime_columns = ['DT_REFER', 'DT_FIM_EXERC', 'DT_INI_EXERC', ]
+    numeric_columns = ['VL_CONTA', ]
+
+    # Change data types for columns
+    for year, df in demo_cvm.items():
+      for column in df.columns:
+        if column in category_columns:
+            try:
+              [column] = df[column].astype('category')
+            except Exception as e:
+              pass
+        elif column in datetime_columns:
+            try:
+              df[column] = pd.to_datetime(df[column])
+            except Exception as e:
+              pass
+        elif column in numeric_columns:
+            try:
+              df[column] = df[column].astype(int)
+            except Exception as e:
+              pass
+                
+    # print('not saved')
+    demo_cvm = save_pkl(demo_cvm, f'{b3.app_folder}database')
+
+    try:
+      # Write the maximum date from filtered filelist_df to 'last_update.txt'
+      last_update = filelist_df['date'].max().strftime('%Y-%m-%d')
+      with open(f'{b3.app_folder}last_update.txt', 'w') as f:
+        f.write(last_update)
+    except Exception as e:
+      pass
+
+  except Exception as e:
+    # print(e)
+    pass
+
+  # Get metadata and categories from filelist
+  meta_dict = get_metadados(filelist)
+  categories = get_categories(filelist)
+  demonstrativos_cvm = []
+  for cat in categories:
+    term = 'DOC/'
+    if term in cat:
+      demonstrativos_cvm.append(cat.replace(term,'').lower())
+
+  # Print results
+  total_fields = sum((i + 1) * len(d) for i, d in enumerate(meta_dict.values()))
+  print(f'{b3.base_cvm}')
+  print(f'Encontradas {len(categories)} categorias com {len(meta_dict)} arquivos meta contendo {total_fields} campos')
+  print(demonstrativos_cvm)
+
+  return demo_cvm, meta_dict, demonstrativos_cvm
+
+def get_companies_by_str_port(df):
+    """
+    Get a list of companies grouped by 'ind' and 'con' in a structured report.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing financial data.
+
+    Returns:
+        dict: Dictionary with keys 'ind', 'con', and ('ind', 'con') combinations
+              mapped to lists of corresponding 'DENOM_CIA' values.
+
+    This function calculates the list of companies grouped by 'ind' (individual) and 'con'
+    (consolidated) in a structured report. It utilizes a pivot table to count occurrences of
+    'ind' and 'con' for each company and reporting date. The resulting dictionary stores
+    'ind' and 'con' as keys and their corresponding 'DENOM_CIA' values.
+
+    Example:
+        To use this function, provide a DataFrame containing financial data ('df') as input.
+        The function will return a dictionary with keys 'ind', 'con', and ('ind', 'con')
+        combinations, each mapped to lists of 'DENOM_CIA' values belonging to that group.
+    """
+    # Create a pivot table to count occurrences of 'ind' and 'con'
+    pivot_table = df.pivot_table(index=['DENOM_CIA', 'DT_REFER'], columns='AGRUPAMENTO', aggfunc='size', fill_value=0)
+    
+    # Convert counts to boolean values (True if count > 0, else False)
+    pivot_table = pivot_table.applymap(lambda x: True if x > 0 else False)
+    pivot_table = pivot_table[['ind'] + [col for col in pivot_table.columns if col != 'ind' and col != 'con'] + ['con']]
+
+    # Get unique combinations of rows as tuples
+    combinations = set(map(tuple, pivot_table.to_numpy()))
+
+    # Create a dictionary to store combinations and corresponding 'DENOM_CIA'
+    companies_by_str_port = {}
+
+    # Find matching 'DENOM_CIA' for each combination
+    for combination in combinations:
+        relest_individual = combination[0]
+        relest_consolidado = combination[1]
+        cias = pivot_table[(pivot_table['ind'] == relest_individual) & (pivot_table['con'] == relest_consolidado)].index.get_level_values('DENOM_CIA').unique()
+        key = ('ind', 'con')
+        if relest_consolidado and not relest_individual:
+            key = 'con'
+        if not relest_consolidado and relest_individual:
+            key = 'ind'
+
+        companies_by_str_port[key] = cias
+
+    return companies_by_str_port
+
+def perform_math_magic(demo_cvm, max_iterations=20000000):
+    """
+    Perform 'magic' calculations on the DataFrame demo_cvm based on specified quarters.
+
+    Args:
+        demo_cvm (dict): Dictionary of DataFrames containing financial data.
+        last_quarters (list): List of quarters considered as last quarters.
+        all_quarters (list): List of quarters considered as all quarters.
+        max_iterations (int): Maximum number of iterations to perform.
+
+    Returns:
+        dict: Updated demo_cvm with 'magic' calculations.
+
+    This function iterates through the provided demo_cvm DataFrames, performs calculations based on specified quarters,
+    and updates the 'VL_CONTA' values and 'MATH_MAGIC' flag where necessary.
+    """
+    start_time = time.time()
+
+    # Iterate through each year's DataFrame
+    for n1, (year, demonstrativo_cvm) in enumerate(demo_cvm.items()):
+        groups = demonstrativo_cvm.groupby(['DENOM_CIA', 'AGRUPAMENTO'], group_keys=False)
+        start_time_2 = time.time()
+        for n2, (key, group) in enumerate(groups):
+            company = key[0]
+            agg = key[1]
+            subgroups = group.groupby(['CD_CONTA', 'DS_CONTA'], group_keys=False)
+            
+            start_time_3 = time.time()
+            for n3, (index, df) in enumerate(subgroups):
+                conta_first = index[0][0]
+                # Convert DT_REFER to datetime
+                df['DT_REFER'] = pd.to_datetime(df['DT_REFER'])
+                
+                # Create 'MATH_MAGIC' column if not exists
+                if 'MATH_MAGIC' not in demonstrativo_cvm.columns:
+                    demonstrativo_cvm['MATH_MAGIC'] = False
+
+                try:
+                    i1 = df[df['DT_REFER'].dt.quarter == 1].index[0]
+                    q1 = df[df['DT_REFER'].dt.quarter == 1]['VL_CONTA'].iloc[0]
+                except Exception:
+                    q1 = 0
+                try:
+                    i2 = df[df['DT_REFER'].dt.quarter == 2].index[0]
+                    q2 = df[df['DT_REFER'].dt.quarter == 2]['VL_CONTA'].iloc[0]
+                except Exception:
+                    q2 = 0
+                try:
+                    i3 = df[df['DT_REFER'].dt.quarter == 3].index[0]
+                    q3 = df[df['DT_REFER'].dt.quarter == 4]['VL_CONTA'].iloc[0]
+                except Exception:
+                    q3 = 0
+                try:
+                    i4 = df[df['DT_REFER'].dt.quarter == 4].index[0]
+                    q4 = df[df['DT_REFER'].dt.quarter == 4]['VL_CONTA'].iloc[0]
+                except Exception:
+                    q4 = 0
+
+                update = False
+                try:
+                    # Perform calculations based on specified quarters and update flag
+                    if conta_first in b3.last_quarters:
+                        if not demonstrativo_cvm.loc[i4, 'MATH_MAGIC']:
+                            q4 = q4 - (q3 + q2 + q1)
+                        update = True
+                    elif conta_first in b3.all_quarters:
+                        if not demonstrativo_cvm.loc[i2, 'MATH_MAGIC']:
+                            q2 = q2 - (q1)
+                        if not demonstrativo_cvm.loc[i3, 'MATH_MAGIC']:
+                            q3 = q3 - (q2 + q1)
+                        if not demonstrativo_cvm.loc[i4, 'MATH_MAGIC']:
+                            q4 = q4 - (q3 + q2 + q1)
+                        update = True
+                except Exception:
+                    update = False
+
+                if update:
+                    # Update 'VL_CONTA' values and 'MATH_MAGIC' flag
+                    demonstrativo_cvm.loc[i2, ['VL_CONTA', 'MATH_MAGIC']] = [q2, True]
+                    demonstrativo_cvm.loc[i3, ['VL_CONTA', 'MATH_MAGIC']] = [q3, True]
+                    demonstrativo_cvm.loc[i4, ['VL_CONTA', 'MATH_MAGIC']] = [q4, True]
+
+                if n3 > max_iterations:
+                    break
+            if n2 > max_iterations:
+                break
+        if n1 > max_iterations:
+            break
+
+    return demo_cvm

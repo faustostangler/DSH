@@ -566,81 +566,10 @@ def dre_pivot(value):
     return value
 
 def dre_cvm(value):
-  # Get demo_cvm new files
-  try:
-    # Get the DataFrame containing file links from the base_cvm URL
-    filelist_df = run.get_filelink_df(base_cvm)
-    filelist = filelist_df['filename'].to_list()
-    
-    # Read last update date from 'last_update.csv' if available
-    try:
-      with open(f'{app_folder}last_update.txt', 'r') as f:
-        last_update = f.read().strip()
-        if not last_update:
-          last_update = '1970-01-01'
-    except Exception as e:
-      last_update = '1970-01-01'
-    
-    # Filter the filelist_df to include only files with dates greater than last_update
-    filelist_df = filelist_df[filelist_df['date'] > (pd.to_datetime(last_update) + pd.DateOffset(days=1))]
-    try:
-    # Write the maximum date from the filtered filelist_df to 'last_update.csv'
-      last_update = filelist_df['date'].max().strftime('%Y-%m-%d')
-      with open(f'{app_folder}last_update.txt', 'w') as f:
-        f.write(last_update)
-    except Exception as e:
-      pass
+  # get some basic info
+  demo_cvm, meta_dict, demonstrativos_cvm = run.update_cvm_files()
 
-    # List of demo_cvm types to download
-    demo_cvms = ['itr', 'dfp']
-    
-    # Download the database files for demo_cvms and store them in dataframes
-    dataframes = run.download_database(demo_cvms, filelist_df)
-    
-    # Group dataframes by year using the run.group_by_year function
-    demo_cvm, links = run.group_by_year(dataframes)
-    
-    # Clean the DT_INI_EXERC column in demo_cvm using run.clean_DT_INI_EXERC function
-    demo_cvm = run.clean_DT_INI_EXERC(demo_cvm)
-    
-    # Create a demo_cvm_existing dictionary using run.create_demo_file function
-    # demo_cvm_existing = run.create_demo_file() # old one
-    print('updating saved database')
-    demo_cvm_existing = run.load_pkl(f'{app_folder}dataframes')
-    
-    # Update demo_cvm with values from demo_cvm_existing if missing
-    for year, df in demo_cvm_existing.items():
-      if year not in demo_cvm:
-        demo_cvm[year] = df
-    
-    # demo_cvm save pkl
-    demo_cvm = run.save_pkl(demo_cvm, f'{app_folder}dataframes')
-
-  except Exception as e:
-    print(e)
-
-
-
-
-  # concat demo_cvm and demo_cvm_new
-  try:
-     filelist_df.to_pickle(f'{app_folder}filelist_df.pkl')
-  except Exception as e:
-     pass
-  meta_dict = run.get_metadados(filelist)
-  categories = run.get_categories(filelist)
-  demonstrativos_cvm = []
-  for cat in categories:
-    term = 'DOC/'
-    if term in cat:
-      demonstrativos_cvm.append(cat.replace(term,'').lower())
-
-  # Imprimir resultados
-  total_fields = sum((i + 1) * len(d) for i, d in enumerate(meta_dict.values()))
-  print(f'{base_cvm}')
-  print(f'Encontradas {len(categories)} categorias com {len(meta_dict)} arquivos meta contendo {total_fields} campos')
-  print(demonstrativos_cvm)
-
-
+  demo_cvm = run.perform_math_magic(demo_cvm)
+#   companies_by_str_port = get_companies_by_str_port(demonstrativo_cvm)
 
   return value
