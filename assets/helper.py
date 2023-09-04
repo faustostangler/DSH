@@ -9,6 +9,9 @@ import os
 import time
 import datetime
 
+global duration
+duration = time.time()
+
 # variables 0
 url = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/?language=pt-br' 
 search_url = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/search?language=pt-br' 
@@ -568,8 +571,14 @@ def dre_pivot(value):
 def dre_cvm(value):
   # get some basic info
   demo_cvm, meta_dict, demonstrativos_cvm = run.update_cvm_files()
+  
+  companies_pre = run.year_to_company(demo_cvm)
+  companies_pre = run.save_pkl(companies_pre, 'companies_pre')
 
   demo_cvm = run.perform_math_magic(demo_cvm)
 #   companies_by_str_port = get_companies_by_str_port(demonstrativo_cvm)
 
+  companies = run.year_to_company(demo_cvm)
+  companies = run.save_pkl(companies, 'companies')
+  
   return value

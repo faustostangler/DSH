@@ -21,6 +21,7 @@ import numpy as np
 
 from google.cloud import storage
 import io
+from collections import OrderedDict
 
 import requests
 from bs4 import BeautifulSoup
@@ -2602,7 +2603,7 @@ def get_filelink_df(base_cvm):
                 parts = line.split()
                 if len(parts) >= 3:
                     filename = url + '/' + parts[0]
-                    date = pd.to_datetime(f'{parts[1]} {parts[2]}', format='%d-%b-%Y %H:%M')
+                    date = pd.to_datetime(f'{parts[1]}', format='%d-%b-%Y')
                     fileinfo_df.append([filename, date])
 
     # Create and filter DataFrame for the current year
@@ -2634,10 +2635,10 @@ def download_database(demo_cvms, filelist_df):
     start_time = time.time()
 
     # Iterate through DEMONSTRATIVO values
-    for i, DEMONSTRATIVO in enumerate(demo_cvms):
+    for i, demonstrativo in enumerate(demo_cvms):
         print(remaining_time(start_time, len(demo_cvms), i))
         # Retrieve the list of files based on the specified 'DEMONSTRATIVO'
-        download_files = [filelink for filelink in filelist if 'meta' not in filelink and DEMONSTRATIVO in filelink]
+        download_files = [filelink for filelink in filelist if 'meta' not in filelink and demonstrativo in filelink]
 
         # Iterate through the list of URLs
         start_time_2 = time.time()
@@ -2785,7 +2786,7 @@ def clean_dataframes(dict_of_df):
         # Convert specified columns to datetime format
         try:
             df[col_datetime] = df[col_datetime].apply(pd.to_datetime)
-        except:
+        except Exception as e:
             pass
 
         # Apply a text cleaning function to 'DENOM_CIA' column
@@ -2876,6 +2877,7 @@ def update_cvm_files():
   try:
     # Retrieve DataFrame containing file links from base_cvm URL
     filelist_df = get_filelink_df(b3.base_cvm)
+    last_update2 = filelist_df['date'].max().strftime('%Y-%m-%d')
     filelist = filelist_df['filename'].to_list()
 
     try:
@@ -2902,13 +2904,17 @@ def update_cvm_files():
 
     print('saving updated database (may take up to 5 min)')
     # Load existing demo_cvm data
-    demo_cvm_existing = load_pkl(f'{b3.app_folder}database')
+    try:
+       demo_cvm_existing = load_pkl(f'{b3.app_folder}database')
+    except Exception as e:
+       demo_cvm_existing = {}
     
     # Update demo_cvm with values from demo_cvm_existing if missing years
     for year, df in demo_cvm_existing.items():
       if year not in demo_cvm:
         demo_cvm[year] = df
-    
+    demo_cvm = OrderedDict(sorted(demo_cvm.items()))
+
     # Save updated demo_cvm data
 
     category_columns = ['FILENAME', 'DEMONSTRATIVO', 'BALANCE_SHEET', 'ANO', 'AGRUPAMENTO', 'CNPJ_CIA', 'VERSAO', 'DENOM_CIA', 'CD_CVM', 'GRUPO_DFP', 'MOEDA', 'ESCALA_MOEDA', 'CD_CONTA', 'DS_CONTA','ST_CONTA_FIXA', 'COLUNA_DF', ]
@@ -2920,7 +2926,7 @@ def update_cvm_files():
       for column in df.columns:
         if column in category_columns:
             try:
-              [column] = df[column].astype('category')
+              df[column] = df[column].astype('category')
             except Exception as e:
               pass
         elif column in datetime_columns:
@@ -2930,18 +2936,19 @@ def update_cvm_files():
               pass
         elif column in numeric_columns:
             try:
-              df[column] = df[column].astype(int)
+              df[column] = pd.to_numeric(df[column], errors='ignore')
             except Exception as e:
               pass
-                
+
     # print('not saved')
-    demo_cvm = save_pkl(demo_cvm, f'{b3.app_folder}database')
+    if not filelist_df.empty:
+        demo_cvm = save_pkl(demo_cvm, f'{b3.app_folder}database')
 
     try:
       # Write the maximum date from filtered filelist_df to 'last_update.txt'
-      last_update = filelist_df['date'].max().strftime('%Y-%m-%d')
+      print('last update', last_update2)
       with open(f'{b3.app_folder}last_update.txt', 'w') as f:
-        f.write(last_update)
+        f.write(last_update2)
     except Exception as e:
       pass
 
@@ -3031,77 +3038,111 @@ def perform_math_magic(demo_cvm, max_iterations=20000000):
     This function iterates through the provided demo_cvm DataFrames, performs calculations based on specified quarters,
     and updates the 'VL_CONTA' values and 'MATH_MAGIC' flag where necessary.
     """
-    start_time = time.time()
+    try:
+        start_time = time.time()
 
-    # Iterate through each year's DataFrame
-    for n1, (year, demonstrativo_cvm) in enumerate(demo_cvm.items()):
-        groups = demonstrativo_cvm.groupby(['DENOM_CIA', 'AGRUPAMENTO'], group_keys=False)
-        start_time_2 = time.time()
-        for n2, (key, group) in enumerate(groups):
-            company = key[0]
-            agg = key[1]
-            subgroups = group.groupby(['CD_CONTA', 'DS_CONTA'], group_keys=False)
-            
-            start_time_3 = time.time()
-            for n3, (index, df) in enumerate(subgroups):
-                conta_first = index[0][0]
-                # Convert DT_REFER to datetime
-                df['DT_REFER'] = pd.to_datetime(df['DT_REFER'])
+        # Iterate through each year's DataFrame
+        for n1, (year, demonstrativo_cvm) in enumerate(demo_cvm.items()):
+          if year == 2018:
+            companies_by_str_port = get_companies_by_str_port(demonstrativo_cvm)
+            print(f"{year} {len(demonstrativo_cvm):,.0f} lines, {len(demonstrativo_cvm['DENOM_CIA'].unique())} companies, {'/'.join([f'{len(companies)} {key}' for key, companies in companies_by_str_port.items()])}")
+            print(year, remaining_time(start_time, len(demo_cvm), n1))
+            groups = demonstrativo_cvm.groupby(['DENOM_CIA', 'AGRUPAMENTO'], group_keys=False)
+            start_time_2 = time.time()
+            for n2, (key, group) in enumerate(groups):
+                print('  ', remaining_time(start_time_2, len(groups), n2))
+                company = key[0]
+                agg = key[1]
+                subgroups = group.groupby(['CD_CONTA', 'DS_CONTA'], group_keys=False)
                 
-                # Create 'MATH_MAGIC' column if not exists
-                if 'MATH_MAGIC' not in demonstrativo_cvm.columns:
-                    demonstrativo_cvm['MATH_MAGIC'] = False
+                start_time_3 = time.time()
+                for n3, (index, df) in enumerate(subgroups):
+                    # print('  ', '  ', remaining_time(start_time_3, len(subgroups), n3))
+                    conta_first = index[0][0]
+                    if conta_first == '3' and year > 2010:
+                        pass
+                    # Convert DT_REFER to datetime
+                    df['DT_REFER'] = pd.to_datetime(df['DT_REFER'])
+                    
+                    # Create 'MATH_MAGIC' column if not exists
+                    if 'MATH_MAGIC' not in demonstrativo_cvm.columns:
+                        demonstrativo_cvm['MATH_MAGIC'] = False
 
-                try:
-                    i1 = df[df['DT_REFER'].dt.quarter == 1].index[0]
-                    q1 = df[df['DT_REFER'].dt.quarter == 1]['VL_CONTA'].iloc[0]
-                except Exception:
-                    q1 = 0
-                try:
-                    i2 = df[df['DT_REFER'].dt.quarter == 2].index[0]
-                    q2 = df[df['DT_REFER'].dt.quarter == 2]['VL_CONTA'].iloc[0]
-                except Exception:
-                    q2 = 0
-                try:
-                    i3 = df[df['DT_REFER'].dt.quarter == 3].index[0]
-                    q3 = df[df['DT_REFER'].dt.quarter == 4]['VL_CONTA'].iloc[0]
-                except Exception:
-                    q3 = 0
-                try:
-                    i4 = df[df['DT_REFER'].dt.quarter == 4].index[0]
-                    q4 = df[df['DT_REFER'].dt.quarter == 4]['VL_CONTA'].iloc[0]
-                except Exception:
-                    q4 = 0
+                    try:
+                        i1 = df[df['DT_REFER'].dt.quarter == 1].index[0]
+                        q1 = df[df['DT_REFER'].dt.quarter == 1]['VL_CONTA'].iloc[0]
+                    except Exception:
+                        q1 = 0
+                    try:
+                        i2 = df[df['DT_REFER'].dt.quarter == 2].index[0]
+                        q2 = df[df['DT_REFER'].dt.quarter == 2]['VL_CONTA'].iloc[0]
+                    except Exception:
+                        q2 = 0
+                    try:
+                        i3 = df[df['DT_REFER'].dt.quarter == 3].index[0]
+                        q3 = df[df['DT_REFER'].dt.quarter == 4]['VL_CONTA'].iloc[0]
+                    except Exception:
+                        q3 = 0
+                    try:
+                        i4 = df[df['DT_REFER'].dt.quarter == 4].index[0]
+                        q4 = df[df['DT_REFER'].dt.quarter == 4]['VL_CONTA'].iloc[0]
+                    except Exception:
+                        q4 = 0
 
-                update = False
-                try:
-                    # Perform calculations based on specified quarters and update flag
-                    if conta_first in b3.last_quarters:
-                        if not demonstrativo_cvm.loc[i4, 'MATH_MAGIC']:
-                            q4 = q4 - (q3 + q2 + q1)
-                        update = True
-                    elif conta_first in b3.all_quarters:
-                        if not demonstrativo_cvm.loc[i2, 'MATH_MAGIC']:
-                            q2 = q2 - (q1)
-                        if not demonstrativo_cvm.loc[i3, 'MATH_MAGIC']:
-                            q3 = q3 - (q2 + q1)
-                        if not demonstrativo_cvm.loc[i4, 'MATH_MAGIC']:
-                            q4 = q4 - (q3 + q2 + q1)
-                        update = True
-                except Exception:
                     update = False
+                    try:
+                        # Perform calculations based on specified quarters and update flag
+                        if conta_first in b3.last_quarters and i4:
+                            if not demonstrativo_cvm.loc[i4, 'MATH_MAGIC']:
+                                q4 = q4 - (q3 + q2 + q1)
+                            update = True
+                        elif conta_first in b3.all_quarters and i2 and i3 and i4:
+                            if not demonstrativo_cvm.loc[i2, 'MATH_MAGIC']:
+                                q2 = q2 - (q1)
+                            if not demonstrativo_cvm.loc[i3, 'MATH_MAGIC']:
+                                q3 = q3 - (q2 + q1)
+                            if not demonstrativo_cvm.loc[i4, 'MATH_MAGIC']:
+                                q4 = q4 - (q3 + q2 + q1)
+                            update = True
+                    except Exception as e:
+                        update = False
 
-                if update:
-                    # Update 'VL_CONTA' values and 'MATH_MAGIC' flag
-                    demonstrativo_cvm.loc[i2, ['VL_CONTA', 'MATH_MAGIC']] = [q2, True]
-                    demonstrativo_cvm.loc[i3, ['VL_CONTA', 'MATH_MAGIC']] = [q3, True]
-                    demonstrativo_cvm.loc[i4, ['VL_CONTA', 'MATH_MAGIC']] = [q4, True]
+                    if update:
+                        # Update 'VL_CONTA' values and 'MATH_MAGIC' flag
+                        demonstrativo_cvm.loc[i2, ['VL_CONTA', 'MATH_MAGIC']] = [q2, True]
+                        demonstrativo_cvm.loc[i3, ['VL_CONTA', 'MATH_MAGIC']] = [q3, True]
+                        demonstrativo_cvm.loc[i4, ['VL_CONTA', 'MATH_MAGIC']] = [q4, True]
 
-                if n3 > max_iterations:
+                    if n3 > max_iterations:
+                        break
+                if n2 > max_iterations:
                     break
-            if n2 > max_iterations:
+            if n1 > max_iterations:
                 break
-        if n1 > max_iterations:
-            break
-
+    except Exception as e:
+       pass
     return demo_cvm
+
+def year_to_company(demo_cvm):
+# Get all unique companies across all years
+    all_companies = set()
+    for i, (year, df) in enumerate(demo_cvm.items()):
+        all_companies.update(df['DENOM_CIA'].unique())
+
+    # Initialize the final dictionary with companies as keys
+    companies = {}
+
+    # Populate the company_dict
+    start_time = time.time()
+    for i, company in enumerate(all_companies):
+        print(remaining_time(start_time, len(all_companies), i))
+        company_df = []  # This will hold dataframes for each year for the company
+        for j, (year, df) in demo_cvm.items():
+            company_data = df[df['DENOM_CIA'] == company]
+            company_df.append(company_data)
+        
+        # Concatenate the data for the company across all years
+        companies[company] = pd.concat(company_df, ignore_index=True)
+
+
+    return companies
