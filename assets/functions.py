@@ -2936,7 +2936,7 @@ def update_cvm_files():
                 except Exception as e:
                     pass
 
-    # print('not saved')
+    # Save demo_cvm as pickle
     if not filelist_df.empty:
         demo_cvm = save_pkl(demo_cvm, f'{b3.app_folder}database')
 
@@ -3031,6 +3031,7 @@ def perform_math_magic(demo_cvm, max_iterations=20000000):
     and updates the 'VL_CONTA' values where necessary.
     """
     try:
+        print('entering the smart mathmagic world... It takes long time, came back tomorrow... ')
         start_time = time.time()
         # Iterate through each year's DataFrame
         for n1, (year, demonstrativo_cvm) in enumerate(demo_cvm.items()):
@@ -3141,5 +3142,5 @@ def year_to_company(demo_cvm):
         pass    
         # Concatenate the data for the company across all years
 
-
+    companies = save_pkl(companies, f'{b3.app_folder}database')
     return companies

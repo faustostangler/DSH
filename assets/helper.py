@@ -576,6 +576,6 @@ def dre_cvm(value):
 #   companies_by_str_port = get_companies_by_str_port(demonstrativo_cvm)
 
   companies = run.year_to_company(demo_cvm)
-  companies = run.save_pkl(companies, 'companies')
-  
+
+
   return value
