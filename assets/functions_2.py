@@ -1,4 +1,4 @@
-import assets.helper as b3
+import assets.helper_2 as b3
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -2917,40 +2917,6 @@ def create_cvm(base_cvm):
 
     return cvm_new
 
-def filter_new_cvm_to_math(cvm_existing, cvm_new):
-    # Update cvm_new with values from cvm_existing if missing years
-    for year, df in cvm_existing.items():
-        if year not in cvm_new:
-            cvm_new[year] = df
-    cvm_new = OrderedDict(sorted(cvm_new.items()))
-
-    df_cvm = {}
-    for year in cvm_new.keys():
-        try:
-            df1 = cvm_existing[year]
-            df2 = cvm_new[year]
-            mask_diff = df1['VL_CONTA'] != df2['VL_CONTA']
-            df_diff = df2[mask_diff]
-            df = []
-            for i, (idx, row) in enumerate(df_diff.iterrows()):
-                print(f"{row['DENOM_CIA']}, {row['AGRUPAMENTO']}, {row['DT_REFER'].strftime('%Y-%m-%d')}, {int(row['VL_CONTA'])}, {row['CD_CONTA']}, {row['DS_CONTA']}")
-
-                # Append the filtered matching rows to the list
-                filter_mask_cia = df2['DENOM_CIA'] == row['DENOM_CIA']
-                filter_mask_agg = df2['AGRUPAMENTO'] == row['AGRUPAMENTO']
-                filter_mask_conta = df2['CD_CONTA'] == row['CD_CONTA']
-                filter_mask_year = df2['DT_REFER'].dt.year == row['DT_REFER'].year
-                mask = filter_mask_cia & filter_mask_agg & filter_mask_conta & filter_mask_year
-                df.append(df2[mask])
-            if df:
-                df_cvm[year] = pd.concat(df, ignore_index=False)
-            else:
-                df_cvm[year] = pd.DataFrame(columns=df2.columns)
-        except Exception as e:
-            df_cvm[year] = pd.DataFrame(columns=cvm_new[year].columns)
-
-    return df_cvm
-
 def get_companies_by_str_port(df):
     """
     Get a list of companies grouped by 'ind' and 'con' in a structured report.
@@ -3000,7 +2966,7 @@ def get_companies_by_str_port(df):
 
     return companies_by_str_port
 
-def perform_math_magic(cvm_new, max_iterations=10**9):
+def perform_math_magic(cvm_new, max_iterations=1000000000):
     """
     Perform 'magic' calculations on the DataFrame cvm_new based on specified quarters.
 
@@ -3023,6 +2989,7 @@ def perform_math_magic(cvm_new, max_iterations=10**9):
         for n1, (year, demonstrativo_cvm) in enumerate(cvm_new.items()):
             if 1 == 1:
                 companies_by_str_port = get_companies_by_str_port(demonstrativo_cvm)
+                cvm_new = save_pkl(cvm_new, f'{b3.app_folder}cvm_temp')
                 print(f"{year} {len(demonstrativo_cvm):,.0f} lines, {len(demonstrativo_cvm['DENOM_CIA'].unique())} companies, {'/'.join([f'{len(companies)} {key}' for key, companies in companies_by_str_port.items()])}")
                 print(year, remaining_time(start_time, len(cvm_new), n1))
                 # Convert DT_REFER to datetime
@@ -3097,9 +3064,11 @@ def perform_math_magic(cvm_new, max_iterations=10**9):
                                 demonstrativo_cvm.loc[i4, 'VL_CONTA'] = q4
                             except Exception as e:
                                 pass
-                            row = demonstrativo_cvm.loc[[i1, i2, i3, i4]]
-                            print('  ', '  ', remaining_time(start_time_2, len(groups), n2), remaining_time(start_time_3, len(subgroups), n3))
-
+                            try:
+                               row = demonstrativo_cvm.loc[[i1, i2, i3, i4]]
+                                # print('  ', '  ', remaining_time(start_time_2, len(groups), n2), remaining_time(start_time_3, len(subgroups), n3))
+                            except Exception as e:
+                               pass
                         if n3 > max_iterations:
                             break
                     if n2 > max_iterations:
@@ -3109,7 +3078,7 @@ def perform_math_magic(cvm_new, max_iterations=10**9):
                     break
     
     except Exception as e:
-       pass
+        pass
     return cvm_new
 
 def year_to_company(cvm_new):
@@ -3142,12 +3111,13 @@ def year_to_company(cvm_new):
 def get_diff(df1, df2):
     # Create a mask to identify rows in df2 where 'VL_CONTA' is different from df1
     mask_diff = df1['VL_CONTA'] != df2['VL_CONTA']
+    df_diff = df2[mask_diff]
 
     # Initialize an empty list to store DataFrames with differences
     df_math = []
 
     # Iterate through rows in df2 that have differences in 'VL_CONTA'
-    for i, (idx, row) in enumerate(df2[mask_diff].iterrows()):
+    for i, (idx, row) in enumerate(df_diff.iterrows()):
         # Print information about the difference
         print(
             f"{row['DENOM_CIA']}, {row['AGRUPAMENTO']}, {row['DT_REFER'].strftime('%Y-%m-%d')}, "
@@ -3174,39 +3144,39 @@ def get_diff(df1, df2):
     return df_math
 
 def create_df_math(df_old, df_new):
-    year = 2019
-    try:
-        mask_cia = df_new[year]['DENOM_CIA'] == 'ALPARGATAS SA'
-        mask_agg = df_new[year]['AGRUPAMENTO'] == 'con'
-        mask_quarter = df_new[year]['DT_REFER'] == '2014-06-30'
-        mask_sheet = df_new[year]['BALANCE_SHEET'] == 'BPA'
-        mask_CD_CONTA = df_new[year]['CD_CONTA'] == '1'
-        mask = mask_cia & mask_agg & mask_quarter & mask_sheet & mask_CD_CONTA
-        df_new[year].loc[mask, 'VL_CONTA'] = 1000000.0
-    except Exception as e:
-        pass
+    # year = 2019
+    # try:
+    #     mask_cia = df_new[year]['DENOM_CIA'] == 'ALPARGATAS SA'
+    #     mask_agg = df_new[year]['AGRUPAMENTO'] == 'con'
+    #     mask_quarter = df_new[year]['DT_REFER'] == '2014-06-30'
+    #     mask_sheet = df_new[year]['BALANCE_SHEET'] == 'BPA'
+    #     mask_CD_CONTA = df_new[year]['CD_CONTA'] == '1'
+    #     mask = mask_cia & mask_agg & mask_quarter & mask_sheet & mask_CD_CONTA
+    #     df_new[year].loc[mask, 'VL_CONTA'] = 1000000.0
+    # except Exception as e:
+    #     pass
 
-    try:
-        mask_cia = df_new[year+1]['DENOM_CIA'] == 'ALPARGATAS SA'
-        mask_agg = df_new[year+1]['AGRUPAMENTO'] == 'con'
-        mask_quarter = df_new[year+1]['DT_REFER'] == '2015-09-30'
-        mask_sheet = df_new[year+1]['BALANCE_SHEET'] == 'DRE'
-        mask_CD_CONTA = df_new[year+1]['CD_CONTA'] == '3.01'
-        mask = mask_cia & mask_agg & mask_quarter & mask_sheet & mask_CD_CONTA
-        df_new[year+1].loc[mask, 'VL_CONTA'] = 1000000.0
-    except Exception as e:
-        pass
+    # try:
+    #     mask_cia = df_new[year+1]['DENOM_CIA'] == 'ALPARGATAS SA'
+    #     mask_agg = df_new[year+1]['AGRUPAMENTO'] == 'con'
+    #     mask_quarter = df_new[year+1]['DT_REFER'] == '2015-09-30'
+    #     mask_sheet = df_new[year+1]['BALANCE_SHEET'] == 'DRE'
+    #     mask_CD_CONTA = df_new[year+1]['CD_CONTA'] == '3.01'
+    #     mask = mask_cia & mask_agg & mask_quarter & mask_sheet & mask_CD_CONTA
+    #     df_new[year+1].loc[mask, 'VL_CONTA'] = 1000000.0
+    # except Exception as e:
+    #     pass
 
-    try:
-        mask_cia = df_new[year+2]['DENOM_CIA'] == 'ALPARGATAS SA'
-        mask_agg = df_new[year+2]['AGRUPAMENTO'] == 'con'
-        mask_quarter = df_new[year+2]['DT_REFER'] == '2016-12-31'
-        mask_sheet = df_new[year+2]['BALANCE_SHEET'] == 'DFC_MI'
-        mask_CD_CONTA = df_new[year+2]['CD_CONTA'] == '6.01'
-        mask = mask_cia & mask_agg & mask_quarter & mask_sheet & mask_CD_CONTA
-        df_new[year+2].loc[mask, 'VL_CONTA'] = 1000000.0
-    except Exception as e:
-        pass
+    # try:
+    #     mask_cia = df_new[year+2]['DENOM_CIA'] == 'ALPARGATAS SA'
+    #     mask_agg = df_new[year+2]['AGRUPAMENTO'] == 'con'
+    #     mask_quarter = df_new[year+2]['DT_REFER'] == '2016-12-31'
+    #     mask_sheet = df_new[year+2]['BALANCE_SHEET'] == 'DFC_MI'
+    #     mask_CD_CONTA = df_new[year+2]['CD_CONTA'] == '6.01'
+    #     mask = mask_cia & mask_agg & mask_quarter & mask_sheet & mask_CD_CONTA
+    #     df_new[year+2].loc[mask, 'VL_CONTA'] = 1000000.0
+    # except Exception as e:
+    #     pass
 
    # Iterate through the years and DataFrames in df_new
     # Initialize the dictionary to store differences
@@ -3235,34 +3205,3 @@ def merge_cvm_math(cvm_new, df_math):
         # Update df_cvm['VL_CONTA'] using the values from df_math['VL_CONTA']
         cvm_new[year].loc[df_math[year].index, 'VL_CONTA'] = df_math[year]['VL_CONTA']
     return cvm_new
-
-def merge_math(math_existing, math_new):
-    df1 = math_existing
-    df2 = math_new
-    print('nothing here yet')
-    math = math_new
-# https://chat.openai.com/c/ba8fa5e3-d96f-4db6-8900-864b3561809e
-# https://chat.openai.com/c/4d86bf87-0f68-4df2-8bfc-93ee143c9cac
-# https://chat.openai.com/c/938e4bbc-0d46-4c2e-ad7e-ed07c76859b3
-
-    # Create an empty dataframe to store rows from df1 that aren't in df2
-    df1_filtered = pd.DataFrame(columns=df1.columns)
-
-    # For each row in df1, check if a corresponding row exists in df2
-    for index, row in df1.iterrows():
-        
-        # Create masks based on the conditions provided
-        filter_mask_cia = df2['DENOM_CIA'] == row['DENOM_CIA']
-        filter_mask_agg = df2['AGRUPAMENTO'] == row['AGRUPAMENTO']
-        filter_mask_conta = df2['CD_CONTA'] == row['CD_CONTA']
-        filter_mask_year = df2['DT_REFER'].dt.year == row['DT_REFER'].year
-        mask = filter_mask_cia & filter_mask_agg & filter_mask_conta & filter_mask_year
-        
-        # If the row is not in df2, append it to the filtered df1 dataframe
-        if not df2[mask].shape[0]:
-            df1_filtered = df1_filtered.append(row)
-
-    # Concatenate the filtered df1 with df2 to get the final dataframe
-    result = pd.concat([df2, df1_filtered], ignore_index=True)
-
-    return math

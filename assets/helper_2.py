@@ -1,4 +1,4 @@
-import assets.functions as run
+import assets.functions_2 as run
 from typing import Any
 
 from selenium import webdriver
@@ -578,20 +578,21 @@ def dre_cvm(value):
     # download cvm_new_new // and clean database
     cvm_new = run.create_cvm(base_cvm)
 
-    # merge both, keep cvm_new fresh info whenever available
-    cvm_to_math = run.filter_new_cvm_to_math(cvm_existing, cvm_new)
+    # Update cvm_new with values from cvm_existing if missing years
+    for year, df in cvm_existing.items():
+        if year not in cvm_new:
+            cvm_new[year] = df
+    cvm_new = run.OrderedDict(sorted(cvm_new.items()))
 
     # create df_math_new
-    math_new = run.perform_math_magic(cvm_to_math)
-
+    df_math = run.create_df_math(cvm_existing, cvm_new)
+    df_math = run.perform_math_magic(df_math)
+    df_math = run.save_pkl(df_math, f'{app_folder}df_math')
+    df_math = run.load_pkl(f'{app_folder}df_math')
     # load df_math_existing
-    try:
-        math_existing = run.load_pkl(f'{app_folder}math_new')
-    except Exception as e:
-        math_existing = {}
 
     # merge df_math and save
-    math = run.merge_math(math_existing, math_new)
+
 
 
 #   # get some basic info
