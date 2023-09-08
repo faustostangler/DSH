@@ -2713,6 +2713,15 @@ def clean_cell(cell):
             cell = cell.replace(word, '').strip()
     return cell
 
+def adjust_vl_conta(row):
+    if row['ESCALA_MOEDA'] == 'MIL':
+        row['VL_CONTA'] = row['VL_CONTA'] * 1000
+        row['ESCALA_MOEDA'] = 'UNIDADE'
+
+    return row
+
+
+
 def yearly(df_list):
     """
     Organizes a list of DataFrames by year.
@@ -2784,20 +2793,22 @@ def clean_dataframe(dict_of_df):
             # print(e)
             pass
         
-        # Apply the condition to filter the DataFrame
-        try:
-            df['DT_INI_EXERC'] = pd.to_datetime(df['DT_INI_EXERC'], errors='coerce')
-            mask = (df['DT_INI_EXERC'].dt.month == 1) | (df['DT_INI_EXERC'].isna())
-            df = df[mask].copy()  # Make a copy to avoid modifying the original DataFrame
-            df = df.drop(columns=['DT_INI_EXERC'])
-        except Exception as e:
-            pass
+        # # Apply the condition to filter the DataFrame
+        # try:
+        #     df['DT_INI_EXERC'] = pd.to_datetime(df['DT_INI_EXERC'], errors='coerce')
+        #     mask = (df['DT_INI_EXERC'].dt.month == 1) | (df['DT_INI_EXERC'].isna())
+        #     df = df[mask].copy()  # Make a copy to avoid modifying the original DataFrame
+        #     df = df.drop(columns=['DT_INI_EXERC'])
+        # except Exception as e:
+        #     pass
+        print('pass 1')
 
         # Clean up text in 'DENOM_CIA' column
         try:
             df['DENOM_CIA'] = df['DENOM_CIA'].apply(clean_text)
         except Exception as e:
             pass
+        # print('pass 2')
 
         # Convert specified columns to specified formats
         for column in df.columns:
@@ -2816,6 +2827,13 @@ def clean_dataframe(dict_of_df):
                     df[column] = pd.to_numeric(df[column], errors='ignore')
                 except Exception as e:
                     pass
+
+        # adjust VL_CONTA according to ESCALA
+        try:
+            df['VL_CONTA'] = df.apply(adjust_vl_conta, axis=1)
+        except Exception as e:
+            pass
+        # print('pass 3')
 
         dict_of_df[year] = df
 
@@ -2875,13 +2893,9 @@ def get_filelist(url):
 def create_cvm(base_cvm):
     filelist_df, last_update = get_filelist(base_cvm)
     dataframes = download_database(filelist_df)
-    # dataframes = save_pkl(dataframes, f'{app_folder}dataframes')
-    # dataframes = load_pkl(f'{app_folder}dataframes')
     cvm_new, links = group_by_year(dataframes)
     cvm_new = clean_dataframe(cvm_new)
-    # cvm_new = save_pkl(cvm_new, f'{app_folder}cvm_new')
-    # cvm_new = load_pkl(f'{b3.app_folder}cvm_new')
-
+    
     # Save last_update
     if len(cvm_new) > 0:
         cvm_new = save_pkl(cvm_new, f'{b3.app_folder}cvm_new')
@@ -2918,6 +2932,45 @@ def create_cvm(base_cvm):
     return cvm_new
 
 def filter_new_cvm_to_math(cvm_existing, cvm_new):
+    df1 = cvm_existing
+    df2 = cvm_new
+    key_columns = ['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA', 'DT_REFER']
+    key_columns = ['FILENAME', 'DEMONSTRATIVO', 'BALANCE_SHEET', 'ANO', 'AGRUPAMENTO', 'CNPJ_CIA', 'DT_REFER', 'VERSAO', 'DENOM_CIA', 'CD_CVM', 'GRUPO_DFP', 'MOEDA', 'ESCALA_MOEDA', 'DT_FIM_EXERC', 'CD_CONTA', 'DS_CONTA',]
+    df_merged = {}
+    try:
+        # Loop through each year in df2
+        for year, df_new in df2.items():
+            print(year, len(df_new))
+            # Check if year is present in df1
+            if year not in df1:
+                # If the year is not in df1, simply take the entire df2 for that year
+                df_merged[year] = df_new
+                continue
+            
+            # Merge the two dataframes on the key columns
+            merged_df = df_new.merge(df1[year], on=key_columns, suffixes=('_new', '_old'), how='left')
+            
+            # Find rows where VL_CONTA values are different or missing in df1
+            diff_rows = merged_df[merged_df['VL_CONTA_new'] != merged_df['VL_CONTA_old']]
+            
+            # Extracting matching rows with vectorized approach
+            mask_denom_cia = df_new[key_columns[0]].isin(diff_rows[key_columns[0]])
+            mask_agrupamento = df_new[key_columns[1]].isin(diff_rows[key_columns[1]])
+            mask_cd_conta = df_new[key_columns[2]].isin(diff_rows[key_columns[2]])
+            mask_dt_refer = pd.to_datetime(df_new[key_columns[3]]).dt.year.isin(pd.to_datetime(diff_rows['DT_REFER_new']).dt.year)
+            
+            matching_rows = df_new[mask_denom_cia & mask_agrupamento & mask_cd_conta & mask_dt_refer]
+            
+            # Store the matching rows in df_merged
+            if not matching_rows.empty:
+                df_merged[year] = matching_rows.drop_duplicates()
+                
+    except Exception as e:
+        print(e)
+
+    return df_merged
+
+def filter_new_cvm_to_math_old(cvm_existing, cvm_new):
     # Update cvm_new with values from cvm_existing if missing years
     for year, df in cvm_existing.items():
         if year not in cvm_new:
@@ -2972,31 +3025,33 @@ def get_companies_by_str_port(df):
         The function will return a dictionary with keys 'ind', 'con', and ('ind', 'con')
         combinations, each mapped to lists of 'DENOM_CIA' values belonging to that group.
     """
-    # Create a pivot table to count occurrences of 'ind' and 'con'
-    pivot_table = df.pivot_table(index=['DENOM_CIA', 'DT_REFER'], columns='AGRUPAMENTO', aggfunc='size', fill_value=0)
-    
-    # Convert counts to boolean values (True if count > 0, else False)
-    pivot_table = pivot_table.applymap(lambda x: True if x > 0 else False)
-    pivot_table = pivot_table[['ind'] + [col for col in pivot_table.columns if col != 'ind' and col != 'con'] + ['con']]
+    try:
+       # Create a pivot table to count occurrences of 'ind' and 'con'
+        pivot_table = df.pivot_table(index=['DENOM_CIA', 'DT_REFER'], columns='AGRUPAMENTO', aggfunc='size', fill_value=0)
+        
+        # Convert counts to boolean values (True if count > 0, else False)
+        pivot_table = pivot_table.applymap(lambda x: True if x > 0 else False)
+        pivot_table = pivot_table[['ind'] + [col for col in pivot_table.columns if col != 'ind' and col != 'con'] + ['con']]
 
-    # Get unique combinations of rows as tuples
-    combinations = set(map(tuple, pivot_table.to_numpy()))
+        # Get unique combinations of rows as tuples
+        combinations = set(map(tuple, pivot_table.to_numpy()))
 
-    # Create a dictionary to store combinations and corresponding 'DENOM_CIA'
-    companies_by_str_port = {}
+        # Create a dictionary to store combinations and corresponding 'DENOM_CIA'
+        companies_by_str_port = {}
 
-    # Find matching 'DENOM_CIA' for each combination
-    for combination in combinations:
-        relest_individual = combination[0]
-        relest_consolidado = combination[1]
-        cias = pivot_table[(pivot_table['ind'] == relest_individual) & (pivot_table['con'] == relest_consolidado)].index.get_level_values('DENOM_CIA').unique()
-        key = ('ind', 'con')
-        if relest_consolidado and not relest_individual:
-            key = 'con'
-        if not relest_consolidado and relest_individual:
-            key = 'ind'
-
+        # Find matching 'DENOM_CIA' for each combination
+        for combination in combinations:
+            relest_individual = combination[0]
+            relest_consolidado = combination[1]
+            cias = pivot_table[(pivot_table['ind'] == relest_individual) & (pivot_table['con'] == relest_consolidado)].index.get_level_values('DENOM_CIA').unique()
+            key = ('ind', 'con')
+            if relest_consolidado and not relest_individual:
+                key = 'con'
+            if not relest_consolidado and relest_individual:
+                key = 'ind'
         companies_by_str_port[key] = cias
+    except Exception as e:
+        companies_by_str_port = {('ind', 'con'): 0, 'con': 0, 'ind': 0}
 
     return companies_by_str_port
 
@@ -3023,7 +3078,7 @@ def perform_math_magic(cvm_new, max_iterations=10**9):
         for n1, (year, demonstrativo_cvm) in enumerate(cvm_new.items()):
             if 1 == 1:
                 companies_by_str_port = get_companies_by_str_port(demonstrativo_cvm)
-                print(f"{year} {len(demonstrativo_cvm):,.0f} lines, {len(demonstrativo_cvm['DENOM_CIA'].unique())} companies, {'/'.join([f'{len(companies)} {key}' for key, companies in companies_by_str_port.items()])}")
+                print(f"{year} {len(demonstrativo_cvm):,.0f} lines, {len(demonstrativo_cvm['DENOM_CIA'].unique())} companies, {'/'.join([f'{companies} {str(key)}' for key, companies in companies_by_str_port.items()])}")
                 print(year, remaining_time(start_time, len(cvm_new), n1))
                 # Convert DT_REFER to datetime
                 demonstrativo_cvm['DT_REFER'] = pd.to_datetime(demonstrativo_cvm['DT_REFER'])
@@ -3239,30 +3294,46 @@ def merge_cvm_math(cvm_new, df_math):
 def merge_math(math_existing, math_new):
     df1 = math_existing
     df2 = math_new
-    print('nothing here yet')
-    math = math_new
-# https://chat.openai.com/c/ba8fa5e3-d96f-4db6-8900-864b3561809e
-# https://chat.openai.com/c/4d86bf87-0f68-4df2-8bfc-93ee143c9cac
-# https://chat.openai.com/c/938e4bbc-0d46-4c2e-ad7e-ed07c76859b3
 
-    # Create an empty dataframe to store rows from df1 that aren't in df2
-    df1_filtered = pd.DataFrame(columns=df1.columns)
+    # The key columns used to determine unique rows
+    key_columns = ['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DT_REFER']
 
-    # For each row in df1, check if a corresponding row exists in df2
-    for index, row in df1.iterrows():
-        
-        # Create masks based on the conditions provided
-        filter_mask_cia = df2['DENOM_CIA'] == row['DENOM_CIA']
-        filter_mask_agg = df2['AGRUPAMENTO'] == row['AGRUPAMENTO']
-        filter_mask_conta = df2['CD_CONTA'] == row['CD_CONTA']
-        filter_mask_year = df2['DT_REFER'].dt.year == row['DT_REFER'].year
-        mask = filter_mask_cia & filter_mask_agg & filter_mask_conta & filter_mask_year
-        
-        # If the row is not in df2, append it to the filtered df1 dataframe
-        if not df2[mask].shape[0]:
-            df1_filtered = df1_filtered.append(row)
+    # Create an empty dictionary to store the merged dataframes for each year
+    df_merged = {}
+    try:
+        # https://chat.openai.com/c/ba8fa5e3-d96f-4db6-8900-864b3561809e
+        # https://chat.openai.com/c/4d86bf87-0f68-4df2-8bfc-93ee143c9cac
+        # https://chat.openai.com/c/938e4bbc-0d46-4c2e-ad7e-ed07c76859b3
+        # https://chat.openai.com/c/a68f7b71-fa50-4d90-9df9-f6a961acb3bf  
 
-    # Concatenate the filtered df1 with df2 to get the final dataframe
-    result = pd.concat([df2, df1_filtered], ignore_index=True)
+        # Iterate over each year present in either df1 or df2
+        for year in set(df1.keys()).union(df2.keys()):
+            print(year)
+            # Check if the year exists in df2 (the newer dataframe)
+            if year in df2:
+                # Start with the data from df2 for this year
+                merged_df = df2[year].copy()
+                
+                # Check if the year also exists in df1 (the older dataframe)
+                if year in df1:
+                    # Determine the rows in df1[year] that are not present in df2[year]
+                    # based on the key columns
+                    mask = ~df1[year].set_index(key_columns).index.isin(df2[year].set_index(key_columns).index)
+                    
+                    # Filter df1[year] to only these rows
+                    extra_rows = df1[year][mask]
+                    
+                    # Use pandas.concat to combine the dataframes
+                    merged_df = pd.concat([merged_df, extra_rows], ignore_index=False)
+            else:
+                # If the year doesn't exist in df2, then just use the data from df1
+                merged_df = df1[year].copy()
 
-    return math
+            # Store the merged dataframe for this year in the df_merged dictionary
+            df_merged[year] = merged_df
+
+        # At this point, df_merged will have the merged data for each year
+        # print(len(df_merged))
+    except Exception as e:
+       pass
+    return df_merged

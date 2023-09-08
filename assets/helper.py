@@ -569,27 +569,38 @@ def dre_pivot(value):
     return value
 
 def dre_cvm(value):
+    # prepare raw
+
     # load cvm_existing // and clean database
     try:
-        cvm_existing = run.load_pkl(f'{app_folder}cvm_new')
+        cvm_existing = run.load_pkl(f'{app_folder}cvm_existing')
     except Exception as e:
         cvm_existing = {}
+    cvm_existing = run.save_pkl(cvm_existing, f'{app_folder}cvm_existing')
 
     # download cvm_new_new // and clean database
     cvm_new = run.create_cvm(base_cvm)
+    cvm_new = run.save_pkl(cvm_new, f'{app_folder}cvm_new')
+    print('temp debug delete')
+    cvm_new = run.load_pkl(f'{app_folder}database_raw')
 
     # merge both, keep cvm_new fresh info whenever available
     cvm_to_math = run.filter_new_cvm_to_math(cvm_existing, cvm_new)
 
     # create df_math_new
     math_new = run.perform_math_magic(cvm_to_math)
-
+    
     # load df_math_existing
     try:
-        math_existing = run.load_pkl(f'{app_folder}math_new')
+        # math_existing = run.load_pkl(f'{app_folder}math_new')
+        math_existing = run.load_pkl(f'{app_folder}cvm_temp')
     except Exception as e:
         math_existing = {}
 
+    # temp for debug
+    years_to_delete = list(range(2018, 2024))  # Create a list of years to delete
+    math_existing = {year: value for year, value in math_existing.items() if year not in years_to_delete}
+    print('temp debug delete')
     # merge df_math and save
     math = run.merge_math(math_existing, math_new)
 

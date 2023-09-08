@@ -2987,7 +2987,7 @@ def perform_math_magic(cvm_new, max_iterations=1000000000):
         start_time = time.time()
         # Iterate through each year's DataFrame
         for n1, (year, demonstrativo_cvm) in enumerate(cvm_new.items()):
-            if 1 == 1:
+            if year >= 2018:
                 companies_by_str_port = get_companies_by_str_port(demonstrativo_cvm)
                 cvm_new = save_pkl(cvm_new, f'{b3.app_folder}cvm_temp')
                 print(f"{year} {len(demonstrativo_cvm):,.0f} lines, {len(demonstrativo_cvm['DENOM_CIA'].unique())} companies, {'/'.join([f'{len(companies)} {key}' for key, companies in companies_by_str_port.items()])}")
