@@ -569,61 +569,55 @@ def dre_pivot(value):
     return value
 
 def dre_cvm(value):
-    # prepare raw
-
-    # load cvm_now // and clean database
+    cvm_now = cvm_new = math_now = math_new = ''
     try:
-        cvm_now = run.load_pkl(f'{app_folder}cvm_now')
+        # prepare CVM
+        # cvm_now
+        # try:
+        #     cvm_now = run.load_pkl(f'{app_folder}cvm_now')
+        # except Exception as e:
+        #     cvm_now = {}
+        #     cvm_now = run.save_pkl(cvm_now, f'{app_folder}cvm_now')
+
+        # cvm_new
+        # download cvm_new_new // and clean database
+        # cvm_new = run.create_cvm(base_cvm)
+        # cvm_new = run.save_pkl(cvm_new, f'{app_folder}cvm_new')
+        # print('temp debug delete')
+        # cvm_new = run.load_pkl(f'{app_folder}cvm_new')
+
+        # merge both, get new cvm_now and math for adjusting values
+        # cvm_now, math_new = run.get_merged_and_math(cvm_now, cvm_new)
+        # cvm_now = run.save_pkl(cvm_now, f'{app_folder}cvm_now')
+        # math_new = run.save_pkl(math_new, f'{app_folder}math_new')
+
+        # prepare MATH
+        if not cvm_now:
+            try:
+                cvm_now = run.load_pkl(f'{app_folder}cvm_now')
+            except Exception as e:
+                cvm_now = {}
+        if not cvm_new:
+            cvm_new = run.create_cvm(base_cvm)
+
+        # math_now
+        try:
+            math_now = run.load_pkl(f'{app_folder}math_now')
+        except Exception as e:
+            try:
+                math_now = run.get_adjusted_dataframes(cvm_now)
+                math_now = run.save_pkl(math_now, f'{app_folder}math_now')
+            except Exception as e:
+                math_now = {}
+
+        # math_new
+        if not math_new:
+            try:
+                math_new = run.load_pkl(f'{app_folder}math_new')
+            except Exception as e:
+                cvm_now, math_new = run.get_merged_and_math(cvm_now, cvm_new)
+
     except Exception as e:
-        cvm_now = {}
-        cvm_now = run.save_pkl(cvm_now, f'{app_folder}cvm_now')
-
-    # download cvm_new_new // and clean database
-    # cvm_new = run.create_cvm(base_cvm)
-    # cvm_new = run.save_pkl(cvm_new, f'{app_folder}cvm_new')
-    print('temp debug delete')
-    cvm_new = run.load_pkl(f'{app_folder}database_raw')
-
-    # merge both, keep cvm_new fresh info whenever available
-    cvm_to_math = run.filter_new_cvm_to_math(cvm_now, cvm_new)
-
-    # create df_math_new
-    math_new = run.perform_math_magic(cvm_to_math)
-    
-    # load df_math_existing
-    try:
-        # math_existing = run.load_pkl(f'{app_folder}math_new')
-        math_existing = run.load_pkl(f'{app_folder}cvm_temp')
-    except Exception as e:
-        math_existing = {}
-
-    # temp for debug
-    years_to_delete = list(range(2018, 2024))  # Create a list of years to delete
-    math_existing = {year: value for year, value in math_existing.items() if year not in years_to_delete}
-    print('temp debug delete')
-    # merge df_math and save
-    math = run.merge_math(math_existing, math_new)
-
-
-#   # get some basic info
-#   cvm_new, meta_dict, demonstrativos_cvm = run.update_cvm_files()
-#   try:
-#     cvm_now = run.load_pkl(f'{app_folder}database_old')
-#   except Exception as e:
-#     try:
-#       cvm_now = run.load_pkl(f'{app_folder}database')
-#     except Exception as e:
-#        cvm_now = {}
-
-#   df_math = run.update_df_math(cvm_now, cvm_new)
-#   df_math = run.perform_math_magic(df_math)
-
-#   cvm_new = run.merge_cvm_math(cvm_new, df_math)
-#   cvm_new_old = run.save_pkl(cvm_new, f'{app_folder}database_old')
-
-
-#   companies = run.year_to_company(cvm_new)
-#   companies = run.save_pkl(companies, f'{app_folder}companies')
-
+        pass
 
     return value

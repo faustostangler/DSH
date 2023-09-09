@@ -35,6 +35,8 @@ from urllib.parse import urljoin
 import zipfile
 from lxml import html
 
+from tqdm import tqdm
+
 # general functions
 def wText(xpath: str, wait: WebDriverWait) -> str:
     """
@@ -2578,7 +2580,8 @@ def get_filelink_df(base_cvm):
     Returns:
         pandas.DataFrame: A DataFrame containing file names and dates for the current year.
     """
-    print(f'... getting list of available files from "{base_cvm}"')
+    print(f'... connecting to web "{base_cvm}"')
+    print(f'    to get list of available files for download')
     filelist = gather_links(base_cvm)
     folders = set()
 
@@ -2931,78 +2934,201 @@ def create_cvm(base_cvm):
 
     return cvm_new
 
-def filter_new_cvm_to_math(cvm_now, cvm_new):
-    df1 = cvm_now
-    df2 = cvm_new
-    key_columns = ['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA', 'DT_REFER']
-    key_columns = ['FILENAME', 'DEMONSTRATIVO', 'BALANCE_SHEET', 'ANO', 'AGRUPAMENTO', 'CNPJ_CIA', 'DT_REFER', 'VERSAO', 'DENOM_CIA', 'CD_CVM', 'GRUPO_DFP', 'MOEDA', 'ESCALA_MOEDA', 'DT_FIM_EXERC', 'CD_CONTA', 'DS_CONTA',]
-    df_merged = {}
+def adjust_quarters(group_df):
+    """
+    Adjust the 'VL_CONTA' values for each quarter by subtracting the previous quarter's value.
+    
+    Args:
+    - group_df (pd.DataFrame): A DataFrame containing quarterly data for a specific group.
+
+    Returns:
+    - pd.DataFrame: The same DataFrame with adjusted 'VL_CONTA' values.
+    """
+    
+    # Extract the VL_CONTA values for each quarter. If a value is not present for a quarter, default to 0.
+    # This ensures that the adjustments are based on the correct values even if data for a particular quarter is missing.
+    q1_value = group_df.loc[group_df['DT_REFER'].dt.quarter == 1, 'VL_CONTA'].values[0] if not group_df.loc[group_df['DT_REFER'].dt.quarter == 1, 'VL_CONTA'].empty else 0
+    q2_value = group_df.loc[group_df['DT_REFER'].dt.quarter == 2, 'VL_CONTA'].values[0] if not group_df.loc[group_df['DT_REFER'].dt.quarter == 2, 'VL_CONTA'].empty else 0
+    q3_value = group_df.loc[group_df['DT_REFER'].dt.quarter == 3, 'VL_CONTA'].values[0] if not group_df.loc[group_df['DT_REFER'].dt.quarter == 3, 'VL_CONTA'].empty else 0
+    q4_value = group_df.loc[group_df['DT_REFER'].dt.quarter == 4, 'VL_CONTA'].values[0] if not group_df.loc[group_df['DT_REFER'].dt.quarter == 4, 'VL_CONTA'].empty else 0
+    
+    # Calculate adjustments based on the difference between quarters.
+    q4_adj = q4_value - q3_value
+    q3_adj = q3_value - q2_value
+    q2_adj = q2_value - q1_value
+
+    # Apply the calculated adjustments to the DataFrame.
+    group_df.loc[group_df['DT_REFER'].dt.quarter == 4, 'VL_CONTA'] = q4_adj
+    group_df.loc[group_df['DT_REFER'].dt.quarter == 3, 'VL_CONTA'] = q3_adj
+    group_df.loc[group_df['DT_REFER'].dt.quarter == 2, 'VL_CONTA'] = q2_adj
+
+    return group_df
+
+def filter_last_quarter(group_df):
+    """
+    Filter out rows for the second and third quarters unless the 'DT_REFER' quarter matches the 'DT_INI_EXERC' quarter.
+    
+    Args:
+    - group_df (pd.DataFrame): A DataFrame containing quarterly data for a specific group.
+
+    Returns:
+    - pd.DataFrame: A filtered DataFrame.
+    """
+    
+    # Create a mask to identify rows where the DT_REFER quarter is 2 or 3, but doesn't match the DT_INI_EXERC quarter.
+    mask = ~group_df['DT_REFER'].dt.quarter.isin([2, 3]) | (group_df['DT_REFER'].dt.quarter == group_df['DT_INI_EXERC'].dt.quarter)
+    group_df = group_df[mask]
+    return group_df
+
+def adjust_last_quarter(group_df):
+    """
+    For the last quarter (Q4), adjust the 'VL_CONTA' value by subtracting the sum of the values from the first three quarters.
+    
+    Args:
+    - group_df (pd.DataFrame): A DataFrame containing quarterly data for a specific group.
+
+    Returns:
+    - pd.DataFrame: The DataFrame with adjusted 'VL_CONTA' values for Q4.
+    """
+    
+    # Extract the 'VL_CONTA' values for the first three quarters.
+    q1_value = group_df.loc[group_df['DT_REFER'].dt.quarter == 1]['VL_CONTA'].values[0] if not group_df.loc[group_df['DT_REFER'].dt.quarter == 1, 'VL_CONTA'].empty else 0
+    q2_value = group_df.loc[group_df['DT_REFER'].dt.quarter == 2]['VL_CONTA'].values[0] if not group_df.loc[group_df['DT_REFER'].dt.quarter == 2, 'VL_CONTA'].empty else 0
+    q3_value = group_df.loc[group_df['DT_REFER'].dt.quarter == 3]['VL_CONTA'].values[0] if not group_df.loc[group_df['DT_REFER'].dt.quarter == 3, 'VL_CONTA'].empty else 0
+
+    # Adjust the Q4 value by subtracting the sum of Q1, Q2, and Q3 values.
+    mask = group_df['DT_REFER'].dt.quarter == 4
+    group_df.loc[mask, 'VL_CONTA'] -= (q1_value + q2_value + q3_value)
+
+    return group_df
+
+def apply_adjustments(group):
+    """
+    Apply the appropriate adjustment logic based on the 'BALANCE_SHEET' value of the group.
+    
+    Args:
+    - group (pd.DataFrame): A DataFrame containing data for a specific group.
+
+    Returns:
+    - pd.DataFrame: The adjusted DataFrame.
+    """
+    # Lists defining the types of balance sheets:
+
+    # 'patrimonial' refers to balance sheets that detail a company's assets and liabilities.
+    # 'BPA' stands for "Balance Sheet - Active" and represents the company's assets.
+    # 'BPP' stands for "Balance Sheet - Passive" and represents the company's liabilities.
+    patrimonial = ['BPA', 'BPP']
+
+    # 'resultados' refers to balance sheets that detail a company's revenues and expenses over a specific period.
+    # 'DRA' stands for "Statement of Revenue - Accumulated" and represents the accumulated revenues over a year.
+    # 'DRE' stands for "Statement of Revenue - Exercise" and represents the revenues for a specific financial exercise.
+    resultados = ['DRA', 'DRE']
+
+    # 'fluxo_de_caixa' refers to cash flow statements detailing the inflows and outflows of cash.
+    # 'DFC_MI' represents the "Direct Method of Cash Flow - Individual".
+    # 'DFC_MD' represents the "Direct Method of Cash Flow - Consolidated".
+    # 'DVA' stands for "Added Value Statement".
+    # 'DMPL' stands for "Statement of Changes in Equity".
+    fluxo_de_caixa = ['DFC_MI', 'DFC_MD', 'DVA']
+
+    # other stuff
+    other = ['DMPL']
+
+    sheet = group['BALANCE_SHEET'].iloc[0]
+    
+    # If the group's 'BALANCE_SHEET' value belongs to the fluxo_de_caixa category, apply quarter adjustments.
+    if sheet in fluxo_de_caixa:
+        return adjust_quarters(group)
+    # If the group's 'BALANCE_SHEET' value belongs to the resultados category, filter and adjust the last quarter.
+    elif sheet in resultados:
+        group = filter_last_quarter(group)
+        return adjust_last_quarter(group)
+    # If the group's 'BALANCE_SHEET' value doesn't match the above categories, return the original group without adjustments.
+    else:
+        return group
+
+def get_merged_and_math(cvm_now, cvm_new):
+    """
+    Merge two dictionaries of dataframes and extract updated rows.
+
+    The function performs an outer merge on two dictionaries of dataframes, `cvm_now` (existing data) 
+    and `cvm_new` (new data). The purpose is to update old financial data with new financial data and 
+    to identify rows which have been updated for future mathematical transformations.
+
+    Parameters:
+    - cvm_now (dict): Dictionary with years as keys and existing financial data as values (pandas DataFrames).
+    - cvm_new (dict): Dictionary with years as keys and new financial data as values (pandas DataFrames).
+
+    Returns:
+    - tuple: Two dictionaries of dataframes - the first contains the merged data, and the second contains the updated rows.
+
+    """
+    
+    # Collect unique years present in both dictionaries
+    all_keys = sorted(set(cvm_now.keys()).union(cvm_new.keys()))
+
+    # Retrieve column names for the current year from cvm_now, if absent, get from cvm_new
+    df_columns = cvm_now.get(min(all_keys), pd.DataFrame()).columns if min(all_keys) in cvm_now else cvm_new[min(all_keys)].columns
+
+    # Key column to identify the main data column that could have changes
+    value_column = 'VL_CONTA'
+
+    # Define columns that serve as the unique identifier for each row in the financial data, excluding the value_column
+    key_columns = [col for col in df_columns if col != value_column]
+
+    # Initialize storage for final merged data and the rows that were updated in the new data
+    cvm_merged = {}
+    math = {}
+
     try:
-        # Loop through each year in df2
-        for year, df_new in df2.items():
-            print(year, len(df_new))
-            # Check if year is present in df1
-            if year not in df1:
-                # If the year is not in df1, simply take the entire df2 for that year
-                df_merged[year] = df_new
-                continue
+        # Iterate over each unique year
+        for year in all_keys:
+            # Fetch corresponding DataFrames for the year from cvm_now and cvm_new, or initialize empty DataFrames if absent
+            df1 = cvm_now.get(year, pd.DataFrame(columns=df_columns))
+            df2 = cvm_new.get(year, pd.DataFrame(columns=df_columns))
             
-            # Merge the two dataframes on the key columns
-            merged_df = df_new.merge(df1[year], on=key_columns, suffixes=('_new', '_old'), how='left')
-            
-            # Find rows where VL_CONTA values are different or missing in df1
-            diff_rows = merged_df[merged_df['VL_CONTA_new'] != merged_df['VL_CONTA_old']]
-            
-            # Extracting matching rows with vectorized approach
-            mask_denom_cia = df_new[key_columns[0]].isin(diff_rows[key_columns[0]])
-            mask_agrupamento = df_new[key_columns[1]].isin(diff_rows[key_columns[1]])
-            mask_cd_conta = df_new[key_columns[2]].isin(diff_rows[key_columns[2]])
-            mask_dt_refer = pd.to_datetime(df_new[key_columns[3]]).dt.year.isin(pd.to_datetime(diff_rows['DT_REFER_new']).dt.year)
-            
-            matching_rows = df_new[mask_denom_cia & mask_agrupamento & mask_cd_conta & mask_dt_refer]
-            
-            # Store the matching rows in df_merged
-            if not matching_rows.empty:
-                df_merged[year] = matching_rows.drop_duplicates()
-                
-    except Exception as e:
-        print(e)
-
-    return df_merged
-
-def filter_new_cvm_to_math_old(cvm_now, cvm_new):
-    # Update cvm_new with values from cvm_now if missing years
-    for year, df in cvm_now.items():
-        if year not in cvm_new:
-            cvm_new[year] = df
-    cvm_new = OrderedDict(sorted(cvm_new.items()))
-
-    df_cvm = {}
-    for year in cvm_new.keys():
-        try:
-            df1 = cvm_now[year]
-            df2 = cvm_new[year]
-            mask_diff = df1['VL_CONTA'] != df2['VL_CONTA']
-            df_diff = df2[mask_diff]
-            df = []
-            for i, (idx, row) in enumerate(df_diff.iterrows()):
-                print(f"{row['DENOM_CIA']}, {row['AGRUPAMENTO']}, {row['DT_REFER'].strftime('%Y-%m-%d')}, {int(row['VL_CONTA'])}, {row['CD_CONTA']}, {row['DS_CONTA']}")
-
-                # Append the filtered matching rows to the list
-                filter_mask_cia = df2['DENOM_CIA'] == row['DENOM_CIA']
-                filter_mask_agg = df2['AGRUPAMENTO'] == row['AGRUPAMENTO']
-                filter_mask_conta = df2['CD_CONTA'] == row['CD_CONTA']
-                filter_mask_year = df2['DT_REFER'].dt.year == row['DT_REFER'].year
-                mask = filter_mask_cia & filter_mask_agg & filter_mask_conta & filter_mask_year
-                df.append(df2[mask])
-            if df:
-                df_cvm[year] = pd.concat(df, ignore_index=False)
+            # If only new data exists for the year, directly assign it to the merged result
+            if df1.empty and not df2.empty:
+                cvm_merged[year] = df2
+            # If only old data exists for the year and there's no new data, directly assign the old data to the merged result
+            elif df2.empty and not df1.empty:
+                cvm_merged[year] = df1
+            # If data exists in both old and new sets, perform merging operations
             else:
-                df_cvm[year] = pd.DataFrame(columns=df2.columns)
-        except Exception as e:
-            df_cvm[year] = pd.DataFrame(columns=cvm_new[year].columns)
+                # Merge existing and new data based on the unique identifier columns. Rows from the new data are prioritized.
+                df_merged = pd.merge(df1, df2, on=key_columns, how='right', suffixes=('_now', '_new'))
+                
+                # Identify rows that are either new or have updated 'value_column' values
+                mask_diff_rows = (df_merged[f'{value_column}_now'] != df_merged[f'{value_column}_new']) | df_merged[f'{value_column}_now'].isna()
+                df_math = df_merged.loc[mask_diff_rows].copy()
+                
+                # Loop through both merged and updated rows dataframes for further processing
+                for df, result_dict in zip([df_merged, df_math], [cvm_merged, math]):
+                    # Determine the 'value_column' value based on whether it's an updated/new row or an unchanged one
+                    df[value_column] = np.where(
+                        (df[f'{value_column}_now'] == df[f'{value_column}_new']) | df[f'{value_column}_now'].isna(),
+                        df[f'{value_column}_new'], 
+                        df[f'{value_column}_now']
+                    )
+                    
+                    # Discard temporary columns used during merging
+                    df.drop(columns=[f'{value_column}_now', f'{value_column}_new'], inplace=True)
+                    
+                    # Ensure the dataframe's columns are in the desired order
+                    df = df[df_columns]
+                    
+                    # Store the processed dataframe in the appropriate dictionary
+                    result_dict[year] = df
 
-    return df_cvm
+                # Print diagnostic information about the number of rows in the merged and updated rows data for the current year
+                print(f'{year}, {df_merged.shape[0]:,.0f} existing, {df_math.shape[0]:,.0f} new lines')
+
+    except Exception as e:
+        # In case of an error, print the error message for debugging
+        # print(e)
+        pass
+
+    return cvm_merged, math
 
 def get_companies_by_str_port(df):
     """
@@ -3055,117 +3181,39 @@ def get_companies_by_str_port(df):
 
     return companies_by_str_port
 
-def perform_math_magic(cvm_new, max_iterations=10**9):
-    """
-    Perform 'magic' calculations on the DataFrame cvm_new based on specified quarters.
+def wrapper_apply(group, pbar):
+    """Wrapper function for applying adjustments and updating the progress bar."""
+    result = apply_adjustments(group)
+    pbar.update(1)  # Update the progress bar by one step
+    return result
 
-    Args:
-        cvm_new (dict): Dictionary of DataFrames containing financial data.
-        last_quarters (list): List of quarters considered as last quarters.
-        all_quarters (list): List of quarters considered as all quarters.
-        max_iterations (int): Maximum number of iterations to perform.
+def get_adjusted_dataframes(math):
+    """
+    Apply adjustments to dataframes for each year in the data_dict.
+
+    Parameters:
+    - data_dict (dict): Dictionary with years as keys and financial dataframes as values.
 
     Returns:
-        dict: Updated cvm_new with 'magic' calculations.
-
-    This function iterates through the provided cvm_new DataFrames, performs calculations based on specified quarters,
-    and updates the 'VL_CONTA' values where necessary.
+    - dict: Dictionary with years as keys and adjusted dataframes as values.
     """
-    try:
-        print('... entering the smart mathmagic world... It takes long time, came back tomorrow... ')
-        start_time = time.time()
-        # Iterate through each year's DataFrame
-        for n1, (year, demonstrativo_cvm) in enumerate(cvm_new.items()):
-            if 1 == 1:
-                companies_by_str_port = get_companies_by_str_port(demonstrativo_cvm)
-                print(f"{year} {len(demonstrativo_cvm):,.0f} lines, {len(demonstrativo_cvm['DENOM_CIA'].unique())} companies, {'/'.join([f'{companies} {str(key)}' for key, companies in companies_by_str_port.items()])}")
-                print(year, remaining_time(start_time, len(cvm_new), n1))
-                # Convert DT_REFER to datetime
-                demonstrativo_cvm['DT_REFER'] = pd.to_datetime(demonstrativo_cvm['DT_REFER'])
-                groups = demonstrativo_cvm.groupby(['DENOM_CIA', 'AGRUPAMENTO'], group_keys=False)
-                start_time_2 = time.time()
-                for n2, (key, group) in enumerate(groups):
-                #   if key[0] == 'ALPARGATAS SA':
-                    print('  ', remaining_time(start_time_2, len(groups), n2))
-                    company = key[0]
-                    agg = key[1]
-                    subgroups = group.groupby(['CD_CONTA', 'DS_CONTA'], group_keys=False)
-                    
-                    start_time_3 = time.time()
-                    for n3, (index, df) in enumerate(subgroups):
-                        conta_first = index[0][0]
-                    
-                        try:
-                            i1 = df[df['DT_REFER'].dt.quarter == 1].index[0]
-                            q1 = df[df['DT_REFER'].dt.quarter == 1]['VL_CONTA'].iloc[0]
-                        except Exception as e:
-                            q1 = 0
-                        try:
-                            i2 = df[df['DT_REFER'].dt.quarter == 2].index[0]
-                            q2 = df[df['DT_REFER'].dt.quarter == 2]['VL_CONTA'].iloc[0]
-                        except Exception as e:
-                            q2 = 0
-                        try:
-                            i3 = df[df['DT_REFER'].dt.quarter == 3].index[0]
-                            q3 = df[df['DT_REFER'].dt.quarter == 3]['VL_CONTA'].iloc[0]
-                        except Exception as e:
-                            q3 = 0
-                        try:
-                            i4 = df[df['DT_REFER'].dt.quarter == 4].index[0]
-                            q4 = df[df['DT_REFER'].dt.quarter == 4]['VL_CONTA'].iloc[0]
-                        except Exception as e:
-                            q4 = 0
+    # Initialize a dictionary to store the adjusted dataframes for each year
+    math_new = {}
 
-                        update = False
-                        try:
-                            # Perform calculations based on specified quarters and update flag
-                            if conta_first in b3.last_quarters and i4:
-                                if q4:
-                                    q4 = q4 - (q3)
-                                    update = True
-                            elif conta_first in b3.all_quarters and i2 and i3 and i4:
-                                if q4: 
-                                    q4 = q4 - (q3)
-                                if q3: 
-                                    q3 = q3 - (q2)
-                                if q2: 
-                                    q2 = q2 - (q1)
-                                    update = True
-                        except Exception as e:
-                            update = False
+    # Loop through each year in the data dictionary
+    for year, df_merged in math.items():
+        # Group the DataFrame by the columns: 'DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', and 'DS_CONTA'
+        grouped = df_merged.groupby(['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA'])
 
-                        if update:
-                            # Update 'VL_CONTA' values
-                            try:
-                                demonstrativo_cvm.loc[i1, 'VL_CONTA'] = q1
-                            except Exception as e:
-                                pass
-                            try:
-                                demonstrativo_cvm.loc[i2, 'VL_CONTA'] = q2
-                            except Exception as e:
-                                pass
-                            try:
-                                demonstrativo_cvm.loc[i3, 'VL_CONTA'] = q3
-                            except Exception as e:
-                                pass
-                            try:
-                                demonstrativo_cvm.loc[i4, 'VL_CONTA'] = q4
-                            except Exception as e:
-                                pass
-                            row = demonstrativo_cvm.loc[[i1, i2, i3, i4]]
-                            print('  ', '  ', remaining_time(start_time_2, len(groups), n2), remaining_time(start_time_3, len(subgroups), n3))
+        # Set up a progress bar to track the processing of each group
+        with tqdm(total=grouped.ngroups, desc=f"Calculating quarter values for year {year}") as pbar:
+            # Use a lambda to pass the progress bar to the wrapper_apply function
+            adjusted_df = grouped.apply(lambda group: wrapper_apply(group, pbar)).reset_index(drop=True)
+        
+        # Store the adjusted dataframe in the result dictionary
+        math_new[year] = adjusted_df
 
-                        if n3 > max_iterations:
-                            break
-                    if n2 > max_iterations:
-                        break
-                cvm_new[year] = demonstrativo_cvm
-                if n1 > max_iterations:
-                    break
-    
-    except Exception as e:
-       pass
-    return cvm_new
+    return math_new
 
 def year_to_company(cvm_new):
 # Get all unique companies across all years
