@@ -571,21 +571,21 @@ def dre_pivot(value):
 def dre_cvm(value):
     # prepare raw
 
-    # load cvm_existing // and clean database
+    # load cvm_now // and clean database
     try:
-        cvm_existing = run.load_pkl(f'{app_folder}cvm_existing')
+        cvm_now = run.load_pkl(f'{app_folder}cvm_now')
     except Exception as e:
-        cvm_existing = {}
-    cvm_existing = run.save_pkl(cvm_existing, f'{app_folder}cvm_existing')
+        cvm_now = {}
+        cvm_now = run.save_pkl(cvm_now, f'{app_folder}cvm_now')
 
     # download cvm_new_new // and clean database
-    cvm_new = run.create_cvm(base_cvm)
-    cvm_new = run.save_pkl(cvm_new, f'{app_folder}cvm_new')
+    # cvm_new = run.create_cvm(base_cvm)
+    # cvm_new = run.save_pkl(cvm_new, f'{app_folder}cvm_new')
     print('temp debug delete')
     cvm_new = run.load_pkl(f'{app_folder}database_raw')
 
     # merge both, keep cvm_new fresh info whenever available
-    cvm_to_math = run.filter_new_cvm_to_math(cvm_existing, cvm_new)
+    cvm_to_math = run.filter_new_cvm_to_math(cvm_now, cvm_new)
 
     # create df_math_new
     math_new = run.perform_math_magic(cvm_to_math)
@@ -608,14 +608,14 @@ def dre_cvm(value):
 #   # get some basic info
 #   cvm_new, meta_dict, demonstrativos_cvm = run.update_cvm_files()
 #   try:
-#     cvm_existing = run.load_pkl(f'{app_folder}database_old')
+#     cvm_now = run.load_pkl(f'{app_folder}database_old')
 #   except Exception as e:
 #     try:
-#       cvm_existing = run.load_pkl(f'{app_folder}database')
+#       cvm_now = run.load_pkl(f'{app_folder}database')
 #     except Exception as e:
-#        cvm_existing = {}
+#        cvm_now = {}
 
-#   df_math = run.update_df_math(cvm_existing, cvm_new)
+#   df_math = run.update_df_math(cvm_now, cvm_new)
 #   df_math = run.perform_math_magic(df_math)
 
 #   cvm_new = run.merge_cvm_math(cvm_new, df_math)

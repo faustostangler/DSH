@@ -2931,8 +2931,8 @@ def create_cvm(base_cvm):
 
     return cvm_new
 
-def filter_new_cvm_to_math(cvm_existing, cvm_new):
-    df1 = cvm_existing
+def filter_new_cvm_to_math(cvm_now, cvm_new):
+    df1 = cvm_now
     df2 = cvm_new
     key_columns = ['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA', 'DT_REFER']
     key_columns = ['FILENAME', 'DEMONSTRATIVO', 'BALANCE_SHEET', 'ANO', 'AGRUPAMENTO', 'CNPJ_CIA', 'DT_REFER', 'VERSAO', 'DENOM_CIA', 'CD_CVM', 'GRUPO_DFP', 'MOEDA', 'ESCALA_MOEDA', 'DT_FIM_EXERC', 'CD_CONTA', 'DS_CONTA',]
@@ -2970,9 +2970,9 @@ def filter_new_cvm_to_math(cvm_existing, cvm_new):
 
     return df_merged
 
-def filter_new_cvm_to_math_old(cvm_existing, cvm_new):
-    # Update cvm_new with values from cvm_existing if missing years
-    for year, df in cvm_existing.items():
+def filter_new_cvm_to_math_old(cvm_now, cvm_new):
+    # Update cvm_new with values from cvm_now if missing years
+    for year, df in cvm_now.items():
         if year not in cvm_new:
             cvm_new[year] = df
     cvm_new = OrderedDict(sorted(cvm_new.items()))
@@ -2980,7 +2980,7 @@ def filter_new_cvm_to_math_old(cvm_existing, cvm_new):
     df_cvm = {}
     for year in cvm_new.keys():
         try:
-            df1 = cvm_existing[year]
+            df1 = cvm_now[year]
             df2 = cvm_new[year]
             mask_diff = df1['VL_CONTA'] != df2['VL_CONTA']
             df_diff = df2[mask_diff]
