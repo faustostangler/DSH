@@ -2723,8 +2723,6 @@ def adjust_vl_conta(row):
 
     return row
 
-
-
 def yearly(df_list):
     """
     Organizes a list of DataFrames by year.
@@ -2888,7 +2886,7 @@ def get_filelist(url):
         last_update = '1970-01-01'
 
     # Filter filelist_df to include only files with dates greater than last_update
-    filelist_df = filelist_df[filelist_df['date'] > (pd.to_datetime(last_update) + pd.DateOffset(days=1))]
+    filelist_df = filelist_df[filelist_df['date'] > (pd.to_datetime(last_update) + pd.DateOffset(days=0))]
     print(f'{len(filelist_df)} new files to download')
 
     return filelist_df, last_update2
@@ -2913,7 +2911,7 @@ def create_cvm(base_cvm):
             if term in cat:
                 demonstrativos_cvm.append(str(cat).replace(term,'').lower())
     except Exception as e:
-       pass
+        pass
 
     try:
         # Write the maximum date from filtered filelist_df to 'last_update.txt'
@@ -2928,7 +2926,8 @@ def create_cvm(base_cvm):
         total_fields = sum((i + 1) * len(d) for i, d in enumerate(meta_dict.values()))
         print(f'{b3.base_cvm}')
         print(f'Encontradas {len(categories)} categorias com {len(meta_dict)} arquivos meta contendo {total_fields} campos')
-        print(demonstrativos_cvm)
+        if demonstrativos_cvm:
+            print(demonstrativos_cvm)
     except Exception as e:
         pass
 
@@ -3047,7 +3046,7 @@ def apply_adjustments(group):
     else:
         return group
 
-def get_merged_and_math(cvm_now, cvm_new):
+def get_math_new_from_cvm(cvm_now, cvm_new):
     """
     Merge two dictionaries of dataframes and extract updated rows.
 
@@ -3064,67 +3063,63 @@ def get_merged_and_math(cvm_now, cvm_new):
 
     """
     
-    # Collect unique years present in both dictionaries
-    all_keys = sorted(set(cvm_now.keys()).union(cvm_new.keys()))
+    years = sorted(set(cvm_now.keys()).union(cvm_new.keys()))
 
-    # Retrieve column names for the current year from cvm_now, if absent, get from cvm_new
-    df_columns = cvm_now.get(min(all_keys), pd.DataFrame()).columns if min(all_keys) in cvm_now else cvm_new[min(all_keys)].columns
+    df_columns = cvm_now.get(min(years), pd.DataFrame()).columns if min(years) in cvm_now else cvm_new[min(years)].columns
 
-    # Key column to identify the main data column that could have changes
     value_column = 'VL_CONTA'
-
-    # Define columns that serve as the unique identifier for each row in the financial data, excluding the value_column
     key_columns = [col for col in df_columns if col != value_column]
 
-    # Initialize storage for final merged data and the rows that were updated in the new data
     cvm_merged = {}
     math = {}
 
     try:
-        # Iterate over each unique year
-        for year in all_keys:
-            # Fetch corresponding DataFrames for the year from cvm_now and cvm_new, or initialize empty DataFrames if absent
+        for year in years:
             df1 = cvm_now.get(year, pd.DataFrame(columns=df_columns))
             df2 = cvm_new.get(year, pd.DataFrame(columns=df_columns))
-            
-            # If only new data exists for the year, directly assign it to the merged result
-            if df1.empty and not df2.empty:
-                cvm_merged[year] = df2
-            # If only old data exists for the year and there's no new data, directly assign the old data to the merged result
-            elif df2.empty and not df1.empty:
-                cvm_merged[year] = df1
-            # If data exists in both old and new sets, perform merging operations
-            else:
-                # Merge existing and new data based on the unique identifier columns. Rows from the new data are prioritized.
-                df_merged = pd.merge(df1, df2, on=key_columns, how='right', suffixes=('_now', '_new'))
-                
-                # Identify rows that are either new or have updated 'value_column' values
-                mask_diff_rows = (df_merged[f'{value_column}_now'] != df_merged[f'{value_column}_new']) | df_merged[f'{value_column}_now'].isna()
-                df_math = df_merged.loc[mask_diff_rows].copy()
-                
-                # Loop through both merged and updated rows dataframes for further processing
-                for df, result_dict in zip([df_merged, df_math], [cvm_merged, math]):
-                    # Determine the 'value_column' value based on whether it's an updated/new row or an unchanged one
-                    df[value_column] = np.where(
-                        (df[f'{value_column}_now'] == df[f'{value_column}_new']) | df[f'{value_column}_now'].isna(),
-                        df[f'{value_column}_new'], 
-                        df[f'{value_column}_now']
-                    )
-                    
-                    # Discard temporary columns used during merging
-                    df.drop(columns=[f'{value_column}_now', f'{value_column}_new'], inplace=True)
-                    
-                    # Ensure the dataframe's columns are in the desired order
-                    df = df[df_columns]
-                    
-                    # Store the processed dataframe in the appropriate dictionary
-                    result_dict[year] = df
 
-                # Print diagnostic information about the number of rows in the merged and updated rows data for the current year
-                print(f'{year}, {df_merged.shape[0]:,.0f} existing, {df_math.shape[0]:,.0f} new lines')
+            if df1.empty and not df2.empty:
+                df_merged = df2
+                df_merged[f'{value_column}_now'] = pd.NA
+                df_merged[f'{value_column}_new'] = df2['VL_CONTA']
+                # df_merged.rename(columns={value_column: f'{value_column}_new'}, inplace=True)
+            elif df2.empty and not df1.empty:
+                df_merged = df1
+                df_merged[f'{value_column}_now'] = df1['VL_CONTA']
+                df_merged[f'{value_column}_new'] = pd.NA
+                # df_merged.rename(columns={value_column: f'{value_column}_now'}, inplace=True)
+            else:
+                df_merged = pd.merge(df1, df2, on=key_columns, how='right', suffixes=('_now', '_new'))
+
+            # Create mask for rows that need updating
+            # _now and _new have different values (and are not NaN)
+            mask_1a = ~df_merged[f'{value_column}_now'].isna()
+            mask_1b = ~df_merged[f'{value_column}_new'].isna()
+            mask_1c = df_merged[f'{value_column}_now'] != df_merged[f'{value_column}_new']
+            mask_1 = mask_1a & mask_1b & mask_1c
+
+            # _now is NaN but _new has values
+            mask_2a = df_merged[f'{value_column}_now'].isna()
+            mask_2b = ~df_merged[f'{value_column}_new'].isna()
+            mask_2 = mask_2a & mask_2b
+
+            mask_update = mask_1 | mask_2
+
+            # Update VL_CONTA column based on the mask
+            df_merged[value_column] = np.where(mask_update, df_merged[f'{value_column}_new'], df_merged[f'{value_column}_now'])
+
+            # Filter rows that were updated
+            df_math = df_merged[mask_update].copy()
+
+            # Remove temporary columns and store the processed dataframe
+            for df, result_dict in zip([df_merged, df_math], [cvm_merged, math]):
+                df.drop(columns=[f'{value_column}_now', f'{value_column}_new'], inplace=True)
+                df = df[df_columns]
+                result_dict[year] = df
+
+            print(f'{year}, {df_merged.shape[0]:,.0f} total, {df_math.shape[0]:,.0f} new lines')
 
     except Exception as e:
-        # In case of an error, print the error message for debugging
         # print(e)
         pass
 
@@ -3187,7 +3182,7 @@ def wrapper_apply(group, pbar):
     pbar.update(1)  # Update the progress bar by one step
     return result
 
-def get_adjusted_dataframes(math):
+def get_calculated_math(math):
     """
     Apply adjustments to dataframes for each year in the data_dict.
 
@@ -3203,7 +3198,7 @@ def get_adjusted_dataframes(math):
     # Loop through each year in the data dictionary
     for year, df_merged in math.items():
         # Group the DataFrame by the columns: 'DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', and 'DS_CONTA'
-        grouped = df_merged.groupby(['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA'])
+        grouped = df_merged.groupby(['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA'], group_keys=False)
 
         # Set up a progress bar to track the processing of each group
         with tqdm(total=grouped.ngroups, desc=f"Calculating quarter values for year {year}") as pbar:
@@ -3212,7 +3207,8 @@ def get_adjusted_dataframes(math):
         
         # Store the adjusted dataframe in the result dictionary
         math_new[year] = adjusted_df
-
+        math_new = save_pkl(math_new, f'{b3.app_folder}math_now')
+        math_new[year] = save_pkl(math_new[year], f'{b3.app_folder}math_new_{year}')
     return math_new
 
 def year_to_company(cvm_new):
@@ -3385,3 +3381,68 @@ def merge_math(math_existing, math_new):
     except Exception as e:
        pass
     return df_merged
+
+def math_from_cvm(cvm_now):
+    math_now = {}
+    years = sorted(cvm_now.keys())
+    df_columns = cvm_now[min(years)].columns
+    for year in years:
+        try:
+            math_now[year] = load_pkl(f'{b3.app_folder}math_new_{year}')
+        except Exception as e:
+            math_now[year] = pd.DataFrame(columns=df_columns)
+
+    return math_now
+
+def math_merge(math_now, math_new):
+    print('... math merge')
+    math = {}
+    years = sorted(set(math_now.keys()).union(math_new.keys()))
+    df_columns = math_now[min(years)].columns
+    value_column = 'VL_CONTA'
+    key_columns = [col for col in df_columns if col != value_column]
+
+    try:
+        for year in years:
+            print(year)
+            df_now = math_now.get(year, pd.DataFrame(columns=df_columns))
+            df_new = math_new.get(year, pd.DataFrame(columns=df_columns))
+
+            # Merge dataframes based on key columns
+            df_merged = pd.merge(df_now, df_new, on=key_columns, how='outer', suffixes=('_now', '_new'))
+
+            # Check if VL_CONTA in df_new contains a value, if it does, use it, otherwise use df_now's value
+            mask = ~df_merged[f'{value_column}_new'].isna()
+            df_merged[value_column] = np.where(mask, df_merged[f'{value_column}_new'], df_merged[f'{value_column}_now'])
+
+            # Drop temporary columns
+            df_merged.drop(columns=[f'{value_column}_now', f'{value_column}_new'], inplace=True)
+
+            # Store the updated dataframe in the math dictionary
+            math[year] = df_merged[df_columns]
+
+    except Exception as e:
+        # Handle exception (for now, just passing)
+        pass
+
+    return math
+
+def companies_from_math(math):
+    print('... extracting company info')
+    company = {}
+
+    # Iterate over each year in math
+    for year, df in math.items():
+        print(year)
+        # Group by 'DENOM_CIA'
+        for company_name, group in df.groupby('DENOM_CIA'):
+            # Check if the company is already a key in the companies dictionary
+            if company_name not in company:
+                company[company_name] = group
+            else:
+                # Concatenate the new group to the existing dataframe for that company
+                company[company_name] = pd.concat([company[company_name], group])
+
+    return dict(sorted(company.items()))
+
+

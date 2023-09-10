@@ -568,30 +568,9 @@ def dre_pivot(value):
 
     return value
 
-def dre_cvm(value):
-    cvm_now = cvm_new = math_now = math_new = ''
+def dre_cvm(value, cvm_now='', cvm_new='', math_now='', math_new=''):
     try:
         # prepare CVM
-        # cvm_now
-        # try:
-        #     cvm_now = run.load_pkl(f'{app_folder}cvm_now')
-        # except Exception as e:
-        #     cvm_now = {}
-        #     cvm_now = run.save_pkl(cvm_now, f'{app_folder}cvm_now')
-
-        # cvm_new
-        # download cvm_new_new // and clean database
-        # cvm_new = run.create_cvm(base_cvm)
-        # cvm_new = run.save_pkl(cvm_new, f'{app_folder}cvm_new')
-        # print('temp debug delete')
-        # cvm_new = run.load_pkl(f'{app_folder}cvm_new')
-
-        # merge both, get new cvm_now and math for adjusting values
-        # cvm_now, math_new = run.get_merged_and_math(cvm_now, cvm_new)
-        # cvm_now = run.save_pkl(cvm_now, f'{app_folder}cvm_now')
-        # math_new = run.save_pkl(math_new, f'{app_folder}math_new')
-
-        # prepare MATH
         if not cvm_now:
             try:
                 cvm_now = run.load_pkl(f'{app_folder}cvm_now')
@@ -600,23 +579,31 @@ def dre_cvm(value):
         if not cvm_new:
             cvm_new = run.create_cvm(base_cvm)
 
+        # prepare MATH
         # math_now
         try:
             math_now = run.load_pkl(f'{app_folder}math_now')
         except Exception as e:
             try:
-                math_now = run.get_adjusted_dataframes(cvm_now)
-                math_now = run.save_pkl(math_now, f'{app_folder}math_now')
+                math_now = run.math_from_cvm(cvm_now)
             except Exception as e:
-                math_now = {}
+                try:
+                    math_now = run.get_calculated_math(cvm_now)
+                    math_now = run.save_pkl(math_now, f'{app_folder}math_now')
+                except Exception as e:
+                    math_now = {}
 
         # math_new
         if not math_new:
             try:
                 math_new = run.load_pkl(f'{app_folder}math_new')
             except Exception as e:
-                cvm_now, math_new = run.get_merged_and_math(cvm_now, cvm_new)
+                cvm_now, math_new = run.get_math_new_from_cvm(cvm_now, cvm_new)
+        math = run.math_merge(math_now, math_new)
 
+        # create company dict of dataframes
+        company = run.companies_from_math(math)
+        company = run.save_pkl(company, f'{app_folder}company')
     except Exception as e:
         pass
 
