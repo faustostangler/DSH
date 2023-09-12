@@ -30,6 +30,9 @@ def my_periodic_task():
 
 
     print("All updated!")
-
-if __name__ == "__main__":
-    my_periodic_task()  
+try:
+    if __name__ == "__main__":
+        my_periodic_task()  
+except Exception as e:
+    print(e)
+    pass

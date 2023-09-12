@@ -15,6 +15,7 @@ duration = time.time()
 # variables 0
 url = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/?language=pt-br' 
 search_url = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/search?language=pt-br' 
+
 start = 1
 batch = 120
 bins = 20
@@ -49,7 +50,7 @@ columns = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'V
 columns = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor', 'Url', 'nsd']
 
 # variables 2
-driver_wait_time = 2
+driver_wait_time = 5
 driver = wait = None
 def set_driver_and_wait(new_driver, new_wait):
     global driver, wait
@@ -70,6 +71,9 @@ bucket_name = 'b3_bovespa_bucket'
 # dre_cvm variables
 base_cvm = "https://dados.cvm.gov.br/dados/CIA_ABERTA/"
 xpath_cvm = '/html/body/div[1]/pre'
+url_setorial = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/classification?language=pt-br'
+download_folder = 'downloads'
+url_companies_info = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/search?language=pt-br'
 
 start_year = 2010
 session = run.requests.Session() # Inicializar uma sessão
@@ -427,7 +431,7 @@ def dre_math(value):
 
   dre_raw, dre_math = run.dre_prepare(dre_raw, dre_math)
 
-  cias, math = run.get_math(dre_raw, dre_math)
+  cias, math = run.do_the_math(dre_raw, dre_math)
   size = len(math)
   print(f'Total of {size} items (items in company quarters) new to process')
   df_temp = pd.DataFrame(columns=cols_dre_math)
@@ -568,43 +572,15 @@ def dre_pivot(value):
 
     return value
 
-def dre_cvm(value, cvm_now='', cvm_new='', math_now='', math_new=''):
-    try:
-        # prepare CVM
-        if not cvm_now:
-            try:
-                cvm_now = run.load_pkl(f'{app_folder}cvm_now')
-            except Exception as e:
-                cvm_now = {}
-        if not cvm_new:
-            cvm_new = run.create_cvm(base_cvm)
+def dre_cvm(value):
+    # math = run.get_math()
 
-        # prepare MATH
-        # math_now
-        try:
-            math_now = run.load_pkl(f'{app_folder}math_now')
-        except Exception as e:
-            try:
-                math_now = run.math_from_cvm(cvm_now)
-            except Exception as e:
-                try:
-                    math_now = run.get_calculated_math(cvm_now)
-                    math_now = run.save_pkl(math_now, f'{app_folder}math_now')
-                except Exception as e:
-                    math_now = {}
+    # setorial = run.get_classificacao_setorial(setorial='')
 
-        # math_new
-        if not math_new:
-            try:
-                math_new = run.load_pkl(f'{app_folder}math_new')
-            except Exception as e:
-                cvm_now, math_new = run.get_math_new_from_cvm(cvm_now, cvm_new)
-        math = run.math_merge(math_now, math_new)
+    company_b3 = run.b3_grab(search_url)
+    company_b3 = run.save_pkl(company_b3, f'{app_folder}company_b3')
 
-        # create company dict of dataframes
-        company = run.companies_from_math(math)
-        company = run.save_pkl(company, f'{app_folder}company')
-    except Exception as e:
-        pass
+
+    # company = run.get_companies(math)
 
     return value

@@ -9,12 +9,15 @@ from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
 
 from webdriver_manager.chrome import ChromeDriverManager
 import unidecode
 import string
 
 import os
+import re
 
 import pandas as pd
 import numpy as np
@@ -36,6 +39,7 @@ import zipfile
 from lxml import html
 
 from tqdm import tqdm
+import shutil
 
 # general functions
 def wText(xpath: str, wait: WebDriverWait) -> str:
@@ -243,7 +247,7 @@ def load_browser():
     """
     # Define the options for the ChromeDriver.
     options = Options()
-    options.add_argument('--headless')  # Run in headless mode.
+    # options.add_argument('--headless')  # Run in headless mode.
     options.add_argument('--no-sandbox')  # Avoid sandboxing.
     options.add_argument('--disable-dev-shm-usage')  # Disable shared memory usage.
     options.add_argument('--disable-blink-features=AutomationControlled')  # Disable automated control.
@@ -1016,7 +1020,7 @@ def dre_prepare(dre_raw, dre_math):
 
   return dre_raw, dre_math
 
-def get_math(dre_raw, dre_math):
+def do_the_math(dre_raw, dre_math):
    # do the math
   math = dre_raw.groupby([dre_raw['Companhia'], dre_raw['Trimestre'].dt.year, dre_raw['Conta']], group_keys=False)
 
@@ -3445,4 +3449,433 @@ def companies_from_math(math):
 
     return dict(sorted(company.items()))
 
+def get_math(math='', cvm_now='', cvm_new='', math_now='', math_new=''):
+    try:
+        # prepare CVM
+        if not cvm_now:
+            try:
+                cvm_now = load_pkl(f'{b3.app_folder}cvm_now')
+            except Exception as e:
+                cvm_now = {}
+        if not cvm_new:
+            cvm_new = create_cvm(b3.base_cvm)
+
+        # prepare MATH
+        # math_now
+        try:
+            math_now = load_pkl(f'{b3.app_folder}math_now')
+        except Exception as e:
+            try:
+                math_now = math_from_cvm(cvm_now)
+            except Exception as e:
+                try:
+                    math_now = get_calculated_math(cvm_now)
+                    math_now = save_pkl(math_now, f'{b3.app_folder}math_now')
+                except Exception as e:
+                    math_now = {}
+
+        # math_new
+        if not math_new:
+            try:
+                math_new = load_pkl(f'{b3.app_folder}math_new')
+            except Exception as e:
+                cvm_now, math_new = get_math_new_from_cvm(cvm_now, cvm_new)
+        math = math_merge(math_now, math_new)
+
+    except Exception as e:
+        pass
+
+    return math
+
+def get_classificacao_setorial(setorial=''):
+    driver, wait = load_browser()
+    driver.get(b3.url_setorial)
+    # Find the download link using the XPATH you provided
+    download_link_element = driver.find_element(By.XPATH, '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/div[2]/div[3]/div[2]/p/a')
+    url = download_link_element.get_attribute('href')
+    time.sleep(3)
+    response = requests.get(url)
+    filename = url.split("/")[-1]
+
+    with open(filename, 'wb') as f:
+        f.write(response.content)
+
+    # Step 2: Extract the zip
+    with zipfile.ZipFile(filename, 'r') as zip_ref:
+        zip_ref.extractall(b3.download_folder)
+
+    # Assuming only one .xlsx file inside the zip
+    xlsx_file = [f for f in os.listdir(b3.download_folder) if f.endswith('.xlsx')][0]
+
+    # Step 3: Read the Excel file
+    setorial = pd.read_excel(os.path.join(b3.download_folder, xlsx_file))
+    shutil.rmtree(b3.download_folder)
+    driver.quit()
+
+    # clean up setorial# Modifying the extraction method based on the updated insights
+
+    # First, let's identify the start of the data based on the header
+    start_row = setorial[setorial.eq("SETOR ECONÔMICO").any(axis=1)].index[0] + 1
+    end_row = setorial[setorial.eq("(DR1) BDR Nível 1").any(axis=1)].index[0] - 1
+
+    # Extracting the relevant data starting from the identified row
+    subset_df = setorial.loc[start_row:end_row].reset_index(drop=True)
+    subset_df.columns = ['SETOR', 'SUBSETOR', 'SEGMENTO/DENOM_CIA', 'CIA_CODE', 'CIA_LISTAGEM']
+
+    # Initialize the columns
+    subset_data = {
+        'SETOR': [],
+        'SUBSETOR': [],
+        'SEGMENTO': [],
+        'DENOM_CIA': [],
+        'CIA_CODE': [],
+        'CIA_LISTAGEM': []
+    }
+    # Temporary variables to hold the current SETOR, SUBSETOR, and SEGMENTO
+    current_setor = None
+    current_subsetor = None
+    current_segmento = None
+
+    # Iterate through the rows
+    for i, row in subset_df.iterrows():
+        col_1, col_2, col_3, col_4, col_5 = row
+        
+        # Company row
+        if pd.notnull(col_3) and pd.notnull(col_4):
+            if col_3.strip() != 'SEGMENTO':
+                subset_data['SETOR'].append(current_setor.strip() if current_setor else None)
+                subset_data['SUBSETOR'].append(current_subsetor.strip() if current_subsetor else None)
+                subset_data['SEGMENTO'].append(current_segmento.strip() if current_segmento else None)
+                subset_data['DENOM_CIA'].append(col_3.strip())
+                subset_data['CIA_CODE'].append(col_4.strip())
+                subset_data['CIA_LISTAGEM'].append(col_5.strip() if pd.notnull(col_5) else '')
+
+        # SEGMENTO row
+        elif pd.notnull(col_3) and pd.isnull(col_4):
+            current_setor = col_1 if pd.notnull(col_1) else None
+            current_subsetor = col_2 if pd.notnull(col_2) else None  # Reset the SUBSETOR if it's NaN
+            current_segmento = col_3 if pd.notnull(col_3) else None  # Reset the SEGMENTO if it's NaN
+
+        # SUBSETOR row
+        elif pd.notnull(col_2):
+            current_setor = col_1 if pd.notnull(col_1) else None
+            current_subsetor = col_2 if pd.notnull(col_2) else None  # Reset the SUBSETOR if it's NaN
+            current_segmento = col_3 if pd.notnull(col_3) else None  # Reset the SEGMENTO if it's NaN
+
+        # SETOR row
+        elif pd.notnull(col_1):
+            current_setor = col_1 if pd.notnull(col_1) else None
+            current_subsetor = col_2 if pd.notnull(col_2) else None  # Reset the SUBSETOR if it's NaN
+            current_segmento = col_3 if pd.notnull(col_3) else None  # Reset the SEGMENTO if it's NaN
+
+    # Convert the data to a DataFrame
+    setorial = pd.DataFrame(subset_data)
+    setorial['SETOR'] = setorial['SETOR'].fillna(method='ffill')
+    setorial['SUBSETOR'] = setorial['SUBSETOR'].fillna(method='ffill')
+    setorial['SEGMENTO'] = setorial['SEGMENTO'].fillna(method='ffill')
+    setorial['CIA_LISTAGEM'].fillna('', inplace=True)
+    for col in setorial.columns:
+        setorial [col]= setorial[col].apply(clean_text)
+
+    return setorial
+
+def get_companies(math, setorial):
+    value_column = 'DENOM_CIA'
+    key_columns = [col for col in setorial.columns if col != value_column]
+
+    company_setorial_mapping = setorial.drop_duplicates(subset=value_column).set_index(value_column)[key_columns]
+    for year, df in math.items():
+        df_temp = df.merge(company_setorial_mapping, left_on=value_column, right_index=True, how='left')
+        math[year] = df_temp
+    
+    # create company dict of dataframes
+    company = companies_from_math(math)
+    company = save_pkl(company, f'{b3.app_folder}company')
+
+    return math
+
+def extract_company_info(data):
+    company_info = {
+        "COMPANHIA": "",
+        "CNPJ": "",
+        "ATIVIDADE": "",
+        "SETOR": "",
+        "SUBSETOR": "",
+        "SEGMENTO": "",
+        "SITE": "",
+        "ESCRITURADOR": ""
+    }
+
+    # Name (assuming it's always the first item in the list)
+    company_info["NAME"] = data[0].strip()
+
+    # CNPJ
+    cnpj_pattern = r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}'
+    for item in data:
+        match = re.search(cnpj_pattern, item)
+        if match:
+            company_info["CNPJ"] = match.group()
+            break
+
+    # Atividade (assuming it's a short description without special characters)
+    for item in data:
+        if 10 < len(item) < 100 and not re.search(r'[/\d]', item):
+            company_info["ATIVIDADE"] = item.strip()
+            break
+
+    # Setor (with subcategories)
+    setor_pattern = r'.+/.+/.+'
+    for item in data:
+        match = re.search(setor_pattern, item)
+        if match:
+            sector_classification = match.group()
+            setor, subsetor, segmento = sector_classification.split(' / ') if sector_classification else (None, None, None)
+            company_info["SETOR"] = clean_text(setor)
+            company_info["SUBSETOR"] = clean_text(subsetor)
+            company_info["SEGMENTO"] = clean_text(segmento)
+            break
+
+    # Site
+    site_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    for item in data:
+        match = re.search(site_pattern, item)
+        if match:
+            company_info["SITE"] = match.group()
+            break
+
+    # Bookholder (assuming "Instituição:" is the identifier)
+    bookholder_pattern = r'Instituição: (.+)'
+    for item in data:
+        match = re.search(bookholder_pattern, item)
+        if match:
+            company_info["ESCRITURADOR"] = match.group(1).strip()
+            break
+
+    return company_info
+
+def b3_grab(url):
+    print('... getting company_list_new from b3 pages')
+    company_list_new = []
+    cols = ['COMPANHIA', 'PREGAO', 'TICK', 'LISTAGEM']
+    max_retries = 5
+    sleep_time = 0.1
+    driver, wait = load_browser()
+    try:
+        for attempt in range(max_retries):
+            try:
+                driver.get(url)
+
+                # Wait for dropdown to be present and select the last option
+                dropdown = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="divContainerIframeB3"]/form/div[3]/div[1]/select')))
+                all_options = dropdown.find_elements(By.XPATH, './/option')
+                cards_per_page = int(all_options[-1].get_attribute("value"))
+                all_options[-1].click()
+
+                # Recalculate the total number of pages based on the new display count
+                total_companies_element = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="divContainerIframeB3"]/form/div[1]/div/div/div[1]/p/span[1]')))
+                total_companies = int(total_companies_element.text.replace('.', '').strip())
+                total_pages = (total_companies // cards_per_page) + (1 if total_companies % cards_per_page > 0 else 0)
+                break
+            except Exception as e:
+                print('th' + 'i' * (attempt + 1) + 'nking...')
+            time.sleep(sleep_time)
+
+        start_time = time.time()
+        for i, p in enumerate(range(total_pages)):
+            print(remaining_time(start_time, total_pages, i))
+            for attempt in range(max_retries):
+                try:
+                    # Fetch all the company names
+                    company_names_elements = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/p[@class="card-title"]')))
+                    company_names = [elem.text.strip() for elem in company_names_elements]
+
+                    # Fetch all the trading names
+                    trading_names_elements = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/p[@class="card-text"]')))
+                    trading_names = [elem.text.strip() for elem in trading_names_elements]
+
+                    # Fetch all the trading codes
+                    trading_codes_elements = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/h5[@class="card-title2"]')))
+                    trading_codes = [elem.text.strip() for elem in trading_codes_elements]
+
+                    # Fetch all the LISTAGEM values
+                    listagem_elements = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/p[3]')))
+                    listagem_values = [elem.text.strip() for elem in listagem_elements]
+
+                    # Combine the three lists into a list of dictionaries
+                    for i in range(len(company_names)):
+                        company_list_new.append({
+                            'COMPANHIA': company_names[i],
+                            'PREGAO': trading_names[i],
+                            'TICK': trading_codes[i],
+                            'LISTAGEM': listagem_values[i]
+                        })
+
+                    break
+                except Exception as e:
+                    print('th' + 'i' * (attempt + 1) + 'nking...')
+                time.sleep(sleep_time)
+
+            if p < total_pages - 1:
+                next_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a')))
+                next_button.click()
+            
+    except Exception as e:
+        pass
+
+    try:
+        company_list_now = load_pkl(f'{b3.app_folder}company_list')
+    except Exception as e:
+        company_list_now = pd.DataFrame(columns=cols)
+    company_list_new = pd.DataFrame(company_list_new, columns=cols)
+    company_list = pd.concat([company_list_now, company_list_new], ignore_index=True).drop_duplicates().reset_index(drop=True)
+    company_list = save_pkl(company_list, f'{b3.app_folder}company_list')
+
+    try:
+        company_b3 = load_pkl(f'{b3.app_folder}company_b3')
+    except Exception as e:
+        company_b3 = pd.DataFrame(columns=cols)
+
+    new_companies = company_list[~company_list['COMPANHIA'].apply(clean_text).isin(company_b3['COMPANHIA'])]
+
+    if len(new_companies) == 0:
+        return company_b3
+    
+    print('... getting company data from b3 companies')
+    try:
+        driver.get(b3.url)
+        start_time = time.time()
+        for i, row in new_companies.iterrows():
+            company_name = clean_text(row['COMPANHIA'])
+            trading_name = row['PREGAO']
+            trading_code = row['TICK']
+            listagem_values = row['LISTAGEM']
+
+            # Click the search box
+            for attempt in range(max_retries):
+                try:
+                    print(remaining_time(start_time, len(new_companies), i), company_name)
+                    search_box = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="keyword"]')))
+                    search_box.clear()
+                    search_box.send_keys(company_name)
+
+                    search_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button')))
+                    search_button.click()
+                    break
+                except Exception as e:
+                    print('o' * (attempt + 1) + 'ps..')
+                time.sleep(sleep_time)
+
+            # Click on the company card
+            for attempt in range(max_retries):
+                try:
+                    company_card_xpath = f'''//*[@id="nav-bloco"]//div[contains(@class, "card h-100 clickable")
+                                            and .//p[1][text()="{row['COMPANHIA']}"]
+                                            and .//p[2][text()="{row['PREGAO']}"]
+                                            and .//h5[text()="{row['TICK']}"]]'''
+                    company_card = wait.until(EC.element_to_be_clickable((By.XPATH, company_card_xpath)))
+                    company_card.click()
+                    break
+                except Exception as e:
+                    print('o' * (attempt + 1) + 'ps..')
+                time.sleep(sleep_time)
+
+            # Grab the URL and extract the necessary codes
+            for attempt in range(max_retries):
+                try:
+                    current_url = driver.current_url
+                    cvm_code = current_url.split('/')[-3]
+                    try:
+                        int(cvm_code)
+                        break
+                    except Exception as e:
+                        pass
+                except Exception as e:
+                    print('o' * (attempt + 1) + 'ps..')
+                time.sleep(sleep_time)
+
+            # Grab Company INFO
+            for attempt in range(max_retries):
+                try:
+                    try:
+                        elements = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//p[@class="card-linha"]')))
+                        company_info = [element.text.strip() for element in elements]
+                    except NoSuchElementException:
+                        company_info = []
+                    company_info = extract_company_info(company_info)
+
+                    break
+                except Exception as e:
+                    print('o' * (attempt + 1) + 'ps..')
+                time.sleep(sleep_time)
+
+            # Grab Tickers
+            for attempt in range(max_retries):
+                try:
+                    table_html = driver.find_element(By.XPATH, '//*[@id="accordionBody2"]/div/table').get_attribute('outerHTML')
+                    
+                    # Use pandas to directly read the table from the HTML.
+                    table_df = pd.read_html(table_html, header=0)[0]
+
+                    tickers = ', '.join(table_df.iloc[:, 0].tolist())
+                    isins = ', '.join(table_df.iloc[:, 1].tolist())
+
+                    break
+                except Exception as e:
+                    # print('o' * (attempt + 1) + 'ps..')
+                    tickers = None
+                    isins = None
+                time.sleep(sleep_time)
+
+            # Major Stock Holders
+            for attempt in range(max_retries):
+                try:
+                    table_html = driver.find_element(By.XPATH, '//*[@id="accordionBodyTwo"]/div/table').get_attribute('outerHTML')
+                    
+                    # Use pandas to directly read the table from the HTML
+                    tables = pd.read_html(table_html)
+
+                    # The first table in the list is what we want
+                    table = tables[0]
+                    table = table.copy()
+                    table = table.iloc[:-1, :]
+                    table.iloc[:, 1:] = table.iloc[:, 1:] / 100
+                    table['COMPANHIA'] = company_name
+                    table['SETOR'] = company_info['SETOR']
+                    table['SUBSETOR'] = company_info['SUBSETOR']
+                    table['SEGMENTO'] = company_info['SEGMENTO']
+                    break
+                except Exception as e:
+                    table = pd.DataFrame()
+                time.sleep(sleep_time)
+
+            # Update the dataframe
+            company_b3.at[i, 'COMPANHIA'] = company_name
+            company_b3.at[i, 'PREGAO'] = trading_name
+            company_b3.at[i, 'TICK'] = trading_code
+            company_b3.at[i, 'LISTAGEM'] = listagem_values
+            company_b3.at[i, 'CVM'] = cvm_code
+            company_b3.at[i, 'TICKERS'] = tickers
+            company_b3.at[i, 'ISIN'] = isins
+            company_b3.at[i, 'CNPJ'] = company_info['CNPJ']
+            company_b3.at[i, 'ATIVIDADE'] = company_info['ATIVIDADE']
+            company_b3.at[i, 'SETOR'] = company_info['SETOR']
+            company_b3.at[i, 'SUBSETOR'] = company_info['SUBSETOR']
+            company_b3.at[i, 'SEGMENTO'] = company_info['SEGMENTO']
+            company_b3.at[i, 'SITE'] = company_info['SITE']
+            company_b3.at[i, 'ESCRITURADOR'] = company_info['ESCRITURADOR']
+            company_b3.at[i, 'ACIONISTAS'] = table
+
+            # Reload Page
+            driver.get(b3.url)
+            if (len(new_companies) - i + 1) % 5 == 0:
+                company_b3 = save_pkl(company_b3, f'{b3.app_folder}company_b3')
+
+    except Exception as e:
+        print(f"Error encountered: {str(e)}")
+
+    finally:
+        driver.quit()
+
+
+    return company_b3
 
