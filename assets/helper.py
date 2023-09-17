@@ -79,6 +79,8 @@ start_year = 2010
 session = run.requests.Session() # Inicializar uma sessão
 filelist = [] # Lista para armazenar links de arquivos CSV e ZIP
 visited_subfolders = set() # Conjunto para armazenar subpastas já visitadas
+
+
 # system stages
 def update_b3_companies(value: str) -> str:
     """
@@ -573,14 +575,23 @@ def dre_pivot(value):
     return value
 
 def dre_cvm(value):
-    # math = run.get_math()
+    try:
+        company = run.load_pkl(f'{app_folder}company')
+    except Exception as e:
+        company = run.b3_grab(search_url)
+        company = run.save_pkl(company, f'{app_folder}company')
 
-    # setorial = run.get_classificacao_setorial(setorial='')
+    try:
+        math = run.load_pkl(f'{app_folder}math')
+    except Exception as e:
+        math = run.get_math()
+        math = run.save_pkl(math, f'{app_folder}math')
 
-    company_b3 = run.b3_grab(search_url)
-    company_b3 = run.save_pkl(company_b3, f'{app_folder}company_b3')
+    try:
+        b3 = run.load_pkl(f'{app_folder}b3')
+    except Exception as e:
+        b3 = run.get_companies(math, company)
+        b3 = run.save_pkl(b3, f'{app_folder}b3')
 
-
-    # company = run.get_companies(math)
 
     return value

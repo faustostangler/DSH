@@ -34,7 +34,7 @@ import datetime
 import time
 
 import pickle
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, parse_qs
 import zipfile
 from lxml import html
 
@@ -245,25 +245,34 @@ def load_browser():
     Returns:
     tuple: A tuple containing a WebDriver instance and a WebDriverWait instance.
     """
-    # Define the options for the ChromeDriver.
-    options = Options()
-    # options.add_argument('--headless')  # Run in headless mode.
-    options.add_argument('--no-sandbox')  # Avoid sandboxing.
-    options.add_argument('--disable-dev-shm-usage')  # Disable shared memory usage.
-    options.add_argument('--disable-blink-features=AutomationControlled')  # Disable automated control.
-    # options = Options()
-    options.add_argument('start-maximized')  # Maximize the window on startup.
+    try:
+        # Define the options for the ChromeDriver.
+        options = Options()
+        # options.add_argument('--headless')  # Run in headless mode.
+        options.add_argument('--no-sandbox')  # Avoid sandboxing.
+        options.add_argument('--disable-dev-shm-usage')  # Disable shared memory usage.
+        options.add_argument('--disable-blink-features=AutomationControlled')  # Disable automated control.
+        # options = Options()
+        options.add_argument('start-maximized')  # Maximize the window on startup.
 
-    # Install and start the ChromeDriver service, passing in the options.
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    
-    # Define the exceptions to ignore during WebDriverWait.
-    exceptions_ignore = (NoSuchElementException, StaleElementReferenceException)
-    
-    # Create a WebDriverWait instance for the driver, using the specified wait time and exceptions to ignore.
-    wait = WebDriverWait(driver, b3.driver_wait_time, ignored_exceptions=exceptions_ignore)
-    b3.set_driver_and_wait(driver, wait)
+        # chrome_browser_path = "C:\\path_to_chrome\\chrome-win64\\chrome.exe"
+        chromedriver_path = "D:\\Fausto Stangler\\Documentos\\Python\\DSH\\chromedriver-win64\\chromedriver.exe"
+        options = webdriver.ChromeOptions()
+        # options.binary_location = chrome_browser_path
 
+        driver = webdriver.Chrome(executable_path=chromedriver_path, options=options)
+        print('raw browser load')
+        # Install and start the ChromeDriver service, passing in the options.
+        # driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        
+        # Define the exceptions to ignore during WebDriverWait.
+        exceptions_ignore = (NoSuchElementException, StaleElementReferenceException)
+        
+        # Create a WebDriverWait instance for the driver, using the specified wait time and exceptions to ignore.
+        wait = WebDriverWait(driver, b3.driver_wait_time, ignored_exceptions=exceptions_ignore)
+        b3.set_driver_and_wait(driver, wait)
+    except Exception as e:
+        pass
     # Return a tuple containing the driver and the wait object.
     return driver, wait
 
@@ -741,6 +750,7 @@ def read_quarter(line, driver, wait):
     # get url
     url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={line[0]}&CodigoTipoInstituicao=1'
     driver.get(url)
+    # time.sleep(1)
 
     for quadro in b3.cmbQuadro:
       # concat quadro to quarter
@@ -3490,6 +3500,8 @@ def get_math(math='', cvm_now='', cvm_new='', math_now='', math_new=''):
 def get_classificacao_setorial(setorial=''):
     driver, wait = load_browser()
     driver.get(b3.url_setorial)
+    # time.sleep(1)
+
     # Find the download link using the XPATH you provided
     download_link_element = driver.find_element(By.XPATH, '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/div[2]/div[3]/div[2]/p/a')
     url = download_link_element.get_attribute('href')
@@ -3594,33 +3606,22 @@ def get_companies(math, setorial):
 
     return math
 
-def extract_company_info(data):
-    company_info = {
-        "COMPANHIA": "",
-        "CNPJ": "",
-        "ATIVIDADE": "",
-        "SETOR": "",
-        "SUBSETOR": "",
-        "SEGMENTO": "",
-        "SITE": "",
-        "ESCRITURADOR": ""
-    }
-
+def extract_company_info(data, full_company_info):
     # Name (assuming it's always the first item in the list)
-    company_info["NAME"] = data[0].strip()
+    full_company_info["name"] = data[0].strip()
 
     # CNPJ
     cnpj_pattern = r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}'
     for item in data:
         match = re.search(cnpj_pattern, item)
         if match:
-            company_info["CNPJ"] = match.group()
+            full_company_info["cnpj"] = match.group()
             break
 
     # Atividade (assuming it's a short description without special characters)
     for item in data:
-        if 10 < len(item) < 100 and not re.search(r'[/\d]', item):
-            company_info["ATIVIDADE"] = item.strip()
+        if 10 < len(item) and not re.search(r'[/\d]', item):
+            full_company_info["atividade"] = item.strip()
             break
 
     # Setor (with subcategories)
@@ -3630,9 +3631,9 @@ def extract_company_info(data):
         if match:
             sector_classification = match.group()
             setor, subsetor, segmento = sector_classification.split(' / ') if sector_classification else (None, None, None)
-            company_info["SETOR"] = clean_text(setor)
-            company_info["SUBSETOR"] = clean_text(subsetor)
-            company_info["SEGMENTO"] = clean_text(segmento)
+            full_company_info["setor"] = clean_text(setor)
+            full_company_info["subsetor"] = clean_text(subsetor)
+            full_company_info["segmento"] = clean_text(segmento)
             break
 
     # Site
@@ -3640,7 +3641,7 @@ def extract_company_info(data):
     for item in data:
         match = re.search(site_pattern, item)
         if match:
-            company_info["SITE"] = match.group()
+            full_company_info["site"] = match.group()
             break
 
     # Bookholder (assuming "Instituição:" is the identifier)
@@ -3648,10 +3649,239 @@ def extract_company_info(data):
     for item in data:
         match = re.search(bookholder_pattern, item)
         if match:
-            company_info["ESCRITURADOR"] = match.group(1).strip()
+            full_company_info["escriturador"] = match.group(1).strip()
             break
 
-    return company_info
+    return full_company_info
+
+def get_companies_from_b3_cards(driver, wait):
+    """
+    Grabs company details from the current page.
+    
+    Returns:
+    list: A list of dictionaries containing company details.
+    """
+    max_retries = 5
+    sleep_time = 0.1
+    company_list_new = []
+
+    # Attempt to scrape company details from the current page
+    for attempt in range(max_retries):
+        try:
+            # Extract company details
+            time.sleep(sleep_time*5)
+            company_names = [elem.text.strip() for elem in wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/p[@class="card-title"]')))]
+            trading_names = [elem.text.strip() for elem in wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/p[@class="card-text"]')))]
+            trading_codes = [elem.text.strip() for elem in wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/h5[@class="card-title2"]')))]
+            listagem_values = [elem.text.strip() for elem in wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/p[3]')))]
+
+            # Create and append dictionaries with the company details
+            for i in range(len(company_names)):
+                company_list_new.append({
+                    'COMPANHIA': clean_text(company_names[i]),
+                    'PREGAO': trading_names[i],
+                    'TICK': trading_codes[i],
+                    'LISTAGEM': listagem_values[i]
+                })
+            break
+        except Exception as e:
+            print('th' + 'i' * (attempt + 1) + 'nking...')
+            time.sleep(sleep_time)
+
+    return company_list_new
+
+def get_b3_companies_from_site(driver, wait, url):
+    # Initialize the list to store new companies' details
+    company_list_new = []
+    max_retries = 5
+    sleep_time = 0.1
+    driver.get(url)
+    try:
+        # Attempt to set the dropdown to display the maximum number of companies per page
+        for attempt in range(max_retries):
+            try:
+                # Select the last option in the dropdown (maximum display count)
+                dropdown = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="divContainerIframeB3"]/form/div[3]/div[1]/select')))
+                all_options = dropdown.find_elements(By.XPATH, './/option')
+                companies_per_page = int(all_options[-1].text.strip())
+                all_options[-1].click()
+
+                # Calculate the total number of pages required to display all companies
+                total_companies_element = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="divContainerIframeB3"]/form/div[1]/div/div/div[1]/p/span[1]')))
+                total_companies = int(total_companies_element.text.replace('.', '').strip())
+                total_pages = (total_companies // companies_per_page) + (1 if total_companies % companies_per_page > 0 else 0)
+                break
+            except Exception as e:
+                print('th' + 'i' * (attempt + 1) + 'nking...')
+                time.sleep(sleep_time)
+
+        # Loop through each page and scrape company details
+        start_time = time.time()
+        for tp in range(total_pages):
+            print(remaining_time(start_time, total_pages, tp))
+
+            # Attempt to scrape company details from the current page
+            for attempt in range(max_retries):
+                try:
+                    # Use the get_companies() function to extract the details
+                    companies_in_page = get_companies_from_b3_cards(driver, wait)
+                    company_list_new.extend(companies_in_page)
+                    break
+                except Exception as e:
+                    print('th' + 'i' * (attempt + 1) + 'nking...')
+                    time.sleep(sleep_time)
+
+            # Move to the next page if not on the last page
+            if tp < total_pages - 1:
+                next_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a')))
+                next_button.click()
+
+    except Exception as e:
+        pass
+
+    return company_list_new
+
+def check_for_new_companies_in_b3():
+    cols = ['COMPANHIA', 'PREGAO', 'TICK', 'LISTAGEM']
+
+    # company_list_new = get_b3_companies_from_site(driver, wait, url)
+    print('debug 1')
+    company_list_new = []
+
+    # Load the current company list from the local database
+    try:
+        company_list_now = load_pkl(f'{b3.app_folder}company_list')
+    except Exception as e:
+        company_list_now = pd.DataFrame(columns=cols)
+
+    # Merge the newly scraped companies with the current list and remove duplicates
+    company_list_new = pd.DataFrame(company_list_new, columns=cols)
+    company_list = pd.concat([company_list_now, company_list_new], ignore_index=True).drop_duplicates().reset_index(drop=True)
+    company_list = save_pkl(company_list, f'{b3.app_folder}company_list')
+
+    # Load the detailed company data from the local database
+    try:
+        company = load_pkl(f'{b3.app_folder}company')
+    except Exception as e:
+        company = pd.DataFrame(columns=cols)
+
+    # Determine which companies are new and need their detailed data scraped
+    new_companies = company_list[~company_list['COMPANHIA'].apply(clean_text).isin(company['COMPANHIA'])]
+
+    return new_companies, company
+
+def get_full_company_info(row, size, i, start_time, driver, wait):
+    # Define columns and constants
+    max_retries = 5
+    sleep_time = 0.1
+
+    full_company_info = {}
+
+    full_company_info['company_name'] = clean_text(row['COMPANHIA'])
+    full_company_info['trading_name'] = row['PREGAO']
+    full_company_info['trading_code'] = row['TICK']
+    full_company_info['listagem_values'] = row['LISTAGEM']
+
+    # 1 Searching for the company using its name
+    for attempt in range(max_retries):
+        try:
+            print(remaining_time(start_time, size, i), full_company_info['trading_name'])
+            search_box = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="keyword"]')))
+            search_box.clear()
+            search_box.send_keys(full_company_info['company_name'])
+
+            search_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button')))
+            search_button.click()
+            break
+        except Exception as e:
+            print('o' * (attempt + 1) + 'ps..')
+            time.sleep(sleep_time)
+
+    # 2 Selecting the company's card from the results
+    for attempt in range(max_retries):
+        try:
+            company_card_xpath = '//*[@id="nav-tabContent"]//div[contains(@class, "card h-100 clickable")]'
+            company_card = wait.until(EC.element_to_be_clickable((By.XPATH, company_card_xpath)))
+            company_card.click()
+            break
+        except Exception:
+            try:
+                # Try a more specific XPATH if specific one fails
+                company_card_xpath = f'''//*[@id="nav-bloco"]//div[contains(@class, "card h-100 clickable") and .//p[1][text()="{row['COMPANHIA']}"] and .//p[2][text()="{row['PREGAO']}"] and .//h5[text()="{row['TICK']}"]]'''
+                company_card = wait.until(EC.element_to_be_clickable((By.XPATH, company_card_xpath)))
+                company_card.click()
+                break
+            except Exception as e:
+                print('o' * (attempt + 1) + 'ps..')
+                time.sleep(sleep_time)
+
+    # 3 Extracting the CVM code from the company's URL
+    for attempt in range(max_retries):
+        try:
+            current_url = driver.current_url
+            full_company_info['url'] = current_url
+            cvm_code = current_url.split('/')[-3]
+            int(cvm_code)  # Validates if the code is numeric
+            full_company_info['cvm_code'] = cvm_code
+            break
+        except Exception:
+            full_company_info['url'] = ''
+            full_company_info['cvm_code'] = ''
+            
+            print('o' * (attempt + 1) + 'ps..')
+            time.sleep(sleep_time)
+
+    # 4 Extracting general company information
+    for attempt in range(max_retries):
+        try:
+            full_company_info['companhia'] = ''
+            full_company_info['cnpj'] = ''
+            full_company_info['atividade'] = ''
+            full_company_info['setor'] = 'Nenhum'
+            full_company_info['subsetor'] = 'Nenhum'
+            full_company_info['segmento'] = 'Nenhum'
+            full_company_info['site'] = ''
+            full_company_info['escriturador'] = ''
+            full_company_info['stock_holders'] = ''
+
+            elements = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//p[@class="card-linha"]')))
+            data = [element.text.strip() for element in elements]
+            full_company_info = extract_company_info(data, full_company_info)
+            break
+        except Exception as e:
+            print('o' * (attempt + 1) + 'ps..')
+            time.sleep(sleep_time)
+
+    # 5 Extracting tickers and ISIN codes
+    for attempt in range(max_retries):
+        try:
+            table_html = driver.find_element(By.XPATH, '//*[@id="accordionBody2"]/div/table').get_attribute('outerHTML')
+            table_df = pd.read_html(table_html, header=0)[0]
+            full_company_info['tickers'] = ', '.join(table_df.iloc[:, 0].tolist())
+            full_company_info['isins'] = ', '.join(table_df.iloc[:, 1].tolist())
+            break
+        except Exception:
+            full_company_info['tickers'], full_company_info['isins'] = None, None
+            time.sleep(sleep_time)
+
+    # 6 Extracting major stock_holders
+    for attempt in range(max_retries):
+        try:
+            table_html = driver.find_element(By.XPATH, '//*[@id="accordionBodyTwo"]/div/table').get_attribute('outerHTML')
+            tables = pd.read_html(table_html)
+            stock_holders = tables[0].copy().iloc[:-1, :]
+            stock_holders.iloc[:, 1:] = stock_holders.iloc[:, 1:] / 100
+            stock_holders['companhia0'] = full_company_info['company_name']
+            stock_holders['setor'] = full_company_info['setor']
+            stock_holders['subsetor'] = full_company_info['subsetor']
+            stock_holders['segmento'] = full_company_info['segmento']
+            full_company_info['stock_holders'] = stock_holders
+            break
+        except Exception:
+            stock_holders = pd.DataFrame()
+            full_company_info[''] = stock_holders
+            time.sleep(sleep_time)
+    return full_company_info
 
 def b3_grab(url):
     """
@@ -3671,214 +3901,55 @@ def b3_grab(url):
     4. The function makes use of multiple retries to handle timeouts and missing elements during the scraping process.
     """
 
-    # Initialize the list to store new companies' details
-    company_list_new = []
-
     # Define columns and constants
-    cols = ['COMPANHIA', 'PREGAO', 'TICK', 'LISTAGEM']
     max_retries = 5
     sleep_time = 0.1
 
     # Initialize the browser and load the URL
     driver, wait = load_browser()
-    driver.get(url)
+    # time.sleep(1)
 
-    try:
-        # Attempt to set the dropdown to display the maximum number of companies per page
-        for attempt in range(max_retries):
-            try:
-                # Select the last option in the dropdown (maximum display count)
-                dropdown = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="divContainerIframeB3"]/form/div[3]/div[1]/select')))
-                all_options = dropdown.find_elements(By.XPATH, './/option')
-                all_options[-1].click()
-
-                # Calculate the total number of pages required to display all companies
-                total_companies_element = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="divContainerIframeB3"]/form/div[1]/div/div/div[1]/p/span[1]')))
-                total_companies = int(total_companies_element.text.replace('.', '').strip())
-                total_pages = (total_companies // len(all_options)) + (1 if total_companies % len(all_options) > 0 else 0)
-                break
-            except Exception as e:
-                print('th' + 'i' * (attempt + 1) + 'nking...')
-                time.sleep(sleep_time)
-
-        # Loop through each page and scrape company details
-        start_time = time.time()
-        for _ in range(total_pages):
-            print(remaining_time(start_time, total_pages, _))
-
-            # Attempt to scrape company details from the current page
-            for attempt in range(max_retries):
-                try:
-                    # Extract company details and append to the list
-                    company_names = [elem.text.strip() for elem in wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/p[@class="card-title"]')))]
-                    trading_names = [elem.text.strip() for elem in wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/p[@class="card-text"]')))]
-                    trading_codes = [elem.text.strip() for elem in wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/h5[@class="card-title2"]')))]
-                    listagem_values = [elem.text.strip() for elem in wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="nav-bloco"]/div/div/div/div/p[3]')))]
-                    
-                    for i in range(len(company_names)):
-                        company_list_new.append({
-                            'COMPANHIA': company_names[i],
-                            'PREGAO': trading_names[i],
-                            'TICK': trading_codes[i],
-                            'LISTAGEM': listagem_values[i]
-                        })
-                    break
-                except Exception as e:
-                    print('th' + 'i' * (attempt + 1) + 'nking...')
-                    time.sleep(sleep_time)
-
-            # Move to the next page if not on the last page
-            if _ < total_pages - 1:
-                next_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a')))
-                next_button.click()
-
-    except Exception as e:
-        pass
-
-    # Load the current company list from the local database
-    try:
-        company_list_now = load_pkl(f'{b3.app_folder}company_list')
-    except Exception as e:
-        company_list_now = pd.DataFrame(columns=cols)
-
-    # Merge the newly scraped companies with the current list and remove duplicates
-    company_list_new = pd.DataFrame(company_list_new, columns=cols)
-    company_list = pd.concat([company_list_now, company_list_new], ignore_index=True).drop_duplicates().reset_index(drop=True)
-    company_list = save_pkl(company_list, f'{b3.app_folder}company_list')
-
-    # Load the detailed company data from the local database
-    try:
-        company_b3 = load_pkl(f'{b3.app_folder}company_b3')
-    except Exception as e:
-        company_b3 = pd.DataFrame(columns=cols)
-
-    # Determine which companies are new and need their detailed data scraped
-    new_companies = company_list[~company_list['COMPANHIA'].apply(clean_text).isin(company_b3['COMPANHIA'])]
+    new_companies, company = check_for_new_companies_in_b3()
 
     # If there are no new companies, return the current company details
     if len(new_companies) == 0:
-        return company_b3
+        return company
 
     # Scrape detailed data for each new company
     try:
         driver.get(b3.url)
-        start_time = time.time()
+        # time.sleep(1)
 
+        size = len(new_companies)
         # Iterate through the new companies to extract detailed information
+        start_time = time.time()
         for i, row in new_companies.iterrows():
-            company_name = clean_text(row['COMPANHIA'])
-            trading_name = row['PREGAO']
-            trading_code = row['TICK']
-            listagem_values = row['LISTAGEM']
-
-            # Searching for the company using its name
-            for attempt in range(max_retries):
-                try:
-                    print(remaining_time(start_time, len(new_companies), i), company_name)
-                    search_box = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="keyword"]')))
-                    search_box.clear()
-                    search_box.send_keys(company_name)
-
-                    search_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button')))
-                    search_button.click()
-                    break
-                except Exception as e:
-                    print('o' * (attempt + 1) + 'ps..')
-                    time.sleep(sleep_time)
-
-            # Selecting the company's card from the results
-            for attempt in range(max_retries):
-                try:
-                    company_card_xpath = f'''//*[@id="nav-bloco"]//div[contains(@class, "card h-100 clickable")
-                                            and .//p[1][text()="{row['COMPANHIA']}"]
-                                            and .//p[2][text()="{row['PREGAO']}"]
-                                            and .//h5[text()="{row['TICK']}"]]'''
-                    company_card = wait.until(EC.element_to_be_clickable((By.XPATH, company_card_xpath)))
-                    company_card.click()
-                    break
-                except Exception:
-                    # Try a more general XPATH if specific one fails
-                    company_card_xpath = '//*[@id="nav-tabContent"]//div[contains(@class, "card h-100 clickable")]'
-                    company_card = wait.until(EC.element_to_be_clickable((By.XPATH, company_card_xpath)))
-                    company_card.click()
-                    print('o' * (attempt + 1) + 'ps..')
-                    time.sleep(sleep_time)
-
-            # Extracting the CVM code from the company's URL
-            for attempt in range(max_retries):
-                try:
-                    current_url = driver.current_url
-                    cvm_code = current_url.split('/')[-3]
-                    int(cvm_code)  # Validates if the code is numeric
-                    break
-                except Exception:
-                    print('o' * (attempt + 1) + 'ps..')
-                    time.sleep(sleep_time)
-
-            # Extracting general company information
-            for attempt in range(max_retries):
-                try:
-                    elements = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//p[@class="card-linha"]')))
-                    company_info = [element.text.strip() for element in elements]
-                    company_info = extract_company_info(company_info)
-                    break
-                except NoSuchElementException:
-                    company_info = []
-                except Exception:
-                    print('o' * (attempt + 1) + 'ps..')
-                    time.sleep(sleep_time)
-
-            # Extracting tickers and ISIN codes
-            for attempt in range(max_retries):
-                try:
-                    table_html = driver.find_element(By.XPATH, '//*[@id="accordionBody2"]/div/table').get_attribute('outerHTML')
-                    table_df = pd.read_html(table_html, header=0)[0]
-                    tickers = ', '.join(table_df.iloc[:, 0].tolist())
-                    isins = ', '.join(table_df.iloc[:, 1].tolist())
-                    break
-                except Exception:
-                    tickers, isins = None, None
-                    time.sleep(sleep_time)
-
-            # Extracting major stock holders
-            for attempt in range(max_retries):
-                try:
-                    table_html = driver.find_element(By.XPATH, '//*[@id="accordionBodyTwo"]/div/table').get_attribute('outerHTML')
-                    tables = pd.read_html(table_html)
-                    table = tables[0].copy().iloc[:-1, :]
-                    table.iloc[:, 1:] = table.iloc[:, 1:] / 100
-                    table['COMPANHIA'] = company_name
-                    table['SETOR'] = company_info['SETOR']
-                    table['SUBSETOR'] = company_info['SUBSETOR']
-                    table['SEGMENTO'] = company_info['SEGMENTO']
-                    break
-                except Exception:
-                    table = pd.DataFrame()
-                    time.sleep(sleep_time)
+            full_company_info = get_full_company_info(row, size, i, start_time, driver, wait)
 
             # Update the dataframe with the extracted company details
-            company_b3.at[i, 'COMPANHIA'] = company_name
-            company_b3.at[i, 'PREGAO'] = trading_name
-            company_b3.at[i, 'TICK'] = trading_code
-            company_b3.at[i, 'LISTAGEM'] = listagem_values
-            company_b3.at[i, 'CVM'] = cvm_code
-            company_b3.at[i, 'TICKERS'] = tickers
-            company_b3.at[i, 'ISIN'] = isins
-            company_b3.at[i, 'CNPJ'] = company_info.get('CNPJ', None)
-            company_b3.at[i, 'ATIVIDADE'] = company_info.get('ATIVIDADE', None)
-            company_b3.at[i, 'SETOR'] = company_info.get('SETOR', None)
-            company_b3.at[i, 'SUBSETOR'] = company_info.get('SUBSETOR', None)
-            company_b3.at[i, 'SEGMENTO'] = company_info.get('SEGMENTO', None)
-            company_b3.at[i, 'SITE'] = company_info.get('SITE', None)
-            company_b3.at[i, 'ESCRITURADOR'] = company_info.get('ESCRITURADOR', None)
-            company_b3.at[i, 'ACIONISTAS'] = table
+            company.at[i, 'COMPANHIA'] = full_company_info['company_name']
+            company.at[i, 'PREGAO'] = full_company_info['trading_name']
+            company.at[i, 'TICK'] = full_company_info['trading_code']
+            company.at[i, 'LISTAGEM'] = full_company_info['listagem_values']
+            company.at[i, 'CVM'] = full_company_info['cvm_code']
+            company.at[i, 'TICKERS'] = full_company_info['tickers']
+            company.at[i, 'ISIN'] = full_company_info['isins']
+            company.at[i, 'CNPJ'] = full_company_info['cnpj']
+            company.at[i, 'ATIVIDADE'] = full_company_info['atividade']
+            company.at[i, 'SETOR'] = full_company_info['setor']
+            company.at[i, 'SUBSETOR'] = full_company_info['subsetor']
+            company.at[i, 'SEGMENTO'] = full_company_info['segmento']
+            company.at[i, 'SITE'] = full_company_info['site']
+            company.at[i, 'ESCRITURADOR'] = full_company_info['escriturador']
+            company.at[i, 'ACIONISTAS'] = full_company_info['stock_holders']
 
             # Return to the main B3 page to continue with the next company
             driver.get(b3.url)
+            # time.sleep(1)
 
             # Save the current progress intermittently
-            if (len(new_companies) - i + 1) % 50 == 0:
-                company_b3 = save_pkl(company_b3, f'{b3.app_folder}company_b3')
+            if (len(new_companies) - i - 1) % 50 == 0:
+                company = save_pkl(company, f'{b3.app_folder}company')
                 print('Partial save completed')
 
     # Handle any exceptions that might have occurred during scraping
@@ -3890,8 +3961,137 @@ def b3_grab(url):
         driver.quit()
 
     # Save the final scraped data
-    company_b3 = save_pkl(company_b3, f'{b3.app_folder}company_b3')
+    company = save_pkl(company, f'{b3.app_folder}company')
     print('Final save completed')
 
-    return company_b3
+    return company
 
+def get_setores(url):
+    # initialization
+        # Set the maximum number of retries and sleep time.
+        # Initialize an empty list, setorial.
+    max_retries = 5
+    sleep_time = 0.1
+    setorial = []
+
+    # Navigate to the specified URL
+        # Load the browser and navigate to the given URL.
+    driver, wait = load_browser()
+    driver.get(url)
+    # time.sleep(1)
+
+    # Locate the select element for sector dropdown
+        # Identify the dropdown for sectors using its XPath.
+        # Wait until the dropdown is available for interaction.
+    select_element_xpath = '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/div[1]/div/div/select'
+    dropdown = wait.until(EC.presence_of_element_located((By.XPATH, select_element_xpath)))
+    select = Select(dropdown)
+    
+    # Iterate through each option in the dropdown. For each option in the dropdown:
+        # Try to select it and fetch its corresponding rows.
+        # If an error occurs, refresh the page and retry.
+        # Append the fetched rows to the setorial list.
+    for idx, opt in enumerate(select.options):
+        # opt = opt.get_attribute('value')
+        for attempt in range(max_retries):
+            try:
+                # Re-fetch elements
+                time.sleep(sleep_time*20)
+                dropdown = wait.until(EC.presence_of_element_located((By.XPATH, select_element_xpath)))
+                select = Select(dropdown)
+                option = select.options[idx]
+                option_value = option.get_attribute("value")
+                select.select_by_value(option_value)
+                setor = clean_text(option_value)
+                # Extract table data for the selected option
+                table_xpath = '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/table'
+                rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, f"{table_xpath}/tbody/tr")))
+                data = get_segmentos(driver, wait, option_value)
+                setorial.append(data)
+                break
+            except Exception as e:
+                driver.refresh()  # Refresh the page
+                print('o' * (attempt + 1) + 'ps.. in the SETOR SELECTION', e)
+
+    setorial2 = pd.DataFrame(setorial)
+    
+    return setorial2
+
+def get_segmentos(driver, wait, option_value):
+    setorial = []
+    max_retries = 5
+    sleep_time = 0.1
+    # Store the current URL before processing any segment
+    current_url = driver.current_url
+
+    # Extract table data
+    table_xpath = '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/table'
+    rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, f"{table_xpath}/tbody/tr")))
+
+    for idx, _ in enumerate(rows):
+        # time.sleep(sleep_time*20)
+        # Re-locate rows each time to avoid stale element exceptions
+        rows_fresh = wait.until(EC.presence_of_all_elements_located((By.XPATH, f"{table_xpath}/tbody/tr")))
+        row = rows_fresh[idx]
+
+        setor = clean_text(option_value)
+        subsetor = row.find_element(By.XPATH, "td[1]").text
+        subsetor = clean_text(subsetor)
+
+        try:
+            segmentos = row.find_elements(By.XPATH, "td[2]/p/a")
+        except Exception as e:
+            segmentos = wait.until(EC.presence_of_all_elements_located((By.XPATH, "td[2]/p/a")))
+        
+        for seg_idx, _ in enumerate(segmentos):
+            # Re-fetch rows and segment links
+            time.sleep(sleep_time*20)
+            rows_fresh = wait.until(EC.presence_of_all_elements_located((By.XPATH, f"{table_xpath}/tbody/tr")))
+            row = rows_fresh[idx]
+            try:
+                segmentos_fresh = row.find_elements(By.XPATH, "td[2]/p/a")
+            except Exception as e:
+                segmentos_fresh = wait.until(EC.presence_of_all_elements_located((By.XPATH, "td[2]/p/a")))
+            item = segmentos_fresh[seg_idx]
+            segmento = clean_text(item.text)
+            item.click()
+
+            link = driver.current_url
+            companies = get_companies_from_b3_cards(driver, wait)
+
+            for company in companies:
+                company_row = [clean_text(setor), subsetor, segmento, link]
+                company_row.extend([company[key] for key in ['COMPANHIA', 'PREGAO', 'TICK', 'LISTAGEM']])
+                setorial.append(company_row)
+
+            print(f'{clean_text(setor)}: {subsetor}: {segmento}: {len(companies)}:')
+            print(f'{[company["TICK"] for company in companies]}')
+            for attempt in range(max_retries):
+                try:
+                    # Return to the original page
+                    driver.get(current_url)
+                    time.sleep(sleep_time*20)
+                    table_xpath = '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/table'
+                    rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, f"{table_xpath}/tbody/tr")))
+
+                    # Ensure the dropdown is still set to the current setor
+                    select_element_xpath = '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/div[1]/div/div/select'
+                    dropdown = wait.until(EC.presence_of_element_located((By.XPATH, select_element_xpath)))
+                    select = Select(dropdown)
+                    select.select_by_value(option_value)
+
+                    # Re-fetching the rows after navigating back to the page
+                    rows_fresh = wait.until(EC.presence_of_all_elements_located((By.XPATH, f"{table_xpath}/tbody/tr")))
+                    # time.sleep(2)
+                    break
+                except Exception as e:
+                    driver.refresh()  # Refresh the page
+                    print('o' * (attempt + 1) + 'ps..')
+                    time.sleep(sleep_time)
+                    
+    return setorial
+
+def get_full_setorial_data(url):
+    # Load browser
+    setorial = get_setores(url)
+    return setorial
