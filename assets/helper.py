@@ -575,23 +575,29 @@ def dre_pivot(value):
     return value
 
 def dre_cvm(value):
-    try:
-        company = run.load_pkl(f'{app_folder}company')
-    except Exception as e:
-        company = run.b3_grab(search_url)
-        company = run.save_pkl(company, f'{app_folder}company')
 
-    try:
-        math = run.load_pkl(f'{app_folder}math')
-    except Exception as e:
-        math = run.get_math()
-        math = run.save_pkl(math, f'{app_folder}math')
+    # math = run.get_math_from_b3_cvm()
 
-    try:
-        b3 = run.load_pkl(f'{app_folder}b3')
-    except Exception as e:
-        b3 = run.get_companies(math, company)
-        b3 = run.save_pkl(b3, f'{app_folder}b3')
+    # try: # just for spped
+    #     company = run.load_pkl(f'{app_folder}company')
+    # except Exception as e:
+    #     company = run.b3_grab(search_url)
+    #     company = run.save_pkl(company, f'{app_folder}company')
 
+    # try: # just for spped
+    #     print('loading...')
+    #     math = run.load_pkl(f'{app_folder}math')
+    # except Exception as e:
+    #     math = run.get_math_from_b3_cvm()
+    #     math = run.save_pkl(math, f'{app_folder}math')
+
+    # try:
+    #     b3_cvm = run.load_pkl(f'{app_folder}b3_cvm')
+    # except Exception as e:
+    #     b3_cvm = run.get_companies(math, company)
+    #     b3_cvm = run.save_pkl(b3_cvm, f'{app_folder}b3_cvm')
+
+    b3_cvm = run.load_pkl(f'{app_folder}b3_cvm')
+    super_b3 = run.prepare_b3_cvm(b3_cvm)
 
     return value

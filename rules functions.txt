@@ -1,0 +1,372 @@
+def apply_intel_rules(df, rules):
+    for (cd_target, ds_target), conditions in rules:
+        mask = pd.Series([True] * len(df))
+        
+        for condition, value in conditions:
+            # Conditions for the CD_CONTA column
+            if condition == "conta_exact":
+                # Exact match for CD_CONTA
+                mask &= df["CD_CONTA"] == value
+            elif condition == "conta_startswith":
+                # CD_CONTA starts with a specific value
+                mask &= df["CD_CONTA"].str.startswith(value)
+            elif condition == "conta_endswith":
+                # CD_CONTA ends with a specific value
+                mask &= df["CD_CONTA"].str.endswith(value)
+            elif condition == "conta_contains":
+                # CD_CONTA contains a specific value (case-insensitive)
+                mask &= df["CD_CONTA"].str.contains(value, case=False, na=False)
+            elif condition == "conta_contains_not":
+                # CD_CONTA does not contain a specific value (case-insensitive)
+                mask &= ~df["CD_CONTA"].str.contains(value, case=False, na=False)
+            elif condition == "conta_levelmin":
+                # Minimum number of levels in CD_CONTA (based on '.')
+                mask &= (df["CD_CONTA"].str.count('.') + 1 >= int(value))
+            elif condition == "conta_levelmax":
+                # Maximum number of levels in CD_CONTA (based on '.')
+                mask &= (df["CD_CONTA"].str.count('.') + 1 <= int(value))
+            elif condition == "conta_in_list":
+                # CD_CONTA is in a specified list of values
+                mask &= df["CD_CONTA"].isin(value)
+            elif condition == "conta_not_in_list":
+                # CD_CONTA is not in a specified list of values
+                mask &= ~df["CD_CONTA"].isin(value)
+            elif condition == "conta_regex":
+                # CD_CONTA matches a specified regular expression
+                mask &= df["CD_CONTA"].str.match(value)
+
+            # Conditions for the DS_CONTA column
+            if condition == "descricao_exact":
+                # Exact match for DS_CONTA
+                mask &= df["DS_CONTA"] == value
+            elif condition == "descricao_startswith":
+                # DS_CONTA starts with a specific value
+                mask &= df["DS_CONTA"].str.startswith(value)
+            elif condition == "descricao_endswith":
+                # DS_CONTA ends with a specific value
+                mask &= df["DS_CONTA"].str.endswith(value)
+            elif condition == "descricao_contains":
+                # DS_CONTA contains a specific value (case-insensitive)
+                mask &= df["DS_CONTA"].str.contains(value, case=False, na=False)
+            elif condition == "descricao_contains_not":
+                # DS_CONTA does not contain a specific value (case-insensitive)
+                mask &= ~df["DS_CONTA"].str.contains(value, case=False, na=False)
+            elif condition == "descricao_in_list":
+                # DS_CONTA is in a specified list of values
+                mask &= df["DS_CONTA"].isin(value)
+            elif condition == "descricao_not_in_list":
+                # DS_CONTA is not in a specified list of values
+                mask &= ~df["DS_CONTA"].isin(value)
+            elif condition == "descricao_regex":
+                # DS_CONTA matches a specified regular expression
+                mask &= df["DS_CONTA"].str.match(value)
+
+        # Apply the substitution using the created mask
+        df.loc[mask, "CD_CONTA"] = cd_target
+        df.loc[mask, "DS_CONTA"] = ds_target
+
+    return df
+
+def get_rules():
+    # imobilizado e intangível
+    kw60201 = ['investiment', 'mobiliár', 'derivativ', 'propriedad']
+    kw60202 = ['imob', 'intangív']
+    kw60203 = ['financeir']
+    kw60204 = ['coligad', 'controlad', 'ligad']
+    kw60205 = ['juro', 'jcp', 'jscp', 'dividend']
+    kw602 = list(set(kw60201 + kw60202 + kw60203 + kw60204 + kw60205))
+    # dividend juros jcp, jscp bonifica, 
+    kw60301 = ['capital']
+    kw60302 = ['ação', 'ações', 'acionist']
+    kw60303 = ['debentur', 'empréstim', 'financiam']
+    kw60304 = ['credor']
+    kw60305 = ['amortizaç', 'captaç']
+    kw60306 = ['dividend', 'juros', 'jcp', 'bonifica']
+    kw603 = list(set(kw60301 + kw60302 + kw60303 + kw60304 + kw60305 + kw60306))
+
+    rules = [
+        # Conditions for the CD_CONTA Column:
+        
+        # 1. Exact match for CD_CONTA
+
+        # 2. CD_CONTA starts with a specific value
+        # (['Nome do Novo DS_CONTA', [('conta_startswith', 'valor_inicial')]]),
+        
+        # 3. CD_CONTA ends with a specific value
+        # (['Nome do Novo DS_CONTA', [('conta_endswith', 'valor_final')]]),
+        
+        # 4. CD_CONTA contains a specific value (case-insensitive)
+        # (['Nome do Novo DS_CONTA', [('conta_contains', 'texto_a_procurar')]]),
+        
+        # 5. CD_CONTA does not contain a specific value (case-insensitive)
+        # (['Nome do Novo DS_CONTA', [('conta_contains_not', 'texto_a_evitar')]]),
+        
+        # 6. Minimum number of levels in CD_CONTA (based on '.')
+        # (['Nome do Novo DS_CONTA', [('conta_levelmin', 'min_levels')]]),
+        
+        # 7. Maximum number of levels in CD_CONTA (based on '.')
+        # (['Nome do Novo DS_CONTA', [('conta_levelmax', 'max_levels')]]),
+        
+        # 8. CD_CONTA is in a specified list of values
+        # (['Nome do Novo DS_CONTA', [('conta_in_list', ['valor1', 'valor2', 'valor3'])]]),
+        
+        # 9. CD_CONTA is not in a specified list of values
+        # (['Nome do Novo DS_CONTA', [('conta_not_in_list', ['valor1', 'valor2'])]]),
+        
+        # 10. CD_CONTA matches a specified regular expression
+        # (['Nome do Novo DS_CONTA', [('conta_regex', 'expressao_regular_aqui')]]),
+        
+        # Conditions for the DS_CONTA Column:
+        
+        # 1. Exact match for DS_CONTA
+        # (['Nome do Novo DS_CONTA', [('descricao_exact', 'valor_exato')]]),
+        
+        # 2. DS_CONTA starts with a specific value
+        # (['Nome do Novo DS_CONTA', [('descricao_startswith', 'valor_inicial')]]),
+        
+        # 3. DS_CONTA ends with a specific value
+        # (['Nome do Novo DS_CONTA', [('descricao_endswith', 'valor_final')]]),
+        
+        # 4. DS_CONTA contains a specific value (case-insensitive)
+        # (['Nome do Novo DS_CONTA', [('descricao_contains', 'texto_a_procurar')]]),
+        
+        # 5. DS_CONTA does not contain a specific value (case-insensitive)
+        # (['Nome do Novo DS_CONTA', [('descricao_contains_not', 'texto_a_evitar')]]),
+        
+        # 6. DS_CONTA is in a specified list of values
+        # (['Nome do Novo DS_CONTA', [('descricao_in_list', ['valor1', 'valor2', 'valor3'])]]),
+        
+        # 7. DS_CONTA is not in a specified list of values
+        # (['Nome do Novo DS_CONTA', [('descricao_not_in_list', ['valor1', 'valor2'])]]),
+        
+        # 8. DS_CONTA matches a specified regular expression
+        # (['Nome do Novo DS_CONTA', [('descricao_regex', 'expressao_regular_aqui')]]),
+
+
+
+        # Balanço Patrimonial Ativo
+		('01 - Ativo Total', [('conta_exact', '1')]),
+		('01.01 - Ativo Circulante de Curto Prazo', [('conta_exact', '1.01')]),
+		('01.01.01 - Caixa e Disponibilidades de Caixa', [('conta_exact', '1.01.01')]),
+		('01.01.02 - Aplicações Financeiras', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['aplica', 'depósito', 'reserv', 'saldo', 'centra', 'interfinanceir', 'crédit']), ('conta_contains_not', ['1.01.01', '1.01.02', '1.01.06'])]),
+		('01.01.03 - Contas a Receber', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['conta'])]),
+		('01.01.04 - Estoques', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['estoque'])]),
+		('01.01.05 - Ativos Biológicos', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['biológic'])]),
+		('01.01.06 - Tributos', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['tribut'])]),
+		('01.01.07 - Despesas', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['despes'])]),
+		('01.01.09 - Outros Ativos Circulantes', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'outr'), ('descricao_contains_not', ['aplica', 'depósito', 'reserv', 'saldo', 'centra', 'interfinanceir', 'crédit', 'conta', 'estoque', 'biológic', 'tribut', 'despes']), ('conta_contains_not', ['1.01.01', '1.01.02', '1.01.03', '1.01.04', '1.01.05', '1.01.06', '1.01.07'])]), 
+		('01.02 - Ativo Não Circulante de Longo Prazo', [('conta_exact', '1.02')]),
+		('01.02.01 - Ativos Financeiros', [('conta_startswith', '1.02.'), ('descricao_contains_not', ['investiment', 'imobilizad', 'intangív'])]),
+		('01.02.01.01 - Ativos Financeiros a Valor Justo', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'valor justo'), ('descricao_contains_not', 'custo amortizado')]),
+		('01.02.01.02 - Ativos Financeiros ao Custo Amortizado', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'custo amortizado'), ('descricao_contains_not', 'valor justo')]),
+		('01.02.01.03 - Contas a Receber', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'conta')]),
+		('01.02.01.04 - Estoques', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'estoque')]),
+		('01.02.01.05 - Ativos Biológicos', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'biológic')]),
+		('01.02.01.06 - Tributos', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'tribut')]),
+		('01.02.01.07 - Despesas', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'despes')]),
+		('01.02.01.09 - Outros Ativos Não Circulantes', [('conta_startswith', '1.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['valor justo', 'custo amortizado', 'conta', 'estoque', 'biológic', 'tribut', 'despes'])]), 
+		('01.02.02 - Investimentos Não Capex', [('conta_startswith', '1.02.'), ('descricao_contains', ['investiment'])]),
+		('01.02.02.01 - Propriedades - Investimentos Não Capex', [('conta_startswith', '1.02.'), ('conta_levelmin', 3), ('descricao_contains', ['propriedad'])]),
+		('01.02.02.02 - Arrendamentos - Investimentos Não Capex', [('conta_startswith', '1.02.'), ('conta_levelmin', 3), ('descricao_contains', ['arrendam']), ('descricao_contains_not', ['sotware', 'imobilizad', 'intangív', 'direit'])]),
+		('01.02.03 - Imobilizados', [('conta_startswith', '1.02.'), ('descricao_contains', ['imobilizad'])]),
+		('01.02.03.01 - Imobilizados em Operação', [('conta_startswith', '1.02.03.'), ('descricao_contains', ['operaç'])]),
+		('01.02.03.02 - Imobilizados em Arrendamento', [('conta_startswith', '1.02.03.'), ('descricao_contains', ['arrend'])]),
+		('01.02.03.03 - Imobilizados em Andamento', [('conta_startswith', '1.02.03.'), ('descricao_contains', ['andament'])]),
+		('01.02.04 - Intangível', [('conta_startswith', '1.02.'), ('descricao_contains', ['intangív'])]),
+        ('01.03 - Empréstimos', [('conta_startswith', '1.'), ('conta_levelmax', 2), ('descricao_contains', 'empréstimo')]),
+        ('01.04 - Tributos Diferidos', [('conta_startswith', '1.'), ('conta_levelmax', 2), ('descricao_contains', 'tributo')]),
+        ('01.05 - Investimentos', [('conta_startswith', '1.'), ('conta_levelmax', 2), ('descricao_contains', 'investimento')]),
+        ('01.05.01 - Participações em Coligadas', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'coligad')]),
+        ('01.05.02 - Participações em Controladas', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'controlad')]),
+        ('01.06 - Imobilizados', [('conta_startswith', '1.'), ('conta_levelmax', 2), ('descricao_contains', 'imobilizado')]),
+        ('01.06.01 - Propriedades - Investimentos Não Capex', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.02.']), ('descricao_contains', ['propriedad', 'imóve'])]),
+        ('01.06.02 - Arrendamento - Investimentos Não Capex', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.02.']), ('descricao_contains', 'arrendam')]),
+        ('01.06.03 - Tangíveis - Investimentos Não Capex', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.02.']), ('descricao_contains', ['arrendam', 'equipamento'])]),
+        ('01.07 - Intangíveis', [('conta_startswith', '1.'), ('conta_levelmax', 2), ('descricao_contains', 'intangíve')]),
+        ('01.07.01 - Intangíveis', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.02.']), ('descricao_contains', 'intangíve')]),
+        ('01.07.02 - Goodwill', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.02.']), ('descricao_contains', 'goodwill')]),
+        ('01.08 - Permanente', [('conta_startswith', '1.0'), ('conta_levelmax', 2), ('descricao_contains', 'permanente')]),
+        ('01.09.09 - Outros Ativos', [('conta_startswith', '1.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['1.01.', '1.02']), ('descricao_contains_not', ['depreciaç', 'amortizaç', 'empréstimo', 'tributo', 'investimento', 'imobilizado', 'intangíve', 'permanente', 'goodwill', 'arrendam', 'equipamento', 'propriedad', 'imóve', 'coligad', 'controlad'])]), 
+
+        # Balanço Patrimonial Passivo
+		('02 - Passivo Total', [('conta_exact', '2')]),
+		('02.01 - Passivo Circulante de Curto Prazo', [('conta_startswith', '2.'), ('conta_levelmin', 2), ('conta_levelmax', 2), ('descricao_contains', ['circulante', 'o resultado', 'amortizado', 'negociaç']), ('descricao_contains_not', ['não', 'patrimônio', 'fisca'])]),
+		('02.01.01 - Obrigações Sociais e Trabalhistas', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['obrigações sociais'])]),
+		('02.01.01.01 - Obrigações Sociais', [('conta_startswith', '2.01.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['socia'])]),
+		('02.01.01.02 - Obrigações Trabalhistas', [('conta_startswith', '2.01.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['trabalhista'])]),
+		('02.01.01.09 - Outras Obrigações', [('conta_startswith', '2.01.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['socia', 'trabalhista'])]),
+		('02.01.02 - Fornecedores', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['fornecedor'])]),
+		('02.01.02.01 - Fornecedores Nacionais', [('conta_startswith', ['2.01.01.', '2.01.02']), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['fornecedores nacionais'])]),
+		('02.01.02.02 - Fornecedores Estrangeiros', [('conta_startswith', ['2.01.01.', '2.01.02']), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['fornecedores estrangeiros'])]), 
+        ('02.01.03 - Obrigações Fiscais', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['obrigaç', 'fisca']), ('descricao_contains_not', 'socia')]),
+        ('02.01.03.01 - Obrigações Fiscais Federais', [('conta_startswith', '2.01.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['federa'])]),
+        ('02.01.03.02 - Obrigações Fiscais Estaduais', [('conta_startswith', '2.01.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['estadua'])]),
+        ('02.01.03.03 - Obrigações Fiscais Municipais', [('conta_startswith', '2.01.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'municipa')]),
+        ('02.01.03.09 - Outras Obrigações Fiscais', [('conta_startswith', '2.01.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['federa', 'estadua', 'municipa'])]),
+        ('02.01.04 - Empréstimos, Financiamentos e Debêntures', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['empréstimo', 'financiamento'])]),
+        ('02.01.04.01 - Empréstimos e Financiamentos', [('conta_startswith', '2.01.04'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['empréstimo', 'financiamento'])]),
+        ('02.01.04.01.01 - Empréstimos e Financiamentos em Moeda Nacional', [('conta_startswith', '2.01.04.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'naciona')]),
+        ('02.01.04.01.02 - Empréstimos e Financiamentos em Moeda Estrangeira', [('conta_startswith', '2.01.04.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'estrangeir')]),
+        ('02.01.04.02 - Debêntures', [('conta_startswith', '2.01.04'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'debentur')]),
+        ('02.01.04.03 - Arrendamentos', [('conta_startswith', '2.01.04'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'arrendament')]),
+        ('02.01.04.09 - Outros empréstimos, financiamentos e debêntures', [('conta_startswith', '2.01.04'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['empréstimo', 'financiamento', 'debentur', 'arrendament'])]),
+        ('02.01.05 - Outras Obrigações', [('conta_startswith', '2.01.05'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['outr', 'relaç'])]),
+        ('02.01.05.01 - Passivos com Partes Relacionadas', [('conta_startswith', '2.01.05'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['partes relacionadas'])]),
+        ('02.01.05.09 - Outros', [('conta_startswith', '2.01.05'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['partes relacionadas'])]), 
+		('02.01.06 - Provisões', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['provis'])]),
+		('02.01.06.01 - Provisões Específicas', [('conta_startswith', '2.01.06.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['provis'])]),
+		('02.01.06.01.01 - Provisões Fiscais', [('conta_startswith', '2.01.06.01.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['fisca'])]),
+		('02.01.06.01.02 - Provisões Trabalhistas e Previdenciárias', [('conta_startswith', '2.01.06.01.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['trabalhist'])]),
+		('02.01.06.01.03 - Provisões para Benefícios a Empregados', [('conta_startswith', '2.01.06.01.03'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['benefício'])]),
+		('02.01.06.01.04 - Provisões Judiciais Cíveis', [('conta_startswith', '2.01.06.01.04'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['cív'])]),
+		('02.01.06.01.05 - Outras Provisões Específicas', [('conta_startswith', '2.01.06.01.05'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['outr'])]),
+		('02.01.06.02 - Provisões Outras', [('conta_startswith', '2.01.06.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['provis'])]),
+		('02.01.06.02.01 - Provisões para Garantias', [('conta_startswith', '2.01.06.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['garantia'])]),
+		('02.01.06.02.02 - Provisões para Reestruturação', [('conta_startswith', '2.01.06.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['reestrutura'])]),
+		('02.01.06.02.03 - Provisões para Passivos Ambientais e de Desativação', [('conta_startswith', '2.01.06.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['ambient'])]), 
+        ('02.01.07 - Passivos sobre Ativos Não-Correntes a Venda e Descontinuados', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['Passivos sobre ativos'])]),
+        ('02.01.07.01 - Passivos sobre Ativos Não-Correntes a Venda', [('conta_startswith', '2.01.07.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['venda'])]),
+        ('02.01.07.02 - Passivos sobre Ativos de Operações Descontinuadas', [('conta_startswith', '2.01.07.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['descontinuad'])]),
+        ('02.01.09 - Outros Passivos', [('conta_startswith', '2.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains_not', ['obrigações sociais', 'fornecedor', 'obrigaç', 'fisca', 'empréstimo', 'financiamento', 'provis', 'Passivos sobre ativos'])]),
+        ('02.02 - Passivo Não Circulante de Longo Prazo', [('conta_startswith', '2.'), ('conta_levelmin', 2), ('conta_levelmax', 2), ('descricao_contains', ['longo prazo', 'não circulante', 'ngeociação', 'fisca', 'provis', 'exercício', 'outr', 'venda']), ('descricao_contains_not', ['patrimônio'])]),
+        ('02.02.01 - Empréstimos e Financiamentos de Longo Prazo', [('conta_startswith', '2.02'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['empréstim', 'financiament'])]),
+        ('02.02.01.01 - Empréstimos e Financiamentos', [('conta_startswith', '2.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['empréstim', 'financiament'])]),
+        ('02.02.01.01.01 - Empréstimos e Financiamentos em Moeda Nacional', [('conta_startswith', '2.02.01.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['naciona'])]),
+        ('02.02.01.01.02 - Empréstimos e Financiamentos em Moeda Estrangeira', [('conta_startswith', '2.02.01.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['estrangeir'])]),
+        ('02.02.01.02 - Debêntures', [('conta_startswith', '2.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['debentur'])]),
+        ('02.02.01.03 - Arrendamentos', [('conta_startswith', '2.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['arrendament'])]),
+        ('02.02.02.09 - Outros empréstimos, financiamentos e debêntures', [('conta_startswith', '2.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['empréstimo', 'financiamento', 'debentur', 'arrendament'])]),
+        ('02.02.02 - Outras Obrigações', [('conta_startswith', '2.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['obriga'])]),
+        ('02.02.02.01 - Com Partes Relacionadas', [('conta_startswith', '2.02.02.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['relacionad'])]),
+        ('02.02.02.02 - Outras Obrigações', [('conta_startswith', '2.02.02.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['outr'])]),
+		('02.02.03 - Tributos Diferidos', [('conta_startswith', '2.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'tributo')]),
+		('02.02.03.01 - Imposto de Renda e Contribuição Social', [('conta_startswith', '2.02.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['imposto de renda', 'contribuição social'])]),
+		('02.02.03.02 - Outros tributos diferidos', [('conta_startswith', '2.02.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains_not', ['imposto de renda', 'contribuição social'])]),
+		('02.02.04 - Provisões', [('conta_startswith', '2.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'provis')]),
+		('02.02.04.01 - Provisões Específicas', [('conta_startswith', '2.02.04.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'provis')]),
+		('02.02.04.01.01 - Provisões Fiscais', [('conta_startswith', '2.02.04.01.01'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'fisca')]),
+		('02.02.04.01.02 - Provisões Trabalhistas e Previdenciárias', [('conta_startswith', '2.02.04.01.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'trabalhist')]),
+		('02.02.04.01.03 - Provisões para Benefícios a Empregados', [('conta_startswith', '2.02.04.01.03'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'benefício')]),
+		('02.02.04.01.04 - Provisões Judiciais Cíveis', [('conta_startswith', '2.02.04.01.04'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'cív')]),
+		('02.02.04.02 - Outras Provisões', [('conta_startswith', '2.02.04.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'provis')]),
+		('02.02.04.02.01 - Provisões para Garantias', [('conta_startswith', '2.02.04.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'garantia')]),
+		('02.02.04.02.02 - Provisões para Reestruturação', [('conta_startswith', '2.02.04.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', 'reestrutura')]),
+		('02.02.04.02.03 - Provisões para Passivos Ambientais e de Desativação', [('conta_startswith', '2.02.04.02'), ('conta_levelmin', 5), ('conta_levelmax', 5), ('descricao_contains', ['ambient'])]), 
+		('02.02.05 - Passivos sobre Ativos Não-Correntes a Venda e Descontinuados', [('conta_startswith', '2.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['Passivos sobre ativos'])]),
+		('02.02.05.01 - Passivos sobre Ativos Não-Correntes a Venda', [('conta_startswith', '2.02.05.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['venda'])]),
+		('02.02.05.02 - Passivos sobre Ativos de Operações Descontinuadas', [('conta_startswith', '2.02.05.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['descontinuad'])]),
+		('02.02.06 - Lucros e Receitas a Apropriar', [('conta_startswith', '2.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['lucros e receitas'])]),
+		('02.02.06.01 - Lucros a Apropriar', [('conta_startswith', '2.02.06.01'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['lucr'])]),
+		('02.02.06.02 - Receitas a Apropriar', [('conta_startswith', '2.02.06.02'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['receit'])]),
+		('02.02.06.03 - Subvenções de Investimento a Apropriar', [('conta_startswith', '2.02.06.03'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['subvenç'])]),
+		('02.02.09 - Outros Passivos', [('conta_startswith', ['2.02.07', '2.02.08', '2.02.09']), ('conta_levelmin', 3), ('conta_levelmax', 3)]),
+		('02.03 - Patrimônio Líquido', [('conta_startswith', '2.'), ('conta_levelmin', 2), ('conta_levelmax', 2), ('descricao_contains', 'patrimônio')]),
+		('02.03.01 - Capital Social', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['capital social'])]),
+		('02.03.02 - Reservas de Capital', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['reservas de capital'])]),
+		('02.03.03 - Reservas de Reavaliação', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['reservas de reavaliaç'])]),
+		('02.03.04 - Reservas de Lucros', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['reservas de lucro'])]),
+		('02.03.05 - Lucros ou Prejuízos Acumulados', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['lucro', 'prejuízo', 'acumulad']), ('descricao_contains_not', 'reserva')]),
+		('02.03.06 - Ajustes de Avaliação Patrimonial', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['avaliação patrimonial'])]),
+		('02.03.07 - Ajustes Acumulados de Conversão', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['ajustes acumulados'])]),
+		('02.03.08 - Outros Resultados Abrangentes', [('conta_startswith', '2.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith_not', ['2.01', '2.02']), ('descricao_contains', ['resultados abrangentes'])]),
+		('02.04 - Outros Passivos ou Provissões', [('conta_startswith', ['2.04', '2.05', '2.06', '2.07', '2.08', '2.09']), ('conta_levelmin', 2), ('conta_levelmax', 2), ('descricao_contains_not', 'patrimonio')]), 
+
+        # Demonstração do Resultado
+        ('03.01 - Receita Bruta', [('conta_exact', '3.01')]),
+        ('03.02 - Custo de Produção', [('conta_exact', '3.02')]),
+        ('03.03 - Resultado Bruto (Receita Líquida)', [('conta_exact', '3.03')]),
+        ('03.04 - Despesas Operacionais', [('conta_exact', '3.04')]),
+        ('03.04.01 - Despesas com Vendas', [('conta_exact', '3.04.01')]),
+        ('03.04.02 - Despesas Gerais e Administrativas', [('conta_exact', '3.04.02')]),
+        ('03.04.09 - Outras despesas, receitas ou equivalências', [('conta_levelmin', 3), ('conta_levelmax', 3), ('conta_startswith', ['3.04.']), ('conta_startswith_not', ['3.04.01', '3.04.02'])]),
+        ('03.05 - LAJIR EBIT Resultado Antes do Resultado Financeiro e dos Tributos', [('conta_exact', '3.05')]),
+        ('03.06 - Resultado Financeiro (Não Operacional)', [('conta_exact', '3.06')]),
+        ('03.07 - Resultado Antes dos Tributos sobre o Lucro', [('conta_exact', '3.07')]),
+        ('03.08 - Impostos IRPJ e CSLL', [('conta_exact', '3.08')]),
+        ('03.09 - Resultado Líquido das Operações Continuadas', [('conta_exact', '3.09')]),
+        ('03.10 - Resultado Líquido das Operações Descontinuadas', [('conta_exact', '3.10')]),
+        ('03.11 - Lucro Líquido', [('conta_exact', '3.11')]),
+
+        # Demonstração de Fluxo de Caixa
+		('06.01 - Caixa das Operações', [('conta_exact', '6.01')]),
+		('06.01.01 - Caixa das Operações', [('conta_startswith', '6.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['operac']), ('descricao_contains_not', ['ativ', 'print(e)iv', 'despes', 'ingress', 'pagament', 'receb', 'arrendament', 'aquisic'])]),
+		('06.01.02 - Variações de Ativos e Passivos', [('conta_startswith', '6.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['ativ']), ('descricao_contains_not', ['operac', 'imob', 'intangív', 'adiantament', 'provis', 'permanent', 'despes', 'pagament', 'recebiment', 'caixa', 'derivativ', 'judicia'])]),
+		('06.01.09 - Outros Caixas Operacionais', [('conta_startswith', '6.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains_not', ['ativ', 'operac'])]),
+		('06.02 - Caixa de Investimentos CAPEX', [('conta_exact', '6.02')]),
+		('06.02.01 - Investimentos', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60201), ('descricao_contains_not', list_subtract(kw602, kw60201))]),
+		('06.02.02 - Imobilizado e Intangível', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60202), ('descricao_contains_not', list_subtract(kw602, kw60202))]),
+		('06.02.03 - Aplicações Financeiras', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60203), ('descricao_contains_not', list_subtract(kw602, kw60203))]),
+		('06.02.04 - Coligadas e Controladas', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60204), ('descricao_contains_not', list_subtract(kw602, kw60204))]),
+		('06.02.05 - Juros sobre Capital Próprio e Dividendos', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60205), ('descricao_contains_not', list_subtract(kw602, kw60205))]),
+		('06.02.09 - Outros Caixas de Investimento', [('conta_startswith', '6.02.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains_not', kw602)]),
+		('06.03 - Caixa de Financiamento', [('conta_exact', '6.03')]),
+		('06.03.01 - Capital', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60301), ('descricao_contains_not', list_subtract(kw603, kw60301))]),
+		('06.03.02 - Ações e Acionistas', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60302), ('descricao_contains_not', list_subtract(kw603, kw60302))]),
+		('06.03.03 - Debêntures, empréstimos e financiamentos', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60303), ('descricao_contains_not', list_subtract(kw603, kw60303))]),
+		('06.03.04 - Credores', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60304), ('descricao_contains_not', list_subtract(kw603, kw60304))]),
+		('06.03.05 - Captações e Amortizações', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60305), ('descricao_contains_not', list_subtract(kw603, kw60305))]),
+		('06.03.06 - Juros JCP e Dividendos', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', kw60306), ('descricao_contains_not', list_subtract(kw603, kw60306))]),
+		('06.03.09 - Outros Caixas de Financiamento', [('conta_startswith', '6.03.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains_not', kw603)]),
+		('06.04 - Caixa da Variação Cambial', [('conta_exact', '6.04')]),
+		('06.05 - Variação do Caixa', [('conta_exact', '6.05')]),
+		('06.05.01 - Saldo Inicial do Caixa ', [('conta_exact', '6.05.01')]),
+		('06.05.02 - Saldo Final do Caixa', [('conta_exact', '6.05.02')]),
+
+        # Demonstração de Valor Adiconado
+        ('07.01 - Receitas', [('conta_startswith', '7.'), ('descricao_contains', ['receita']), ('descricao_contains_not', 'líquid')]),
+        ('07.01.01 - Vendas', [('conta_exact', '7.01.01')]),
+        ('07.01.02 - Outras Receitas', [('conta_exact', '7.01.02')]),
+        ('07.01.03 - Ativos Próprios', [('conta_exact', '7.01.03')]),
+        ('07.01.04 - Reversão de Créditos Podres', [('conta_exact', '7.01.04')]),
+        ('07.02 - Custos dos Insumos', [('conta_startswith', '7.'), ('descricao_contains', ['insumos adquiridos', 'intermediação financeira', 'provis'])]),
+        ('07.02.01 - Custo de Mercadorias', [('conta_exact', '7.02.01')]),
+        ('07.02.02 - Custo de Materiais, Energia e Terceiros', [('conta_exact', '7.02.02')]),
+        ('07.02.03 - Valores Ativos', [('conta_exact', '7.02.03')]),
+        ('07.02.04 - Outros', [('conta_exact', '7.02.04')]),
+        ('07.03 - Valor Adicionado Bruto', [('conta_startswith', '7.'), ('descricao_contains', ['valor adicionado bruto'])]),
+        ('07.04 - Retenções', [('conta_startswith', '7.'), ('descricao_contains', ['retenç', 'Benefíci', 'sinistr'])]),
+        ('07.04.01 - Depreciação e Amortização', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['deprecia', 'amortiza', 'exaust'])]),
+        ('07.04.02 - Outras retenções', [('conta_exact', '7.04.02')]),
+        ('07.05 - Valor Adicionado Líquido', [('conta_startswith', '7.'), ('descricao_contains', ['valor adicionado líquid', 'receita operacional']), ('conta_startswith_not', '7.01'), ('descricao_contains_not', 'transferência')]),
+        ('07.06 - Valor Adicionado em Transferência', [('conta_startswith', '7.'), ('descricao_contains', ['transferência'])]),
+        ('07.06.01 - Resultado de Equivalência Patrimonial', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['equivalencia patrimonial'])]),
+        ('07.06.02 - Receitas Financeiras', [('conta_exact', '7.06.02')]),
+        ('07.06.03 - Outros', [('conta_exact', '7.06.03')]),
+        ('07.07 - Valor Adicionado Total a Distribuir', [('conta_startswith', '7.'), ('descricao_contains', ['total a distribuir'])]), 
+        ('07.08 - Distribuição do Valor Adicionado', [('conta_startswith', '7.'), ('descricao_contains', 'Distribuição do Valor Adicionado')]),
+        ('07.08.01 - Pessoal', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', 'pessoal')]),
+        ('07.08.01.01 - Remuneração Direta', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'remuneração direta')]),
+        ('07.08.01.02 - Benefícios', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'benefícios')]),
+        ('07.08.01.03 - FGTS', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['F.G.T.S.', 'fgts'])]),
+        ('07.08.01.04 - Outros', [('conta_exact', '7.08.01.04')]),
+        ('07.08.02 - Impostos, Taxas e Contribuições', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['imposto', 'taxa', 'contribuiç'])]),
+        ('07.08.02.01 - Federais', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'federa')]),
+        ('07.08.02.02 - Estaduais', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'estadua')]),
+        ('07.08.02.03 - Municipais', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'municipa')]),
+        ('07.08.03 - Remuneração de Capital de Terceiros', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['remuneraç', 'capital', 'terceir']), ('descricao_contains_not', 'própri')]),
+        ('07.08.03.01 - Juros Pagos', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['juro']), ('descricao_contains_not', 'propri')]),
+        ('07.08.03.02 - Aluguéis', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', 'alugue')]),
+        ('07.08.04 - Remuneração de Capital Próprio', [('conta_startswith', '7.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['remuneraç', 'capital', 'própri']), ('descricao_contains_not', 'terceir')]),
+        ('07.08.04.01 - Juros sobre o Capital Próprio', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['juros sobre', 'jcp'])]),
+        ('07.08.04.02 - Dividendos', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['dividend'])]),
+        ('07.08.04.03 - Lucros Retidos', [('conta_startswith', '7.'), ('conta_levelmin', 4), ('conta_levelmax', 4), ('descricao_contains', ['lucros retidos'])]),
+        ('07.08.05 - Outros', [('conta_exact', '7.08.05')])
+
+    ]
+
+    return rules
+
+def choose_agrupamento(group):
+    if 'con' in group['AGRUPAMENTO'].values:
+        return group[group['AGRUPAMENTO'] == 'con']
+    else:
+        return group[group['AGRUPAMENTO'] == 'ind']
+
+def prepare_b3_cvm(b3_cvm):
+
+
+    for key, df in b3_cvm.items():
+        # Apply the function to each group
+        df = df.groupby('CD_CVM', group_keys=False).apply(choose_agrupamento).reset_index(drop=True)
+        df = df.apply_intel_rules(df, rules)
+    return b3_cvm
