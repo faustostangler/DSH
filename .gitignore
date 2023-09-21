@@ -8,3 +8,6 @@ temporary_task.py
 *.7z
 *.pkl
 *.csv
+*.xlsx
+*.xls
+*.pdf

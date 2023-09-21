@@ -46,7 +46,7 @@ h11==0.14.0
 h5py==3.9.0
 html5lib==1.1
 idna==3.4
-ipykernel==6.21.3
+ipykernel==6.25.2
 ipython==8.11.0
 itsdangerous==2.1.2
 jedi==0.18.2

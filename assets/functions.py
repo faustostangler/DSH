@@ -475,12 +475,13 @@ def read_or_create_dataframe(filename, cols):
     # Construct the full path to the file using the varsys data_path.
     filepath = os.path.join(b3.data_path, f'{filename}.zip')
     try:
-      df = download_from_gcs(filename)
+      df = download_from_gcs(filename+'errorgoogle')
+      df = save_and_pickle(df, filename)
       pass
     except Exception as e:
       try:
         df = pd.read_pickle(filepath)  # Try to read the file as a pickle.
-        # df = upload_to_gcs(df, filename)
+        df = upload_to_gcs(df, filename)
       except Exception as e:
         # print(f'Error occurred while reading file {filename}: {e}')
         df = pd.DataFrame(columns=cols)
@@ -490,14 +491,16 @@ def read_or_create_dataframe(filename, cols):
     print(f'{filename}: total {len(df)} items')
     return df[cols]
 
-def save_and_pickle(df, df_name):
-  df.to_pickle(b3.data_path + f'{df_name}.zip')
-  df = upload_to_gcs(df, df_name)
-
+def save_and_pickle(df, filename):
+  try:
+      df.to_pickle(b3.data_path + f'{filename}.zip')
+      df = upload_to_gcs(df, filename)
+  except Exception as e:
+      pass
   return df
 
 # nsd_functions
-def nsd_range(nsd, safety_factor):
+def nsd_range(nsd, safety_factor=1.8):
   # start
   try:
     start = int(max(nsd['nsd'])) + 1
@@ -527,9 +530,11 @@ def nsd_range(nsd, safety_factor):
   start = start
   end = start + expected_nsd 
 
+  print(f'from {start} to {end}')
+
   return start-1, end
 
-def nsd_dates(nsd, safety_factor):
+def nsd_dates(nsd, safety_factor=1.8):
   # find the gap in days from today to max 'envio' date
   last_date = nsd['envio'].max().date()
   today = datetime.datetime.now().date()
@@ -552,8 +557,8 @@ def nsd_dates(nsd, safety_factor):
 
   return last_date, limit_date, max_gap
 
-def get_nsd(n):
-  nsd_url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={n}&CodigoTipoInstituicao=1'
+def get_nsd(nsd):
+  nsd_url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={nsd}&CodigoTipoInstituicao=1'
   # Getting the HTML content from the URL
   response = requests.get(nsd_url)
   html_content = response.text
@@ -612,9 +617,9 @@ def get_nsd(n):
   url = nsd_url
 
   # company
-  row = [company, dri, dri2, dre, data, versao, auditor, auditor_rt, cancelamento, protocolo, envio, url, n]
+  data = [company, dri, dri2, dre, data, versao, auditor, auditor_rt, cancelamento, protocolo, envio, url, nsd]
 
-  return row
+  return data
 
 def clean_nsd(nsd):
   nsd.reset_index(drop=True, inplace=True)
@@ -649,6 +654,119 @@ def clean_nsd(nsd):
   nsd.sort_values(by=['company', 'data', 'versao'], ascending=[True, True, True], inplace=True)
 
   return nsd
+
+def get_nsd_content():
+    safety_factor = 1.8
+
+    gap = 0
+
+    filename = 'nsd_links'
+    cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
+
+    nsd = read_or_create_dataframe(filename, cols_nsd)
+    nsd['envio'] = pd.to_datetime(nsd['envio'], dayfirst=True)
+
+    start, end = nsd_range(nsd, safety_factor)
+
+    start_time = time.time()
+    for i, n in enumerate(range(start, end)):
+        progress = remaining_time(start_time, end-start, i)
+
+        # interrupt conditions
+        last_date, limit_date, max_gap = nsd_dates(nsd, safety_factor)
+        if last_date > limit_date:
+            if gap == max_gap:
+                break
+
+        try:
+            # add nsd row to dataframe
+            row = get_nsd(n)
+            nsd = pd.concat([nsd, pd.DataFrame([row], columns=cols_nsd)])
+            print(n, progress, row[10], row[4], row[3], row[0])
+            # reset gap
+            gap = 0
+        except Exception as e:
+            # increase gap count
+            gap += 1
+            print(n, progress)
+
+        # if n % b3.bin_size == 0:
+        if (end-start - i - 1) % 50 == 0:
+            nsd = save_and_pickle(nsd, filename)
+            print('partial save')
+
+    nsd = save_and_pickle(nsd, filename)
+    print('final save')
+
+    return nsd
+
+def get_acoes(driver, wait, url):
+    try:
+        select_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='cmbGrupo']")))
+
+        # Once the element is clickable, create a Select object and select the option
+        select = Select(select_element)
+        select.select_by_visible_text("Dados da Empresa")
+
+        iframe_element = driver.find_element(By.ID, "iFrameFormulariosFilho")
+        driver.switch_to.frame(iframe_element)
+        table = driver.find_element(By.XPATH, "//*[@id='UltimaTabela']/table")
+
+        # Read the table data into a Pandas DataFrame
+        dados = pd.read_html(table.get_attribute('outerHTML'))[0]
+        driver.switch_to.default_content()
+
+        on = pd.to_numeric(dados.iloc[2, 1].replace('.', '').replace(',', ''))
+        pn = pd.to_numeric(dados.iloc[3, 1].replace('.', '').replace(',', ''))
+        on_tes = pd.to_numeric(dados.iloc[6, 1].replace('.', '').replace(',', ''))
+        pn_tes = pd.to_numeric(dados.iloc[7, 1].replace('.', '').replace(',', ''))
+
+        acoes = [on, pn, on_tes, pn_tes, url]
+    except Exception as e:
+        acoes = [0, 0, 0, 0, url]
+        pass
+
+    return acoes
+
+def get_composicao_acionaria():
+    driver, wait = load_browser()
+    filename = 'nsd_links'
+    cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
+    nsd = read_or_create_dataframe(filename, cols_nsd)
+    selected_dre = ['INFORMACOES TRIMESTRAIS', 'DEMONSTRACOES FINANCEIRAS PADRONIZADAS']
+    filtered_nsd = nsd[nsd['dre'].isin(selected_dre)]
+
+    filename = 'acoes'
+    columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
+    acoes = read_or_create_dataframe(filename, columns)
+
+    last = 0
+    if len(acoes) > 0:
+        last = acoes.index[-1]
+
+    start_time = time.time()
+    for j, (i, row) in enumerate(filtered_nsd.iterrows()):
+        if j < last:
+            continue
+        
+        company = row['company']
+        data = row['data']
+        url = row['url']
+        print(remaining_time(start_time, len(filtered_nsd), j), company, data)
+    
+        driver.get(url)
+        data = [company, data] + get_acoes(driver, wait, url)
+        acoes = pd.concat([acoes, pd.DataFrame([data], columns=columns)], ignore_index=True)
+    
+        if (len(filtered_nsd) - j - 1) % 50 == 0:
+            acoes = save_and_pickle(acoes, filename)
+            print('partial save')
+
+    acoes = acoes.drop_duplicates()
+    acoes = save_and_pickle(acoes, filename)
+    print('final save')
+
+    return acoes
 
 # dre
 def clean_dre(dre):
@@ -4189,7 +4307,8 @@ def apply_intel_rules(df, rules):
     try:
         start_time = time.time()
         for r, (target, conditions) in enumerate(rules):
-            print(remaining_time(start_time, len(rules), r), target)
+            if target == '01.01.02 - Aplicações Financeiras':
+                pass
             cd_target, ds_target = target.split(' - ', 1)
 
             mask = pd.Series([True] * len(df))
@@ -4202,62 +4321,66 @@ def apply_intel_rules(df, rules):
                     if type(value) is tuple:
                         value = list(value)
                     if type(value) is list:
-                        # value = [clean_text(word) for word in value]
-                        value = '|'.join(value)
+                        value = [word.lower() for word in value]
+                        value = '|'.join(value) # to string
 
                 # Conditions for the CD_CONTA column
                 if condition == "conta_exact":
-                    mask &= df["CD_CONTA"] == value
+                    mask &= df["CD_CONTA"].str.lower() == value
                 if condition == "conta_startswith":
-                    mask &= df["CD_CONTA"].str.startswith(value)
+                    mask &= df["CD_CONTA"].str.lower().str.startswith(value, na=False)
                 if condition == "conta_startswith_not":
-                    mask &= ~df["CD_CONTA"].str.startswith(value)
+                    mask &= ~df["CD_CONTA"].str.lower().str.startswith(value, na=False)
                 if condition == "conta_endswith":
-                    mask &= df["CD_CONTA"].str.endswith(value)
+                    mask &= df["CD_CONTA"].str.lower().str.endswith(value, na=False)
                 if condition == "conta_endswith_not":
-                    mask &= ~df["CD_CONTA"].str.endswith(value)
+                    mask &= ~df["CD_CONTA"].str.lower().str.endswith(value, na=False)
                 if condition == "conta_contains":
-                    mask &= df["CD_CONTA"].str.contains(value, case=False, na=False)
+                    mask &= df["CD_CONTA"].str.lower().str.contains(value, case=False, na=False)
                 if condition == "conta_contains_not":
-                    mask &= ~df["CD_CONTA"].str.contains(value, case=False, na=False)
+                    mask &= ~df["CD_CONTA"].str.lower().str.contains(value, case=False, na=False)
                 if condition == "conta_levelmin":
-                    mask &= (df["CD_CONTA"].str.count('.') + 1 >= int(value))
+                    mask &= (df["CD_CONTA"].str.count('\.') + 1 >= int(value))
                 if condition == "conta_levelmax":
-                    mask &= (df["CD_CONTA"].str.count('.') + 1 <= int(value))
+                    mask &= (df["CD_CONTA"].str.count('\.') + 1 <= int(value))
                 if condition == "conta_in_list":
-                    mask &= df["CD_CONTA"].isin(value)
+                    mask &= df["CD_CONTA"].isin(value, na=False)
                 if condition == "conta_not_in_list":
-                    mask &= ~df["CD_CONTA"].isin(value)
+                    mask &= ~df["CD_CONTA"].isin(value, na=False)
                 if condition == "conta_regex":
-                    mask &= df["CD_CONTA"].str.match(value)
+                    mask &= df["CD_CONTA"].str.lower().str.match(value, na=False)
 
                 # Conditions for the DS_CONTA column
                 if condition == "descricao_exact":
-                    mask &= df["DS_CONTA"] == value
+                    mask &= df["DS_CONTA"].str.lower() == value
                 if condition == "descricao_startswith":
-                    mask &= df["DS_CONTA"].str.startswith(value)
+                    mask &= df["DS_CONTA"].str.lower().str.startswith(value, na=False)
                 if condition == "descricao_startswith_not":
-                    mask &= ~df["DS_CONTA"].str.startswith(value)
+                    mask &= ~df["DS_CONTA"].str.lower().str.startswith(value, na=False)
                 if condition == "descricao_endswith":
-                    mask &= df["DS_CONTA"].str.endswith(value)
+                    mask &= df["DS_CONTA"].str.lower().str.endswith(value, na=False)
                 if condition == "descricao_endswith_not":
-                    mask &= ~df["DS_CONTA"].str.endswith(value)
+                    mask &= ~df["DS_CONTA"].str.lower().str.endswith(value, na=False)
                 if condition == "descricao_contains":
-                    mask &= df["DS_CONTA"].str.contains(value, case=False, na=False)
+                    mask &= df["DS_CONTA"].str.lower().str.contains(value, case=False, na=False)
                 if condition == "descricao_contains_not":
-                    mask &= ~df["DS_CONTA"].str.contains(value, case=False, na=False)
+                    mask &= ~df["DS_CONTA"].str.lower().str.contains(value, case=False, na=False)
                 if condition == "descricao_in_list":
-                    mask &= df["DS_CONTA"].isin(value)
+                    mask &= df["DS_CONTA"].isin(value, na=False)
                 if condition == "descricao_not_in_list":
-                    mask &= ~df["DS_CONTA"].isin(value)
+                    mask &= ~df["DS_CONTA"].isin(value, na=False)
                 if condition == "descricao_regex":
-                    mask &= df["DS_CONTA"].str.match(value)
+                    mask &= df["DS_CONTA"].str.lower().str.match(value, na=False)
 
             # Append rows that match the conditions to df_new
             matching_rows = df[mask].copy()
             matching_rows["CD_CONTA"] = cd_target
             matching_rows["DS_CONTA"] = ds_target
             df_new = pd.concat([df_new, matching_rows])
+            # print(f"Total rows matched for {target}: {len(matching_rows)}")
+            print(remaining_time(start_time, len(rules), r), target, 'matching rows', len(matching_rows))
+            if len(matching_rows) < 1:
+                pass
 
     except Exception as e:
         pass
@@ -4344,7 +4467,7 @@ def get_rules():
 		('01 - Ativo Total', [('conta_exact', '1')]),
 		('01.01 - Ativo Circulante de Curto Prazo', [('conta_exact', '1.01')]),
 		('01.01.01 - Caixa e Disponibilidades de Caixa', [('conta_exact', '1.01.01')]),
-		('01.01.02 - Aplicações Financeiras', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['aplica', 'depósito', 'reserv', 'saldo', 'centra', 'interfinanceir', 'crédit']), ('conta_contains_not', ['1.01.01', '1.01.02', '1.01.06'])]),
+		('01.01.02 - Aplicações Financeiras', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['aplica', 'depósito', 'reserv', 'saldo', 'centra', 'interfinanceir', 'crédit']), ('conta_contains_not', ['1.01.01', '1.01.06'])]),
 		('01.01.03 - Contas a Receber', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['conta'])]),
 		('01.01.04 - Estoques', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['estoque'])]),
 		('01.01.05 - Ativos Biológicos', [('conta_startswith', '1.01.'), ('conta_levelmin', 3), ('conta_levelmax', 3), ('descricao_contains', ['biológic'])]),
@@ -4559,16 +4682,20 @@ def choose_agrupamento(group):
         return group[group['AGRUPAMENTO'] == 'ind']
 
 def prepare_b3_cvm(b3_cvm):
-    super_b3 = {}
+    columns = ['CNPJ_CIA', 'DENOM_CIA', 'DT_REFER', 'CD_CONTA', 'DS_CONTA', 'VL_CONTA']
+    intel_b3 = {}
+
     try:
         rules = get_rules()
         start_time_b3 = time.time()
         for k, (key, df) in enumerate(b3_cvm.items()):
             print(key, remaining_time(start_time_b3, len(b3_cvm), k))
             # Apply the function to each group
-            df = df.groupby('CD_CVM', group_keys=False).apply(choose_agrupamento).reset_index(drop=True)
-            super_b3[key] = apply_intel_rules(df, rules)
+            df = df[[item for item in df.columns if item != "ACIONISTAS"]] # remove ACIONISTAS from df
+            df = df.groupby(['CNPJ_CIA', 'DT_REFER'], group_keys=False).apply(choose_agrupamento).reset_index(drop=True)
+            intel_b3[key] = apply_intel_rules(df, rules)
+            intel_b3[key].to_csv(f'{key}_intel.csv')
     except Exception as e:
         print(e)
         pass
-    return super_b3
+    return intel_b3

@@ -319,52 +319,9 @@ def yahoo_cotahist(value):
     return value
 
 def get_nsd_links(value):
-    safety_factor = 1.8
+    acoes = run.get_composicao_acionaria()
 
-    gap = 0
-    start_time = time.time()
-
-    filename = 'nsd_links'
-    cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
-    nsd = run.read_or_create_dataframe(filename, cols_nsd)
-    nsd['envio'] = pd.to_datetime(nsd['envio'], dayfirst=True)
-
-    start, end = run.nsd_range(nsd, safety_factor)
-    print(f'from {start} to {end}')
-
-    for i, n in enumerate(range(start, end)):
-        # interrupt conditions
-        last_date, limit_date, max_gap = run.nsd_dates(nsd, safety_factor)
-        if last_date > limit_date:
-            if gap == max_gap:
-                break
-
-        # elapsed time
-        running_time = (time.time() - start_time)
-        elapsed_time = '{:.6f}'.format(running_time/(i+1))
-        minutes, seconds = divmod(round(float(running_time)), 60)
-        elapsed_time_formatted = f'{int(minutes)}m {int(seconds)}s'
-        now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        try:
-            # add nsd row to dataframe
-            row = run.get_nsd(n)
-            nsd = pd.concat([nsd, pd.DataFrame([row], columns=cols_nsd)])
-            print(row[-1], row[10], now, elapsed_time, row[4], row[3], row[0], elapsed_time_formatted)
-            # reset gap
-            gap = 0
-        except Exception as e:
-            # increase gap count
-            gap += 1
-            print(n, elapsed_time)
-
-        if n % bin_size == 0:
-            nsd = run.save_and_pickle(nsd, filename)
-            print('partial save')
-
-    nsd = run.save_and_pickle(nsd, filename)
-    print('final save')
-
+    nsd = run.get_nsd_content()
 
     return value
 
@@ -598,6 +555,7 @@ def dre_cvm(value):
     #     b3_cvm = run.save_pkl(b3_cvm, f'{app_folder}b3_cvm')
 
     b3_cvm = run.load_pkl(f'{app_folder}b3_cvm')
-    super_b3 = run.prepare_b3_cvm(b3_cvm)
+    intel_b3 = run.prepare_b3_cvm(b3_cvm)
+    intel_b3 = run.save_pkl(intel_b3, f'{app_folder}intel_b3')
 
     return value
