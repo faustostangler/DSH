@@ -4302,88 +4302,150 @@ def convert_columns(df, threshold=0.1):
     return df
 
 def apply_intel_rules(df, rules):
+    """
+    Apply a set of intelligent rules to transform a DataFrame based on certain conditions.
 
+    Parameters:
+    - df (pd.DataFrame): The input DataFrame to be transformed.
+    - rules (list): A list of rules where each rule is a tuple containing a string and a list of conditions.
+                    The string defines the new CD_CONTA and DS_CONTA values, and the list contains the conditions.
+
+    Returns:
+    - df_new (pd.DataFrame): The transformed DataFrame.
+
+    Example Rule:
+    ('6.01.01.09 - Outros', [('conta_startswith', '6.01.01.'), ('conta_level_exact', 4), ('descricao_contains_not', 'forneced')])
+
+    This rule will match rows where CD_CONTA starts with '6.01.01.' and has exactly 4 levels, and DS_CONTA does not contain 'forneced'.
+    The matched rows will then have their CD_CONTA set to '6.01.01.09' and DS_CONTA set to 'Outros'.
+    """
+    
+    # Create an empty DataFrame with the same columns as the input DataFrame
     df_new = pd.DataFrame(columns=df.columns)
+    
     try:
+        # Get the current time to calculate processing duration
         start_time = time.time()
-        for r, (target, conditions) in enumerate(rules):
-            if target == '01.01.02 - Aplicações Financeiras':
-                pass
-            cd_target, ds_target = target.split(' - ', 1)
 
+        # Loop through each rule
+        for r, (line, conditions) in enumerate(rules):
+            # Create a mask initialized to all True values (same length as df)
             mask = pd.Series([True] * len(df))
+            line_CD, line_DS = line.split(' - ', 1)
 
-            for condition, value in conditions:
+            # Apply each condition in the rule
+            for condition, criteria in conditions:
+                # Check if condition requires string operations like startswith, contains, etc.
                 condition_part = condition.split('_')[1] if '_' in condition else condition
-                if condition_part in ["startswith", "startswith_not", "endswith", "endswith_not", "contains", "contains_not"]:
-                    if type(value) is str:
-                        value = [value]
-                    if type(value) is tuple:
-                        value = list(value)
-                    if type(value) is list:
-                        value = [word.lower() for word in value]
-                        value = '|'.join(value) # to string
 
-                # Conditions for the CD_CONTA column
-                if condition == "conta_exact":
-                    mask &= df["CD_CONTA"].str.lower() == value
-                if condition == "conta_startswith":
-                    mask &= df["CD_CONTA"].str.lower().str.startswith(value, na=False)
-                if condition == "conta_startswith_not":
-                    mask &= ~df["CD_CONTA"].str.lower().str.startswith(value, na=False)
-                if condition == "conta_endswith":
-                    mask &= df["CD_CONTA"].str.lower().str.endswith(value, na=False)
-                if condition == "conta_endswith_not":
-                    mask &= ~df["CD_CONTA"].str.lower().str.endswith(value, na=False)
-                if condition == "conta_contains":
-                    mask &= df["CD_CONTA"].str.lower().str.contains(value, case=False, na=False)
-                if condition == "conta_contains_not":
-                    mask &= ~df["CD_CONTA"].str.lower().str.contains(value, case=False, na=False)
-                if condition == "conta_levelmin":
-                    mask &= (df["CD_CONTA"].str.count('\.') + 1 >= int(value))
-                if condition == "conta_levelmax":
-                    mask &= (df["CD_CONTA"].str.count('\.') + 1 <= int(value))
-                if condition == "conta_in_list":
-                    mask &= df["CD_CONTA"].isin(value, na=False)
-                if condition == "conta_not_in_list":
-                    mask &= ~df["CD_CONTA"].isin(value, na=False)
-                if condition == "conta_regex":
-                    mask &= df["CD_CONTA"].str.lower().str.match(value, na=False)
+                # Prepare the criteria for string operations
+                if condition_part in ["contains", "startswith", "endswith", "contains_not", "startswith_not", "endswith_not"]:
+                    if type(criteria) is str:
+                        criteria = [criteria]
+                    if type(criteria) is tuple:
+                        criteria = list(criteria)
+                    if condition_part in ["contains", "startswith", "endswith"]:
+                        criteria = [word.lower() for word in criteria]
+                        criteria_str = '|'.join(criteria)  # Convert to string
 
-                # Conditions for the DS_CONTA column
-                if condition == "descricao_exact":
-                    mask &= df["DS_CONTA"].str.lower() == value
-                if condition == "descricao_startswith":
-                    mask &= df["DS_CONTA"].str.lower().str.startswith(value, na=False)
-                if condition == "descricao_startswith_not":
-                    mask &= ~df["DS_CONTA"].str.lower().str.startswith(value, na=False)
-                if condition == "descricao_endswith":
-                    mask &= df["DS_CONTA"].str.lower().str.endswith(value, na=False)
-                if condition == "descricao_endswith_not":
-                    mask &= ~df["DS_CONTA"].str.lower().str.endswith(value, na=False)
-                if condition == "descricao_contains":
-                    mask &= df["DS_CONTA"].str.lower().str.contains(value, case=False, na=False)
-                if condition == "descricao_contains_not":
-                    mask &= ~df["DS_CONTA"].str.lower().str.contains(value, case=False, na=False)
-                if condition == "descricao_in_list":
-                    mask &= df["DS_CONTA"].isin(value, na=False)
-                if condition == "descricao_not_in_list":
-                    mask &= ~df["DS_CONTA"].isin(value, na=False)
-                if condition == "descricao_regex":
-                    mask &= df["DS_CONTA"].str.lower().str.match(value, na=False)
+                # CD_CONTA criteria
+                # Check if the CD_CONTA value is exactly equal to the given criteria
+                if condition == 'conta_exact':
+                    mask &= df['CD_CONTA'] == criteria
 
-            # Append rows that match the conditions to df_new
+                # Check if the CD_CONTA value starts with the given criteria
+                elif condition == 'conta_startswith':
+                    mask &= df['CD_CONTA'].str.startswith(criteria_str)
+
+                # Check if the CD_CONTA value ends with the given criteria
+                elif condition == 'conta_endswith':
+                    mask &= df['CD_CONTA'].str.endswith(criteria_str)
+
+                # Check if the CD_CONTA value contains the given criteria
+                elif condition == 'conta_contains':
+                    mask &= df['CD_CONTA'].str.contains(criteria_str)
+
+                # Check if the CD_CONTA value is not equal to the given criteria
+                elif condition == 'conta_exact_not':
+                    mask &= df['CD_CONTA'] != criteria
+
+                # Check if the CD_CONTA value does not start with the given criteria
+                elif condition == 'conta_startswith_not':
+                    mask &= ~df['CD_CONTA'].str.startswith(criteria_str)
+
+                # Check if the CD_CONTA value does not end with the given criteria
+                elif condition == 'conta_endswith_not':
+                    mask &= ~df['CD_CONTA'].str.endswith(criteria_str)
+
+                # Check if the CD_CONTA value does not contain the given criteria
+                elif condition == 'conta_contains_not':
+                    mask &= ~df['CD_CONTA'].str.contains(criteria_str)
+
+                # Check if the level of CD_CONTA is greater than or equal to the given criteria
+                elif condition == 'conta_level_min':
+                    mask &= df['CD_CONTA'].str.count('\.') + 1 >= criteria
+
+                # Check if the level of CD_CONTA is less than or equal to the given criteria
+                elif condition == 'conta_level_max':
+                    mask &= df['CD_CONTA'].str.count('\.') + 1 <= criteria
+
+                # Check if the level of CD_CONTA is exactly equal to the given criteria
+                elif condition == 'conta_level_exact':
+                    mask &= df['CD_CONTA'].str.count('\.') + 1 == criteria
+
+
+                # DS_CONTA criteria
+                # Check if the DS_CONTA value is exactly equal to the given criteria
+                elif condition == 'descricao_exact':
+                    mask &= df['DS_CONTA'] == criteria
+
+                # Check if the DS_CONTA value starts with the given criteria
+                elif condition == 'descricao_startswith':
+                    mask &= df['DS_CONTA'].str.startswith(criteria_str)
+
+                # Check if the DS_CONTA value ends with the given criteria
+                elif condition == 'descricao_endswith':
+                    mask &= df['DS_CONTA'].str.endswith(criteria_str)
+
+                # Check if the DS_CONTA value contains the given criteria (case-insensitive)
+                elif condition == 'descricao_contains':
+                    mask &= df['DS_CONTA'].str.lower().str.contains(criteria_str)
+
+                # Check if the DS_CONTA value is not equal to the given criteria
+                elif condition == 'descricao_exact_not':
+                    mask &= df['DS_CONTA'] != criteria
+
+                # Check if the DS_CONTA value does not start with the given criteria
+                elif condition == 'descricao_startswith_not':
+                    mask &= ~df['DS_CONTA'].str.startswith(criteria_str)
+
+                # Check if the DS_CONTA value does not end with the given criteria
+                elif condition == 'descricao_endswith_not':
+                    mask &= ~df['DS_CONTA'].str.endswith(criteria_str)
+
+                # Check if the DS_CONTA value does not contain the given criteria (case-insensitive)
+                elif condition == 'descricao_contains_not':
+                    mask &= ~df['DS_CONTA'].str.lower().str.contains(criteria_str)
+
+            # Extract rows matching the mask and modify their CD_CONTA and DS_CONTA values
             matching_rows = df[mask].copy()
-            matching_rows["CD_CONTA"] = cd_target
-            matching_rows["DS_CONTA"] = ds_target
+            matching_rows['CD_CONTA'] = line_CD
+            matching_rows['DS_CONTA'] = line_DS
+            matching_rows['CD_CONTA_original'] = df[mask]['CD_CONTA']
+            matching_rows['DS_CONTA_original'] = df[mask]['DS_CONTA']
+            
+            # Append the modified rows to the new DataFrame
             df_new = pd.concat([df_new, matching_rows])
-            # print(f"Total rows matched for {target}: {len(matching_rows)}")
-            print(remaining_time(start_time, len(rules), r), target, 'matching rows', len(matching_rows))
+
+            # Print progress and diagnostics
+            print(remaining_time(start_time, len(rules), r), line, 'matching rows', len(matching_rows))
             if len(matching_rows) < 1:
                 pass
 
+    # Catch any exception and continue
     except Exception as e:
         pass
+
     return df_new
 
 def get_rules():
@@ -4686,6 +4748,7 @@ def prepare_b3_cvm(b3_cvm):
     intel_b3 = {}
 
     try:
+        from assets.rules import rules
         rules = get_rules()
         start_time_b3 = time.time()
         for k, (key, df) in enumerate(b3_cvm.items()):
