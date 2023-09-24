@@ -533,29 +533,10 @@ def dre_pivot(value):
 
 def dre_cvm(value):
 
-    # math = run.get_math_from_b3_cvm()
-
-    # try: # just for spped
-    #     company = run.load_pkl(f'{app_folder}company')
-    # except Exception as e:
-    #     company = run.b3_grab(search_url)
-    #     company = run.save_pkl(company, f'{app_folder}company')
-
-    # try: # just for spped
-    #     print('loading...')
-    #     math = run.load_pkl(f'{app_folder}math')
-    # except Exception as e:
-    #     math = run.get_math_from_b3_cvm()
-    #     math = run.save_pkl(math, f'{app_folder}math')
-
-    # try:
-    #     b3_cvm = run.load_pkl(f'{app_folder}b3_cvm')
-    # except Exception as e:
-    #     b3_cvm = run.get_companies(math, company)
-    #     b3_cvm = run.save_pkl(b3_cvm, f'{app_folder}b3_cvm')
-
-    b3_cvm = run.load_pkl(f'{app_folder}b3_cvm')
-    intel_b3 = run.prepare_b3_cvm(b3_cvm)
-    intel_b3 = run.save_pkl(intel_b3, f'{app_folder}intel_b3')
+    try: # Company
+      intelacoes = run.load_pkl(f'{app_folder}intelacoes')
+    except Exception as e:
+      intelacoes = run.compose_intel()
+      intelacoes = run.save_pkl(intelacoes, f'{app_folder}intelacoes')
 
     return value

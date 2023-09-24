@@ -2,17 +2,13 @@ import assets.helper as b3
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.keys import Keys
 
-from webdriver_manager.chrome import ChromeDriverManager
 import unidecode
 import string
 
@@ -24,7 +20,6 @@ import numpy as np
 
 from google.cloud import storage
 import io
-from collections import OrderedDict
 
 import requests
 from bs4 import BeautifulSoup
@@ -34,7 +29,7 @@ import datetime
 import time
 
 import pickle
-from urllib.parse import urljoin, urlparse, parse_qs
+from urllib.parse import urljoin
 import zipfile
 from lxml import html
 
@@ -765,7 +760,7 @@ def get_composicao_acionaria():
     acoes = acoes.drop_duplicates()
     acoes = save_and_pickle(acoes, filename)
     print('final save')
-
+    driver.quit()
     return acoes
 
 # dre
@@ -4762,3 +4757,81 @@ def prepare_b3_cvm(b3_cvm):
         print(e)
         pass
     return intel_b3
+
+def process_stock_data(group, acoes):
+    company, quarter = group.name
+    
+    # Filter acoes based on company and quarter
+    mask = acoes['DENOM_CIA'] == company
+    mask &= acoes['DT_REFER'] == quarter
+
+    # Concatenate and ffill
+    return pd.concat([group, acoes[mask]], ignore_index=True).ffill()
+
+def compose_intel():
+    # Load Ações
+    try: # Attempt to load 'acoes'
+        acoes = load_pkl(f'{b3.app_folder}acoes')
+    except Exception as e:
+        # If loading 'acoes' fails, retrieve it and save it for future use
+        acoes = get_composicao_acionaria()
+        acoes = save_pkl(acoes, f'{b3.app_folder}acoes')
+
+    # Intel from B3
+    try: # Attempt to load 'intel_b3'
+        intel_b3 = load_pkl(f'{b3.app_folder}intel_b3')
+    except Exception as e:
+        # Create 'intel_b3'
+        try: # Attempt to load 'b3_cvm'
+            b3_cvm = load_pkl(f'{b3.app_folder}b3_cvm')
+        except Exception as e:
+            # Create 'b3_cvm'
+            try: # Attempt to load 'company'
+                company = load_pkl(f'{b3.app_folder}company')
+            except Exception as e:
+                # Create 'company'
+                company = b3_grab(b3.search_url)
+                company = save_pkl(company, f'{b3.app_folder}company')
+            # Create 'math'
+            try: # Attempt to load 'math'
+                print('loading...')
+                math = load_pkl(f'{b3.app_folder}math')
+            except Exception as e:
+                # Create 'math'
+                math = get_math_from_b3_cvm()
+                math = save_pkl(math, f'{b3.app_folder}math')
+            # Once 'math' and 'company' are obtained, create 'b3_cvm' data based on them
+            b3_cvm = get_companies(math, company)
+            b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}b3_cvm')
+        # Once 'b3_cvm' is retrieved, proceed to prepare 'intel_b3'
+        b3_cvm = load_pkl(f'{b3.app_folder}b3_cvm')
+        intel_b3 = prepare_b3_cvm(b3_cvm)
+        intel_b3 = save_pkl(intel_b3, f'{b3.app_folder}intel_b3')
+
+    # Process the acoes and return the result
+    acoes['Trimestre'] = pd.to_datetime(acoes['Trimestre'], errors='coerce', dayfirst=True)
+    acoes['BALANCE_SHEET'] = 'STK'
+    column_mapping = {
+        'Ações ON': '00.01.01',
+        'Ações PN': '00.02.01',
+        'Ações ON em Tesouraria': '00.01.02',
+        'Ações PN em Tesouraria': '00.02.02'
+    }
+    acoes = acoes.rename(columns={"Companhia": "DENOM_CIA", "Trimestre": "DT_REFER"})
+
+    acoes = acoes.melt(id_vars=['DENOM_CIA', 'DT_REFER', 'BALANCE_SHEET'], 
+                            value_vars=['Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria'],
+                            var_name='DS_CONTA', value_name='VL_CONTA').sort_values(by=['DENOM_CIA', 'DT_REFER', 'DS_CONTA'])
+
+    acoes['CD_CONTA'] = acoes['DS_CONTA'].map(column_mapping)
+    intelacoes = {}
+
+    start_time = time.time()
+    for i, (setor, df) in enumerate(intel_b3.items()):
+        df = df.groupby(['DENOM_CIA', 'DT_REFER']).apply(process_stock_data, acoes=acoes).reset_index(drop=True)
+        intelacoes[df]
+
+        intelacoes[setor].to_pickle(f'{setor}_intelacoes.pkl')
+
+        print(remaining_time(start_time, len(intel_b3), i), setor)
+    return intelacoes
