@@ -140,7 +140,8 @@ def update_b3_companies(value: str) -> str:
         size = len(b3_tickers)
 
         # Loop through each company in the b3_tickers dataframe
-        for index, row in b3_tickers.iterrows():
+        start_time = time.time()
+        for i, (index, row) in enumerate(b3_tickers.iterrows()):
             counter +=1
             keyword = str(row['ticker']) + ' ' + str(row['company_name'])
             if keyword not in b3_keywords:
@@ -151,10 +152,9 @@ def update_b3_companies(value: str) -> str:
 
                 company = run.get_company(1, driver, wait)
                 b3_companies = pd.concat([b3_companies, pd.DataFrame([company], columns=cols_b3_companies)])
-
-                print(counter, size-counter, company)
             else:
-                print(counter, size-counter, keyword)
+                pass
+            print(run.remaining_time(start_time, len(b3_keywords), i), counter, size-counter, keyword)
         b3_companies.fillna('', inplace=True)
         b3_companies.reset_index(drop=True, inplace=True)
         b3_companies.drop_duplicates(inplace=True)
@@ -176,144 +176,136 @@ def update_b3_companies(value: str) -> str:
     return value
            
 def update_world_markets(value):
-  """
-  Updates the world markets data and saves it as a compressed pickle file.
+    """
+    Updates the world markets data based on stock symbols and saves the result.
+    
+    Args:
+        value (str): A string to be appended with "done".
+    
+    Returns:
+        str: The input string appended with "done" to indicate completion.
+    """
+    import credentials.keys
+    from stocksymbol import StockSymbol
 
-  Args:
-  value (str): A string value to be appended with "done".
-
-  Returns:
-  str: A string value appended with "done" to indicate the completion of the function.
-
-  """
-  # world stock symbols - https://polygon.io/stocks
-  # cols = ['market', 'abbreviation', 'totalCount', 'lastUpdated', 'index']
-  import credentials.keys
-  from stocksymbol import StockSymbol
-
-  # world markets
-  ss = StockSymbol(credentials.keys.polygon)
-  world_markets = pd.DataFrame(ss.market_list)
-  index = pd.DataFrame(ss.index_list)
-
-  world_markets.drop(labels='index', axis=1, inplace=True)
-
-  world_markets = pd.merge(index, world_markets, how='outer')
-  world_markets = world_markets[['market', 'abbreviation', 'totalCount', 'lastUpdated', 'indexName', 'indexId']]
-  world_markets.fillna('', inplace=True)
-
-  # world_markets[['market', 'abbreviation']] = world_markets[['market', 'abbreviation']].apply(run.txt_cln)
-  world_markets = world_markets.sort_values(by=['market','indexName'])
-
-  try:
+    # Initialize StockSymbol with credentials
+    ss = StockSymbol(credentials.keys.polygon)
+    
+    # Retrieve world markets and indices data
+    world_markets = pd.DataFrame(ss.market_list)
+    index_data = pd.DataFrame(ss.index_list)
+    world_markets.drop(labels='index', axis=1, inplace=True)
+    world_markets = pd.merge(index_data, world_markets, how='outer')
+    
+    # Cleaning and organizing world_markets DataFrame
+    world_markets = world_markets[['market', 'abbreviation', 'totalCount', 'lastUpdated', 'indexName', 'indexId']]
+    world_markets.fillna('', inplace=True)
+    world_markets.sort_values(by=['market','indexName'], inplace=True)
+    
+    # Retrieve all unique abbreviations
     abbreviation = world_markets['abbreviation'].unique()
-  except Exception as e:
-    abbreviation = []
+    
+    # Initialize world_companies DataFrame
+    cols_world_markets = ['market', 'abbreviation', 'ticker', 'exchange_country', 'ticker_type']
+    world_companies = pd.DataFrame(columns=cols_world_markets)
+    
+    # Populate world_companies with data for each abbreviation
+    start_time = time.time()
+    for index, abbrv in enumerate(abbreviation):
+        try:
+            df = pd.DataFrame(ss.get_symbol_list(market=abbrv))
+            world_companies = pd.concat([world_companies, df], ignore_index=True)
+        except Exception:
+            df = pd.DataFrame()
+        print(run.remaining_time(start_time, len(abbreviation), index), f' {abbrv}, {len(df)} new {len(world_companies)} total companies')
 
-  df_name = 'world_companies'
-  world_companies = pd.DataFrame(columns=cols_world_markets)
+    # Clean and organize world_companies DataFrame
+    world_companies['market'] = world_companies['market'].str.replace('_market', '')
+    world_companies.fillna('', inplace=True)
+    world_companies.drop_duplicates(inplace=True)
+    
+    # Expand ticker and country information from symbol
+    world_companies[['ticker', 'exchange_country']] = world_companies['symbol'].str.split(pat='.', n=1, expand=True)
+    world_companies['ticker_type'] = ''
+    
+    # Handle specific adjustments for Brazil
+    mask = world_companies['market'] == 'br'
+    brazil_tickers = world_companies[mask].copy()
+    brazil_tickers['ticker_type'] = brazil_tickers['ticker'].str[4:]
+    brazil_tickers['ticker'] = brazil_tickers['ticker'].str[:4]
+    
+    world_companies.update(brazil_tickers)
+    
+    # Save the DataFrame
+    world_companies = run.save_and_pickle(world_companies, 'world_companies')
+    
+    return 'done ' + value
 
-  # world companies
-  for index, abbrv in enumerate(abbreviation):
+def yahoo_cotahist(value):
+    import yfinance as yf
+
+    df_name = 'world_companies'
+    world_companies = run.read_or_create_dataframe(df_name, cols_world_markets)
+
+    df_name = 'company_info'
+    company_info = run.read_or_create_dataframe(df_name, cols_info)
+
+    c_info = pd.DataFrame(columns=cols_info)
+
+    # filter missing companies
+    mask = world_companies['symbol'].isin(company_info['symbol'].unique())
+    downloaded_companies = world_companies[mask]
+    missing_companies = world_companies[~mask]
+
+    for c, company in enumerate(missing_companies.itertuples()):
+      downloaded = (len(downloaded_companies)+c+1)
+      print(f'{downloaded} {len(missing_companies)-(c+1)} of {len(world_companies)} {downloaded/len(world_companies):.4%} {company[5]} {company[4]}:{company[1]} {company[3]}')
+      ticker  = yf.Ticker(company[1])
+      try:
+        c_info2 = pd.DataFrame([ticker.info])
+        c_info2['symbol'] = company[1]
+        c_info = pd.concat([c_info, c_info2], ignore_index=True)
+      except Exception as e:
+        pass
+
+    if (downloaded) % varsys.bin_size == 0:
+      if not c_info.empty:
+        # load
+        company_info = pd.read_pickle(varsys.data_path + f'{df_name}.zip')
+
+        # save
+        try:
+          company_info = pd.concat([company_info, c_info], ignore_index=True)
+
+          try:
+            company_info = company_info.drop(['companyOfficers'], axis=1, errors='ignore')
+            company_info.drop_duplicates(inplace=True)
+          except Exception as e:
+            pass
+            
+          company_info.to_pickle(varsys.data_path + f'{df_name}.zip')
+
+          company_info = pd.DataFrame(columns=cols_info)
+          c_info = pd.DataFrame(columns=cols_info)
+
+          print(f'partial save')
+        except Exception as e:
+          print(e)
+
+    # final save
+    company_info = pd.concat([company_info, c_info], ignore_index=True)
+    company_info.sort_values(by=['market', 'exchange', 'quoteType', 'sector', 'industry', 'symbol'], inplace=True)
+
     try:
-      df = pd.DataFrame(ss.get_symbol_list(market=abbrv)) # "us" or "america" will also work
-      world_companies = pd.concat([world_companies, df], ignore_index=True)
-      print(f'{abbrv} {index}+{len(abbreviation)-1-index} markets {index/(len(abbreviation)-1):.2%}, {len(df)} new, {len(world_companies)} total companies')
+      company_info = company_info.drop(['companyOfficers'], axis=1, errors='ignore')
+      company_info.drop_duplicates(inplace=True)
     except Exception as e:
       pass
 
-  world_companies = world_companies.copy()
-  world_companies['market'] = world_companies['market'].map(lambda x: x.replace('_market', ''))
-  world_companies.fillna('', inplace=True)
-  world_companies.drop_duplicates(inplace=True)
-  
-  # expand sufixes
-  world_companies[['ticker', 'exchange_country']] = world_companies['symbol'].str.split('.', expand=True)
-  world_companies['ticker_type'] = ''
+    company_info.to_pickle(varsys.data_path + f'{df_name}.zip')
 
-  # expand Brazil Ticker Sufixes
-  mask = (world_companies['market'] == 'br')
-  br_world_companies = world_companies[mask]
-
-  # adjustments
-  br_world_companies['ticker_type'] = br_world_companies['ticker'].str[4:]
-  br_world_companies = br_world_companies.copy()
-  br_world_companies['ticker'] = br_world_companies['ticker'].str[:4]
-
-  world_companies = pd.merge(world_companies, br_world_companies, how='left')
-  world_companies.fillna('', inplace=True)
-
-  # Save
-  world_companies = run.save_and_pickle(world_companies, df_name)
-
-  value = 'done ' + value
-  return value
-
-def yahoo_cotahist(value):
-    # import yfinance as yf
-
-    # df_name = 'world_companies'
-    # world_companies = run.read_or_create_dataframe(df_name, cols_world_markets)
-
-    # df_name = 'company_info'
-    # company_info = run.read_or_create_dataframe(df_name, cols_info)
-
-    # c_info = pd.DataFrame(columns=cols_info)
-
-    # # filter missing companies
-    # mask = world_companies['symbol'].isin(company_info['symbol'].unique())
-    # downloaded_companies = world_companies[mask]
-    # missing_companies = world_companies[~mask]
-
-    # for c, company in enumerate(missing_companies.itertuples()):
-    #   downloaded = (len(downloaded_companies)+c+1)
-    #   print(f'{downloaded} {len(missing_companies)-(c+1)} of {len(world_companies)} {downloaded/len(world_companies):.4%} {company[5]} {company[4]}:{company[1]} {company[3]}')
-    #   ticker  = yf.Ticker(company[1])
-    #   try:
-    #     c_info2 = pd.DataFrame([ticker.info])
-    #     c_info2['symbol'] = company[1]
-    #     c_info = pd.concat([c_info, c_info2], ignore_index=True)
-    #   except Exception as e:
-    #     pass
-
-    # if (downloaded) % varsys.bin_size == 0:
-    #   if not c_info.empty:
-    #     # load
-    #     company_info = pd.read_pickle(varsys.data_path + f'{df_name}.zip')
-
-    #     # save
-    #     try:
-    #       company_info = pd.concat([company_info, c_info], ignore_index=True)
-
-    #       try:
-    #         company_info = company_info.drop(['companyOfficers'], axis=1, errors='ignore')
-    #         company_info.drop_duplicates(inplace=True)
-    #       except Exception as e:
-    #         pass
-            
-    #       company_info.to_pickle(varsys.data_path + f'{df_name}.zip')
-
-    #       company_info = pd.DataFrame(columns=cols_info)
-    #       c_info = pd.DataFrame(columns=cols_info)
-
-    #       print(f'partial save')
-    #     except Exception as e:
-    #       print(e)
-
-    # # final save
-    # company_info = pd.concat([company_info, c_info], ignore_index=True)
-    # company_info.sort_values(by=['market', 'exchange', 'quoteType', 'sector', 'industry', 'symbol'], inplace=True)
-
-    # try:
-    #   company_info = company_info.drop(['companyOfficers'], axis=1, errors='ignore')
-    #   company_info.drop_duplicates(inplace=True)
-    # except Exception as e:
-    #   pass
-
-    # company_info.to_pickle(varsys.data_path + f'{df_name}.zip')
-
-    # company_info = pd.DataFrame(columns=cols_info)
-    # c_info = pd.DataFrame(columns=cols_info)
+    company_info = pd.DataFrame(columns=cols_info)
+    c_info = pd.DataFrame(columns=cols_info)
 
     value='please refactor using yahooquery, nothing done here'
     return value
@@ -532,11 +524,12 @@ def dre_pivot(value):
     return value
 
 def dre_cvm(value):
+  fund = run.load_database()
 
-    try: # Company
-      intelacoes = run.load_pkl(f'{app_folder}intelacoes')
-    except Exception as e:
-      intelacoes = run.compose_intel()
-      intelacoes = run.save_pkl(intelacoes, f'{app_folder}intelacoes')
+def yahoo_quotes(value):
+  fund = run.load_database()
 
-    return value
+  quotes = run.integrate_yahoo_quotes(fund)
+  quotes = run.save_pkl(quotes, f'{app_folder}quotes')
+
+  return value

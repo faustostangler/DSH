@@ -4768,46 +4768,7 @@ def process_stock_data(group, acoes):
     # Concatenate and ffill
     return pd.concat([group, acoes[mask]], ignore_index=True).ffill()
 
-def compose_intel():
-    # Load Ações
-    try: # Attempt to load 'acoes'
-        acoes = load_pkl(f'{b3.app_folder}acoes')
-    except Exception as e:
-        # If loading 'acoes' fails, retrieve it and save it for future use
-        acoes = get_composicao_acionaria()
-        acoes = save_pkl(acoes, f'{b3.app_folder}acoes')
-
-    # Intel from B3
-    try: # Attempt to load 'intel_b3'
-        intel_b3 = load_pkl(f'{b3.app_folder}intel_b3')
-    except Exception as e:
-        # Create 'intel_b3'
-        try: # Attempt to load 'b3_cvm'
-            b3_cvm = load_pkl(f'{b3.app_folder}b3_cvm')
-        except Exception as e:
-            # Create 'b3_cvm'
-            try: # Attempt to load 'company'
-                company = load_pkl(f'{b3.app_folder}company')
-            except Exception as e:
-                # Create 'company'
-                company = b3_grab(b3.search_url)
-                company = save_pkl(company, f'{b3.app_folder}company')
-            # Create 'math'
-            try: # Attempt to load 'math'
-                print('loading...')
-                math = load_pkl(f'{b3.app_folder}math')
-            except Exception as e:
-                # Create 'math'
-                math = get_math_from_b3_cvm()
-                math = save_pkl(math, f'{b3.app_folder}math')
-            # Once 'math' and 'company' are obtained, create 'b3_cvm' data based on them
-            b3_cvm = get_companies(math, company)
-            b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}b3_cvm')
-        # Once 'b3_cvm' is retrieved, proceed to prepare 'intel_b3'
-        b3_cvm = load_pkl(f'{b3.app_folder}b3_cvm')
-        intel_b3 = prepare_b3_cvm(b3_cvm)
-        intel_b3 = save_pkl(intel_b3, f'{b3.app_folder}intel_b3')
-
+def compose_intel(acoes, intel_b3):
     # Process the acoes and return the result
     acoes['Trimestre'] = pd.to_datetime(acoes['Trimestre'], errors='coerce', dayfirst=True)
     acoes['BALANCE_SHEET'] = 'STK'
@@ -4829,9 +4790,584 @@ def compose_intel():
     start_time = time.time()
     for i, (setor, df) in enumerate(intel_b3.items()):
         df = df.groupby(['DENOM_CIA', 'DT_REFER']).apply(process_stock_data, acoes=acoes).reset_index(drop=True)
-        intelacoes[df]
+        intelacoes[setor] = df
 
         intelacoes[setor].to_pickle(f'{setor}_intelacoes.pkl')
 
         print(remaining_time(start_time, len(intel_b3), i), setor)
     return intelacoes
+
+def calculate_fund(rules_fund, sheet, company, quarter):
+    rows = []
+    try:
+        for i, data in enumerate(rules_fund):
+            vl = 0
+            sh, cd, ds, operation, items = data
+            if operation == 'add':
+                vl = sheet[sheet['CD_CONTA'].isin(list(items))]['VL_CONTA'].sum()
+
+            elif operation == 'sub':
+                minuend = sheet[sheet['CD_CONTA'] == items[0]]['VL_CONTA'].sum()
+                subtrahend = sheet[sheet['CD_CONTA'] == items[1]]['VL_CONTA'].sum()
+                vl = minuend - subtrahend
+
+            elif operation == 'div':
+                dividend = sheet[sheet['CD_CONTA'] == items[0]]['VL_CONTA'].sum()
+                divisor = sheet[sheet['CD_CONTA'] == items[1]]['VL_CONTA'].sum()
+                # vl = dividend / divisor
+                vl = dividend / divisor if divisor != 0 and not pd.isna(dividend) and not pd.isna(divisor) else np.nan
+
+            elif operation == 'mul':
+                vl = sheet[sheet['CD_CONTA'].isin(list(items))]['VL_CONTA'].prod()
+
+            row = [company, quarter, sh, cd, ds, vl]
+            rows.append(row)
+
+    except Exception as e:
+        pass
+    return rows
+
+def get_rules_fund():
+    rules = [
+        ('EQT', '11.01.01', 'Capital de Giro (Ativos Circulantes - Passivos Circulantes)', 'sub', ('01.01', '02.01')), 
+        ('EQT', '11.01.02', 'Liquidez (Ativos Circulantes por Passivos Circulantes)', 'div', ('01.01', '02.01')), 
+        ('EQT', '11.01.03', 'Ativos Circulantes de Curto Prazo por Ativos', 'div', ('01.01', '01')),
+        ('EQT', '11.01.04', 'Ativos Não Circulantes de Longo Prazo por Ativos', 'div', ('01.02', '01')), 
+        ('EQT', '11.02', 'Passivos por Ativos', 'div', ('02', '01')),
+        ('EQT', '11.02.01', 'Passivos Circulantes de Curto Prazo por Ativos', 'div', ('02.01', '01')),
+        ('EQT', '11.02.02', 'Passivos Não Circulantes de Longo Prazo por Ativos', 'div', ('02.02', '01')),
+        ('EQT', '11.02.03', 'Passivos Circulantes de Curto Prazo por Passivos', 'div', ('02.01', '02')),
+        ('EQT', '11.02.04', 'Passivos Não Circulantes de Longo Prazo por Passivos', 'div', ('02.02', '02')),
+        ('EQT', '11.03', 'Patrimônio Líquido por Ativos', 'div', ('02.03', '01')),
+        ('EQT', '11.03.01', 'Equity Multiplier (Ativos por Patrimônio Líquido)', 'div', ('01', '02.03')),
+        ('EQT', '11.03.02', 'Passivos por Patrimônio Líquido', 'div', ('02', '02.03')),
+        ('EQT', '11.03.02.01', 'Passivos Circulantes de Curto Prazo por Patrimônio Líquido', 'div', ('02.01', '02.03')),
+        ('EQT', '11.03.02.02', 'Passivos Não Circulantes de Longo Prazo por Patrimônio Líquido', 'div', ('02.02', '02.03')),
+        ('EQT', '11.03.03', 'Soma das Reservas do Patrimônio Líquido', 'add', ('02.03.02', '02.03.03', '02.03.04')), 
+        ('EQT', '11.03.04', 'Patrimônio Imobilizado', 'add', ('01.02.02', '01.02.03', '01.02.04')), 
+        ('EQT', '11.03.05', 'Remuneração do Capital Total(Terceiros + Próprio)', 'add', ('07.08.03', '07.08.04')), 
+
+        ('EQT', '11.04', 'Capital Social por Patrimônio Líquido', 'div', ('02.03.01', '02.03')),
+
+        ('EQT', '12.01.01', 'Caixa', 'add', ('01.01.01', )), 
+
+        ('PFT', '12.03.01', 'Contas a Receber Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.03', '03.01')), 
+        ('PFT', '12.03.02', 'Contas a Receber Circulantes de Longo Prazo Prazo por Faturamento', 'div', ('01.02.01.03', '03.01')), 
+        ('PFT', '13.04.01', 'Estoques Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.04', '03.01')),
+        ('PFT', '13.04.02', 'Estoques Circulantes de Longo Prazo por Faturamento', 'div', ('01.02.01.04', '03.01')),
+        ('PFT', '13.05.01', 'Ativos Biológicos Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.05', '03.01')),
+        ('PFT', '13.05.02', 'Ativos Biológicos Circulantes de Longo Prazo por Faturamento', 'div', ('01.02.01.05', '03.01')),
+        ('EQT', '13.06.01', 'Tributos Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.06', '03.01')),
+        ('EQT', '13.06.02', 'Tributos Circulantes de Longo Prazo por Faturamento', 'div', ('01.02.01.06', '03.01')),
+        ('EQT', '13.07.01', 'Despesas Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.07', '03.01')),
+        ('EQT', '13.07.02', 'Despesas Circulantes de Longo Prazo por Faturamento', 'div', ('01.02.01.07', '03.01')),
+        ('EQT', '13.09.01', 'Outros Ativos Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.09', '03.01')),
+        ('EQT', '13.09.02', 'Outros Ativos Não Circulantes de Longo Prazo por Faturamento', 'div', ('01.02.01.09', '03.01')),
+
+        ('PFT', '14.01.01', 'Receita por Ativos', 'div', ('03.01', '01')),
+        ('PFT', '14.01.02', 'Receita por Patrimônio', 'div', ('03.01', '02.03')),
+        ('PFT', '14.02.01', 'Coeficiente de Retorno (Resultado por Ativos)', 'div', ('03.11', '01')),
+        ('PFT', '14.04.01', 'ROE (Resultado por Patrimônio)', 'div', ('03.11', '02.03')),
+        ('PFT', '14.05.01', 'ROAS (EBIT por Ativos)', 'div', ('03.05', '01')),
+
+        ('EQT', '15.01.01.01', 'Juros Pagos por Remuneração de Capital de Terceiros', 'div', ('07.08.03.01', '07.08.03')),
+        ('EQT', '15.01.01.02', 'Aluguéis por Remuneração de Capital de Terceiros', 'div', ('07.08.03.02', '07.08.03')),
+        ('EQT', '15.01.02.01', 'Juros Pagos por Remuneração de Capital Próprio', 'div', ('07.08.04.01', '07.08.04')),
+        ('EQT', '15.01.02.02', 'Dividendos por Remuneração de Capital Próprio', 'div', ('07.08.04.02', '07.08.04')),
+        ('EQT', '15.01.02.03', 'Lucros Retidos por Remuneração de Capital Próprio', 'div', ('07.08.04.03', '07.08.04')),
+        ('EQT', '15.02.01', 'Impostos por EBIT', 'div', ('03.08', '03.05')),
+
+        ('PFT', '16.01', 'Margem Bruta (Resultado Bruto (Receita Líquida) por Receita Bruto)', 'div', ('03.03', '03.01')),
+        ('PFT', '16.02', 'Margem Operacional (Receitas Operacionais por Receita Bruta)', 'div', ('03.04', '03.01')),
+        ('PFT', '16.02.01', 'Força de Vendas (Despesas com Vendas por Despesas Operacionais)', 'div', ('03.04.01', '03.04')),
+        ('PFT', '16.02.02', 'Peso Administrativo (Despesas com Administração por Despesas Operacionais)', 'div', ('03.04.02', '03.04')),
+        ('PFT', '16.03.01', 'Margem EBIT (EBIT por Resultado Bruto (Receita Líquida))', 'div', ('03.05', '03.03')),
+        ('PFT', '16.03.02', 'Margem de Depreciação por Resultado Bruto (Receita Líquida)', 'div', ('07.04.01', '03.03')),
+        ('PFT', '16.04', 'Margem Não Operacional (Resultado Não Operacional por Resultado Bruto (Receita Líquida))', 'div', ('03.06', '03.03')),
+        ('PFT', '16.05', 'Margem Líquida (Lucro Líquido por Receita Bruta)', 'div', ('03.11', '03.01')),
+
+        ('PFT', '18.01', 'Margem de Vendas por Valor Agregado', 'div', ('07.01.01', '07.07')),
+        ('PFT', '18.02', 'Custo dos Insumos por Valor Agregado', 'div', ('07.02', '07.07')),
+        ('PFT', '18.03', 'Valor Adicionado Bruto por Valor Agregado', 'div', ('07.03', '07.07')),
+        ('PFT', '18.04', 'Retenções por Valor Agregado', 'div', ('07.04', '07.07')),
+        ('PFT', '18.05', 'Valor Adicionado Líquido por Valor Agregado', 'div', ('07.05', '07.07')),
+        ('PFT', '18.06', 'Valor Adicionado em Transferência por Valor Agregado', 'div', ('07.06', '07.07')),
+        ('PFT', '18.07', 'Recursos Humanos por Valor Agregado', 'div', ('07.08.01', '07.07')),
+        ('PFT', '18.07.01', 'Remuneração Direta (Recursos Humanos) por Valor Agregado', 'div', ('07.08.01.01', '07.07')),
+        ('PFT', '18.07.02', 'Benefícios (Recursos Humanos) por Valor Agregado', 'div', ('07.08.01.02', '07.07')),
+        ('PFT', '18.07.03', 'FGTS (Recursos Humanos) por Valor Agregado', 'div', ('07.08.01.03', '07.07')),
+        ('PFT', '18.08', 'Impostos por Valor Agregado', 'div', ('07.08.02', '07.07')),
+        ('PFT', '18.09', 'Remuneração de Capital de Terceiros por Valor Agregado', 'div', ('07.08.03', '07.07')),
+        ('PFT', '18.09.01', 'Juros Pagos a Terceiros por Valor Agregado', 'div', ('07.08.03.01', '07.07')),
+        ('PFT', '18.09.02', 'Aluguéis Pagos a Terceiros por Valor Agregado', 'div', ('07.08.03.02', '07.07')),
+        ('PFT', '18.10', 'Remuneração de Capital Próprio por Valor Agregado', 'div', ('07.08.04', '07.07')),
+        ('PFT', '18.10.01', 'Juros Sobre Capital Próprio por Valor Agregado', 'div', ('07.08.04.01', '07.07')),
+        ('PFT', '18.10.02', 'Dividendos por Valor Agregado', 'div', ('07.08.04.02', '07.07')),
+        ('PFT', '18.10.02', 'Lucros Retidos por Valor Agregado', 'div', ('07.08.04.03', '07.07')),
+        ('PFT', '18.11.01', 'Alíquota de Impostos (Impostos, Taxas e Contribuições por Receita Bruta)', 'div', ('07.08.02', '03.01')),
+        ('PFT', '18.11.02', 'Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta', 'div', ('07.08.03', '03.01')),
+        ('PFT', '18.11.03', 'Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta', 'div', ('07.08.04', '03.01')),
+    ]
+    return rules
+
+def get_sheet_data(sheet):
+    sheet_data = {}
+    try:
+        sheet_data['curto_prazo_moeda_nacional'] = sheet[sheet['CD_CONTA'] == '02.01.04.01.01']['VL_CONTA'].sum()
+        sheet_data['curto_prazo_moeda_estrangeira'] = sheet[sheet['CD_CONTA'] == '02.01.04.01.02']['VL_CONTA'].sum()
+        sheet_data['curto_prazo_debentures'] = sheet[sheet['CD_CONTA'] == '02.01.04.02']['VL_CONTA'].sum()
+        sheet_data['curto_prazo_arrendamentos'] = sheet[sheet['CD_CONTA'] == '02.01.04.03']['VL_CONTA'].sum()
+        sheet_data['curto_prazo_outros'] = sheet[sheet['CD_CONTA'] == '02.01.04.09']['VL_CONTA'].sum()
+
+        sheet_data['longo_prazo_moeda_nacional'] = sheet[sheet['CD_CONTA'] == '02.02.01.01.01']['VL_CONTA'].sum()
+        sheet_data['longo_prazo_moeda_estrangeira'] = sheet[sheet['CD_CONTA'] == '02.02.01.01.02']['VL_CONTA'].sum()
+        sheet_data['longo_prazo_debentures'] = sheet[sheet['CD_CONTA'] == '02.02.01.02']['VL_CONTA'].sum()
+        sheet_data['longo_prazo_arrendamentos'] = sheet[sheet['CD_CONTA'] == '02.02.01.03']['VL_CONTA'].sum()
+        sheet_data['longo_prazo_outros'] = sheet[sheet['CD_CONTA'] == '02.02.02.09']['VL_CONTA'].sum()
+
+        sheet_data['caixa'] = sheet[sheet['CD_CONTA'] == '01.01.01']['VL_CONTA'].sum()
+
+        # Patrimônio e Reservas
+        sheet_data['reservas_de_capital'] = sheet[sheet['CD_CONTA'] == '02.03.02']['VL_CONTA'].sum()
+        sheet_data['reservas_de_reavaliacao'] = sheet[sheet['CD_CONTA'] == '02.03.03']['VL_CONTA'].sum()
+        sheet_data['reservas_de_lucros'] = sheet[sheet['CD_CONTA'] == '02.03.04']['VL_CONTA'].sum()
+        sheet_data['patrimonio'] = sheet[sheet['CD_CONTA'] == '02.03']['VL_CONTA'].sum()
+        sheet_data['investimentos_nao_capex'] = sheet[sheet['CD_CONTA'] == '01.02.02']['VL_CONTA'].sum()
+        sheet_data['imobilizados'] = sheet[sheet['CD_CONTA'] == '01.02.03']['VL_CONTA'].sum()
+        sheet_data['intangivel'] = sheet[sheet['CD_CONTA'] == '01.02.04']['VL_CONTA'].sum()
+        sheet_data['patrimonio_imobilizado'] = sheet_data['investimentos_nao_capex'] + sheet_data['imobilizados'] + sheet_data['intangivel']
+
+        # Operational
+        sheet_data['ebit'] = sheet[sheet['CD_CONTA'] == '03.05']['VL_CONTA'].sum()
+        sheet_data['da'] = sheet[sheet['CD_CONTA'] == '07.04.01']['VL_CONTA'].sum()
+        sheet_data['receita'] = sheet[sheet['CD_CONTA'] == '03.01']['VL_CONTA'].sum()
+        sheet_data['receita_liquida'] = sheet[sheet['CD_CONTA'] == '03.03']['VL_CONTA'].sum()
+        sheet_data['resultado'] = sheet[sheet['CD_CONTA'] == '03.11']['VL_CONTA'].sum()
+        sheet_data['contas_curto_prazo'] = sheet[sheet['CD_CONTA'] == '01.01.03']['VL_CONTA'].sum()
+        sheet_data['contas_longo_prazo'] = sheet[sheet['CD_CONTA'] == '01.02.01.03']['VL_CONTA'].sum()
+        sheet_data['estoque_curto_prazo'] = sheet[sheet['CD_CONTA'] == '01.01.04']['VL_CONTA'].sum()
+        sheet_data['estoque_longo_prazo'] = sheet[sheet['CD_CONTA'] == '01.02.01.04']['VL_CONTA'].sum()
+        sheet_data['biologico_curto_prazo'] = sheet[sheet['CD_CONTA'] == '01.01.05']['VL_CONTA'].sum()
+        sheet_data['biologico_longo_prazo'] = sheet[sheet['CD_CONTA'] == '01.02.01.05']['VL_CONTA'].sum()
+        sheet_data['tributos_curto_prazo'] = sheet[sheet['CD_CONTA'] == '01.01.06']['VL_CONTA'].sum()
+        sheet_data['tributos_longo_prazo'] = sheet[sheet['CD_CONTA'] == '01.02.01.06']['VL_CONTA'].sum()
+        sheet_data['despesas_curto_prazo'] = sheet[sheet['CD_CONTA'] == '01.01.07']['VL_CONTA'].sum()
+        sheet_data['despesas_longo_prazo'] = sheet[sheet['CD_CONTA'] == '01.02.01.07']['VL_CONTA'].sum()
+        sheet_data['outros_curto_prazo'] = sheet[sheet['CD_CONTA'] == '01.01.09']['VL_CONTA'].sum()
+        sheet_data['outros_longo_prazo'] = sheet[sheet['CD_CONTA'] == '01.02.01.09']['VL_CONTA'].sum()
+
+        # Caixa
+        sheet_data['caixa_operacoes'] = sheet[sheet['CD_CONTA'] == '06.01']['VL_CONTA'].sum()
+        sheet_data['caixa_investimentos_capex'] = sheet[sheet['CD_CONTA'] == '06.02']['VL_CONTA'].sum()
+        sheet_data['caixa_financiamentos'] = sheet[sheet['CD_CONTA'] == '06.03']['VL_CONTA'].sum()
+        sheet_data['caixa_investimentos'] = sheet[sheet['CD_CONTA'] == '06.02.01']['VL_CONTA'].sum()
+        sheet_data['caixa_imobilizado_intangivel'] = sheet[sheet['CD_CONTA'] == '06.02.02']['VL_CONTA'].sum()
+        sheet_data['caixa_livre'] = sheet_data['caixa_operacoes'] + sheet_data['caixa_investimentos_capex']
+        sheet_data['caixa_total'] = sheet_data['caixa_operacoes'] + sheet_data['caixa_investimentos_capex'] + sheet_data['caixa_financiamentos']
+        sheet_data['caixa_imobilizado'] = sheet_data['caixa_financiamentos'] + sheet_data['caixa_imobilizado_intangivel']
+
+        # Remuneração de capital
+        sheet_data['remuneracao_capital_terceiros'] = sheet[sheet['CD_CONTA'] == '07.08.03']['VL_CONTA'].sum()
+        sheet_data['remuneracao_capital_proprio'] = sheet[sheet['CD_CONTA'] == '07.08.03']['VL_CONTA'].sum()
+        sheet_data['dividendos_obrigatorios'] = sheet[sheet['CD_CONTA'] == '08.01']['VL_CONTA'].sum()
+
+        # Calculations
+        sheet_data['ebitda'] = sheet_data['ebit'] + sheet_data['da']
+
+        sheet_data['divida_bruta_curto_prazo'] = sheet_data['curto_prazo_moeda_nacional'] + sheet_data['curto_prazo_moeda_estrangeira'] + sheet_data['curto_prazo_debentures'] + sheet_data['curto_prazo_arrendamentos'] + sheet_data['curto_prazo_outros']
+        sheet_data['divida_bruta_longo_prazo'] = sheet_data['longo_prazo_moeda_nacional'] + sheet_data['longo_prazo_moeda_estrangeira'] + sheet_data['longo_prazo_debentures'] + sheet_data['longo_prazo_arrendamentos'] + sheet_data['longo_prazo_outros']
+        sheet_data['divida_bruta'] = sheet_data['divida_bruta_curto_prazo'] + sheet_data['divida_bruta_longo_prazo']
+        sheet_data['divida_moeda_estrangeira'] = sheet_data['curto_prazo_moeda_estrangeira'] + sheet_data['longo_prazo_moeda_estrangeira']
+        sheet_data['divida_moeda_nacional'] = (sheet_data['divida_bruta_curto_prazo'] + sheet_data['divida_bruta_longo_prazo']) - sheet_data['divida_moeda_estrangeira']
+        sheet_data['divida_liquida'] = -1 * (sheet_data['divida_bruta'] - sheet_data['caixa'])
+        sheet_data['divida_liquida_resultado'] = sheet_data['divida_liquida'] / sheet_data['resultado'] if sheet_data['resultado'] != 0 and not pd.isna(sheet_data['divida_liquida']) and not pd.isna(sheet_data['resultado']) else np.nan
+
+        sheet_data['endividamento_financeiro'] = sheet_data['divida_bruta'] / sheet_data['patrimonio'] if sheet_data['patrimonio'] != 0 and not pd.isna(sheet_data['divida_bruta']) and not pd.isna(sheet_data['patrimonio']) else np.nan
+        sheet_data['patrimonio_imobilizado_por_patrimonio'] = sheet_data['patrimonio_imobilizado'] / sheet_data['patrimonio'] if sheet_data['patrimonio'] != 0 and not pd.isna(sheet_data['patrimonio_imobilizado']) and not pd.isna(sheet_data['patrimonio']) else np.nan
+        sheet_data['divida_liquida_por_ebitda'] = sheet_data['divida_liquida'] / sheet_data['ebitda'] if sheet_data['ebitda'] != 0 and not pd.isna(sheet_data['divida_liquida']) and not pd.isna(sheet_data['ebitda']) else np.nan
+
+        sheet_data['contas_faturamento'] = (sheet_data['contas_curto_prazo'] + sheet_data['contas_longo_prazo']) / sheet_data['receita'] if sheet_data['receita'] != 0 and not pd.isna(sheet_data['contas_curto_prazo']) and not pd.isna(sheet_data['contas_longo_prazo']) and not pd.isna(sheet_data['receita']) else np.nan
+        sheet_data['estoques_faturamento'] = (sheet_data['estoque_curto_prazo'] + sheet_data['estoque_longo_prazo']) / sheet_data['receita'] if sheet_data['receita'] != 0 and not pd.isna(sheet_data['estoque_curto_prazo']) and not pd.isna(sheet_data['estoque_longo_prazo']) and not pd.isna(sheet_data['receita']) else np.nan
+        sheet_data['ativos_biologicos_faturamento'] = (sheet_data['biologico_curto_prazo'] + sheet_data['biologico_longo_prazo']) / sheet_data['receita'] if sheet_data['receita'] != 0 and not pd.isna(sheet_data['biologico_curto_prazo']) and not pd.isna(sheet_data['biologico_longo_prazo']) and not pd.isna(sheet_data['receita']) else np.nan
+        sheet_data['tributos_faturamento'] = (sheet_data['tributos_curto_prazo'] + sheet_data['tributos_longo_prazo']) / sheet_data['receita'] if sheet_data['receita'] != 0 and not pd.isna(sheet_data['tributos_curto_prazo']) and not pd.isna(sheet_data['tributos_longo_prazo']) and not pd.isna(sheet_data['receita']) else np.nan
+        sheet_data['despesas_faturamento'] = (sheet_data['despesas_curto_prazo'] + sheet_data['despesas_longo_prazo']) / sheet_data['receita'] if sheet_data['receita'] != 0 and not pd.isna(sheet_data['despesas_curto_prazo']) and not pd.isna(sheet_data['despesas_longo_prazo']) and not pd.isna(sheet_data['receita']) else np.nan
+        sheet_data['outros_faturamento'] = (sheet_data['outros_curto_prazo'] + sheet_data['outros_longo_prazo']) / sheet_data['receita'] if sheet_data['receita'] != 0 and not pd.isna(sheet_data['outros_curto_prazo']) and not pd.isna(sheet_data['outros_longo_prazo']) and not pd.isna(sheet_data['receita']) else np.nan
+
+        sheet_data['reservas'] = sheet_data['reservas_de_capital'] + sheet_data['reservas_de_reavaliacao'] + sheet_data['reservas_de_lucros']
+        if sheet_data['patrimonio'] != 0 and not pd.isna(sheet_data['reservas_de_capital']) and not pd.isna(sheet_data['patrimonio']):
+            sheet_data['reservas_patrimonio'] = sheet_data['reservas_de_capital'] / sheet_data['patrimonio']
+        else:
+            sheet_data['reservas_patrimonio'] = np.nan
+        sheet_data['divida_bruta_por_patrimonio'] = sheet_data['divida_bruta'] / sheet_data['patrimonio'] if sheet_data['patrimonio'] != 0 and not pd.isna(sheet_data['divida_bruta']) and not pd.isna(sheet_data['patrimonio']) else np.nan
+
+        sheet_data['remuneracao_capital'] = sheet_data['remuneracao_capital_terceiros'] + sheet_data['remuneracao_capital_proprio']
+
+        sheet_data['roic'] = sheet_data['resultado'] / sheet_data['patrimonio'] if sheet_data['patrimonio'] != 0 and not pd.isna(sheet_data['resultado']) and not pd.isna(sheet_data['patrimonio']) else np.nan
+        sheet_data['rem_cap_terceiros_por_rem_cap'] = sheet_data['remuneracao_capital_terceiros'] / sheet_data['remuneracao_capital'] if sheet_data['remuneracao_capital'] != 0 and not pd.isna(sheet_data['remuneracao_capital_terceiros']) and not pd.isna(sheet_data['remuneracao_capital']) else np.nan
+        sheet_data['rem_cap_proprio_por_rem_cap'] = sheet_data['remuneracao_capital_proprio'] / sheet_data['remuneracao_capital'] if sheet_data['remuneracao_capital'] != 0 and not pd.isna(sheet_data['remuneracao_capital_proprio']) and not pd.isna(sheet_data['remuneracao_capital']) else np.nan
+        sheet_data['rem_cap_por_ebit'] = sheet_data['remuneracao_capital'] / sheet_data['ebit'] if sheet_data['ebit'] != 0 and not pd.isna(sheet_data['remuneracao_capital']) and not pd.isna(sheet_data['ebit']) else np.nan
+
+        sheet_data['margem_ebitda'] = sheet_data['ebitda'] / sheet_data['receita_liquida'] if sheet_data['receita_liquida'] != 0 and not pd.isna(sheet_data['ebitda']) and not pd.isna(sheet_data['receita_liquida']) else np.nan
+        sheet_data['margem_ebit'] = sheet_data['ebit'] / sheet_data['receita_liquida'] if sheet_data['receita_liquida'] != 0 and not pd.isna(sheet_data['ebit']) and not pd.isna(sheet_data['receita_liquida']) else np.nan
+
+        sheet_data['caixa_investimentos_por_operacoes'] = sheet_data['caixa_investimentos'] / sheet_data['caixa_operacoes'] if sheet_data['caixa_operacoes'] != 0 and not pd.isna(sheet_data['caixa_investimentos']) and not pd.isna(sheet_data['caixa_operacoes']) else np.nan
+        sheet_data['caixa_investimentos_por_ebit'] = sheet_data['caixa_investimentos'] / sheet_data['ebit'] if sheet_data['ebit'] != 0 and not pd.isna(sheet_data['caixa_investimentos']) and not pd.isna(sheet_data['ebit']) else np.nan
+    except Exception as e:
+        pass
+    return sheet_data
+
+def append_rows(sheet, rows, company, quarter):
+    try:
+        sheet_data = get_sheet_data(sheet)
+
+        rows.append([company, quarter, 'EQT', '11.04.01', 'Reservas do Patrimônio', sheet_data['reservas']])
+        rows.append([company, quarter, 'EQT', '11.04.02', 'Reservas por Patrimônio', sheet_data['reservas_patrimonio']])
+        
+        rows.append([company, quarter, 'DBT', '12.01.01', 'Caixa', sheet_data['caixa']])
+        rows.append([company, quarter, 'DBT', '12.01.02', 'Dívida Bruta', sheet_data['divida_bruta']])
+        rows.append([company, quarter, 'DBT', '12.01.03', 'Dívida Líquida', sheet_data['divida_liquida']])
+        rows.append([company, quarter, 'DBT', '12.01.02.01', 'Dívida Bruta Circulante de Curto Prazo', sheet_data['divida_bruta_curto_prazo']])
+        rows.append([company, quarter, 'DBT', '12.01.02.02', 'Dívida Bruta Não Circulante de Longo Prazo Prazo', sheet_data['divida_bruta_longo_prazo']])
+        rows.append([company, quarter, 'DBT', '12.01.02.03', 'Dívida Bruta em Moeda Nacional', sheet_data['divida_moeda_nacional']])
+        rows.append([company, quarter, 'DBT', '12.01.02.04', 'Dívida Bruta em Moeda Estrangeira', sheet_data['divida_moeda_estrangeira']])
+        rows.append([company, quarter, 'EQT', '12.02.01', 'Dívida Bruta por Patrimônio Líquido', sheet_data['divida_bruta_por_patrimonio']])
+        rows.append([company, quarter, 'DBT', '12.02.02', 'Endividamento Financeiro', sheet_data['endividamento_financeiro']])
+        rows.append([company, quarter, 'EQT', '12.03.01', 'Patrimônio Imobilizado em Capex, Investimentos Não Capex e Intangível Não Capex', sheet_data['patrimonio_imobilizado']])
+        rows.append([company, quarter, 'EQT', '12.03.02', 'Patrimônio Imobilizado por Patrimônio', sheet_data['patrimonio_imobilizado_por_patrimonio']])
+        rows.append([company, quarter, 'PFT', '12.04.01', 'Dívida Líquida por EBITDA', sheet_data['divida_liquida_por_ebitda']])
+
+        rows.append([company, quarter, 'PFT', '13.01', 'LAJIDA EBITDA Resultado Antes do Resultado Financeiro e dos Tributos mais Depreciação e Amortização', sheet_data['ebitda']])
+        rows.append([company, quarter, 'PFT', '13.03', 'Contas por Faturamento', sheet_data['contas_faturamento']])
+        rows.append([company, quarter, 'PFT', '13.04', 'Estoques por Faturamento', sheet_data['estoques_faturamento']])
+        rows.append([company, quarter, 'PFT', '13.05', 'Ativos Biológicos por Faturamento', sheet_data['ativos_biologicos_faturamento']])
+        rows.append([company, quarter, 'PFT', '13.06', 'Tributos por Faturamento', sheet_data['tributos_faturamento']])
+        rows.append([company, quarter, 'PFT', '13.07', 'Despesas por Faturamento', sheet_data['despesas_faturamento']])
+        rows.append([company, quarter, 'PFT', '13.09', 'Outros por Faturamento', sheet_data['outros_faturamento']])
+
+        rows.append([company, quarter, 'EQT', '14.03', 'Capital Investido', sheet_data['patrimonio']])
+        rows.append([company, quarter, 'EQT', '14.03.01', 'ROIC (Retorno por Capital Investido)', sheet_data['roic']])
+        
+        rows.append([company, quarter, 'EQT', '15.01', 'Remuneração de Capital', sheet_data['remuneracao_capital']])
+        rows.append([company, quarter, 'EQT', '15.01.01', 'Remuneração de Capital de Terceiros por Remuneração de Capital', sheet_data['rem_cap_terceiros_por_rem_cap']])
+        rows.append([company, quarter, 'EQT', '15.01.02', 'Remuneração de Capital Próprio por Remuneração de Capital', sheet_data['rem_cap_proprio_por_rem_cap']])
+        rows.append([company, quarter, 'EQT', '15.02', 'Remuneração de Capital por EBIT', sheet_data['rem_cap_por_ebit']])
+        
+        rows.append([company, quarter, 'EQT', '16.03', 'Margem EBITDA (EBITDA por Resultado Bruto (Receita Líquida)', sheet_data['margem_ebitda']])
+        rows.append([company, quarter, 'EQT', '16.03.01', 'Margem EBIT (EBIT por Resultado Bruto (Receita Líquida)', sheet_data['margem_ebit']])
+
+        rows.append([company, quarter, 'CSH', '17.01', 'Caixa Livre', sheet_data['caixa_livre']])
+        rows.append([company, quarter, 'CSH', '17.02', 'Caixa Total', sheet_data['caixa_total']])
+        rows.append([company, quarter, 'CSH', '17.03', 'Caixa de Investimentos', sheet_data['caixa_investimentos']])
+        rows.append([company, quarter, 'CSH', '17.03.01', 'Caixa de Investimentos por Caixa das Operações', sheet_data['caixa_investimentos_por_operacoes']])
+        rows.append([company, quarter, 'CSH', '17.03.02', 'Caixa de Investimentos por EBIT', sheet_data['caixa_investimentos_por_ebit']])
+        rows.append([company, quarter, 'CSH', '17.04', 'Caixa Imobilizado', sheet_data['caixa_imobilizado']])
+        rows.append([company, quarter, 'CSH', '17.05', 'FCFF simplificado (Caixa Livre para a Firma)', sheet_data['caixa_operacoes'] - sheet_data['caixa_imobilizado']])
+        rows.append([company, quarter, 'CSH', '17.06', 'FCFE simplificado (Caixa Livre para os Acionistas)', sheet_data['caixa_operacoes'] - sheet_data['dividendos_obrigatorios']])
+
+    except Exception as e:
+        pass
+    return rows
+
+def compose_fund(intelacoes):
+    cols = ['DENOM_CIA', 'DT_REFER', 'BALANCE_SHEET', 'CD_CONTA', 'DS_CONTA', 'VL_CONTA']
+    rules = get_rules_fund()
+    fund = {}
+
+    try:
+        start_time = time.time()
+        for i, (setor, df) in enumerate(intelacoes.items()):
+            df_fund = pd.DataFrame(columns=df.columns)
+            sheets = df.groupby(['DENOM_CIA', 'DT_REFER'])
+            df_list = []  # Initialize an empty list for the dataframes
+
+            start_time_2 = time.time()
+            for j, (key, sheet) in enumerate(sheets):
+                company, quarter = key
+                rows = calculate_fund(rules, sheet=sheet, company=company, quarter=quarter)
+                rows = append_rows(sheet, rows, company, quarter)
+                rows = pd.DataFrame(rows, columns=cols)
+                
+                # Append the combined dataframe to the list
+                sheet = pd.concat([sheet, rows]).ffill().drop_duplicates()
+                df_list.append(sheet)
+
+                if j % 100 == 0:
+                    print(setor, company, remaining_time(start_time_2, len(sheets), j))
+
+            # Concatenate all dataframes in the list
+            df_fund = pd.concat([df_fund, pd.concat(df_list, ignore_index=True)], ignore_index=True)
+            fund[setor] = df_fund
+            df_fund.to_pickle(f'{setor}_fund.pkl')
+            print(setor, remaining_time(start_time, len(intelacoes), i))
+    except Exception as e:
+        pass
+    return fund
+
+def load_database():
+    """
+    This function loads a series of databases in a specific order, with each database potentially
+    depending on previous ones. If a database cannot be loaded, it's generated based on its dependencies.
+    
+    Order & Dependencies:
+    1. 'acoes' 
+        - Directly loaded or generated using get_composicao_acionaria()
+    
+    2. 'intelacoes'
+        - Depends on: 'acoes' & 'intel_b3'
+        - Loaded directly or generated using compose_intel()
+
+    3. 'intel_b3'
+        - Depends on: 'b3_cvm'
+        - Loaded directly or generated using prepare_b3_cvm()
+
+    4. 'b3_cvm'
+        - Depends on: 'company' & 'math'
+        - Loaded directly or generated using get_companies()
+
+    5. 'company'
+        - Directly loaded or generated using b3_grab(b3.search_url)
+
+    6. 'math'
+        - Directly loaded or generated using get_math_from_b3_cvm()
+
+    7. 'fund'
+        - Depends on: 'intelacoes'
+        - Loaded directly or generated using compose_fund()
+
+    Returns:
+        fund (dict): The final loaded or generated database.
+    """
+    # Step 1: Load or prepare 'acoes'
+    try:
+        acoes = load_pkl(f'{b3.app_folder}acoes')
+    except Exception:
+        acoes = get_composicao_acionaria()
+        acoes = save_pkl(acoes, f'{b3.app_folder}acoes')
+
+    # Step 2: Load or prepare 'fund'
+    try:
+        fund = load_pkl(f'{b3.app_folder}fund')
+    except Exception:
+        # Nested step: Load or prepare 'intelacoes'
+        try:
+            intelacoes = load_pkl(f'{b3.app_folder}intelacoes')
+        except Exception:
+            # Nested step: Load or prepare 'intel_b3'
+            try:
+                intel_b3 = load_pkl(f'{b3.app_folder}intel_b3')
+            except Exception:
+                # Further nested step: Load or prepare 'b3_cvm'
+                try:
+                    b3_cvm = load_pkl(f'{b3.app_folder}b3_cvm')
+                except Exception:
+                    # Further nested step: Load or prepare 'company'
+                    try:
+                        company = load_pkl(f'{b3.app_folder}company')
+                    except Exception:
+                        company = b3_grab(b3.search_url)
+                        company = save_pkl(company, f'{b3.app_folder}company')
+                    
+                    # Further nested step: Load or prepare 'math'
+                    try:
+                        math = load_pkl(f'{b3.app_folder}math')
+                    except Exception:
+                        math = get_math_from_b3_cvm()
+                        math = save_pkl(math, f'{b3.app_folder}math')
+                    
+                    # Use 'math' and 'company' to prepare 'b3_cvm'
+                    b3_cvm = get_companies(math, company)
+                    b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}b3_cvm')
+                
+                # Use 'b3_cvm' to prepare 'intel_b3'
+                intel_b3 = prepare_b3_cvm(b3_cvm)
+                intel_b3 = save_pkl(intel_b3, f'{b3.app_folder}intel_b3')
+
+            # Use 'intel_b3' to prepare 'intelacoes'
+            intelacoes = compose_intel(acoes, intel_b3)
+            intelacoes = save_pkl(intelacoes, f'{b3.app_folder}intelacoes')
+        
+        # Use 'intelacoes' to prepare 'fund'
+        fund = compose_fund(intelacoes)
+        fund = save_pkl(fund, f'{b3.app_folder}fund')
+
+
+
+    return fund
+
+def date_to_unix(date_string, date_format='%Y-%m-%d'):
+    """
+    Convert a date string to UNIX timestamp.
+    
+    Parameters:
+    - date_string (str): The date string to convert.
+    - date_format (str, optional): The format of the date string. Default is '%Y-%m-%d'.
+    
+    Returns:
+    - int: UNIX timestamp representing the input date_string.
+    """
+    # Parse the input date_string using the specified date_format.
+    dt = datetime.datetime.strptime(date_string, date_format)
+    
+    # Convert the datetime object to a UNIX timestamp (integer).
+    unix_timestamp = int(dt.timestamp())
+    
+    return unix_timestamp
+
+
+def get_yahoo_quotes(ticker, start_date, end_date=pd.Timestamp.today().strftime('%Y-%m-%d'), country='brazil', interval='1d', events='history', includeAdjustedClose=True):
+    '''
+    Generate a Yahoo Finance URL for downloading historical stock data.
+    
+    Parameters:
+    - ticker (str or list of str): The stock ticker symbol(s) or a list of symbols.
+    - start_date (str): The start date in the format 'YYYY-MM-DD'.
+    - end_date (str, optional): The end date in the format 'YYYY-MM-DD'. Defaults to today's date.
+    - interval (str, optional): Data interval (e.g., '1d' for daily data). Default is '1d'.
+    - events (str, optional): Type of data to request. Default is 'history'.
+    - includeAdjustedClose (bool, optional): Whether to include the adjusted close price. Default is True.
+    
+    Returns:
+    - dict: A dictionary of DataFrames containing historical stock data for the specified ticker(s).
+    '''
+    # Base URL for Yahoo Finance API
+    base_url = 'https://query1.finance.yahoo.com/v7/finance/download/'
+
+    # Convert start and end dates to UNIX timestamps
+    period1 = date_to_unix(start_date)
+    period2 = date_to_unix(end_date)
+
+    # Ensure ticker is a list
+    if type(ticker) is str:
+        ticker = [ticker]
+
+    quotes = {}  # Dictionary to store historical data for each ticker
+    # start_time = run.time.time()
+    for i, tick in enumerate(ticker):
+        # Append '.SA' to ticker symbol if the country is Brazil
+        t = tick + '.SA' if country == 'brazil' else tick
+
+        # Construct the Yahoo Finance URL for the given parameters
+        url = f'{base_url}{t}?period1={period1}&period2={period2}&interval={interval}&events={events}&includeAdjustedClose={includeAdjustedClose}'
+
+        # Read data from the URL into a DataFrame
+        df = pd.read_csv(url)
+        df['Date'] = pd.to_datetime(df['Date'])
+        df = df.set_index('Date')
+
+        # Store the DataFrame in the quotes dictionary
+        quotes[tick] = df
+        # print(run.remaining_time(start_time, len(ticker), i), tick)
+    
+    return quotes  # Return the dictionary of historical stock data
+
+
+def yahoo_quotes(fund, start_date='1970-01-02'):
+    '''
+    Retrieve historical stock data for a fund's tickers from Yahoo Finance.
+
+    Parameters:
+    - fund (dict): A dictionary containing fund data, where keys are sectors and values are DataFrames.
+    - start_date (str, optional): The start date for historical data retrieval in the format 'YYYY-MM-DD'. Default is '1970-01-02'.
+
+    Returns:
+    - dict: A dictionary of historical stock data for the specified fund's tickers.
+    '''
+    quotes = {}  # Dictionary to store historical data for each ticker
+    start_time = time.time()
+
+    # Iterate over sectors and their associated DataFrames in the fund dictionary
+    for i, (setor, df) in enumerate(fund.items()):
+        # Extract unique ticker information for the sector's DataFrame
+        df_tickers = df[['CNPJ_CIA', 'PREGAO', 'TICKERS']].drop_duplicates()
+        
+        # Clean and split ticker strings into lists if necessary
+        df_tickers['TICKERS'] = df_tickers['TICKERS'].apply(lambda x: [item.strip() for item in x.split(',')] if isinstance(x, str) else x)
+
+        start_time_2 = time.time()
+        
+        # Iterate over tickers in the sector
+        for j, (index, row) in enumerate(df_tickers.iterrows()):
+            cnpj, pregao, ticker = row
+            try:
+                # Retrieve historical stock data using the get_yahoo_quotes function
+                df_quotes = get_yahoo_quotes(ticker, start_date=start_date)
+                
+                # Store the retrieved data in the quotes dictionary
+                quotes[pregao] = df_quotes
+                
+                # Print progress information
+                print(remaining_time(start_time, len(fund), i), setor, remaining_time(start_time_2, len(df_tickers), j), pregao, ', '.join(ticker))
+            except Exception as e:
+                pass
+
+    return quotes  # Return the dictionary of historical stock data
+
+def quotes_update(fund, quotes, quotes_new):
+    '''
+    Update existing historical stock data with new data from a second source.
+
+    Parameters:
+    - quotes (dict): A dictionary of existing historical stock data.
+    - quotes_new (dict): A dictionary of new historical stock data to be merged with the existing data.
+
+    Returns:
+    - dict: An updated dictionary of historical stock data.
+    '''
+    start_time = time.time()
+    
+    # Iterate over sectors and their associated DataFrames in the fund dictionary
+    for i, (setor, df) in enumerate(fund.items()):
+        # Extract unique ticker information for the sector's DataFrame
+        df_tickers = df[['CNPJ_CIA', 'PREGAO', 'TICKERS']].drop_duplicates()
+        
+        # Clean and split ticker strings into lists if necessary
+        df_tickers['TICKERS'] = df_tickers['TICKERS'].apply(lambda x: [y.strip() for y in x.split(',')] if isinstance(x, str) else x)
+        
+        for j, (index, row) in enumerate(df_tickers.iterrows()):
+            cnpj, pregao, ticker = row
+            if ticker:
+                for k, tick in enumerate(ticker):
+                    try:
+                        # Retrieve the existing and new data for the ticker
+                        df1 = quotes[pregao][tick]
+                        df2 = quotes_new[pregao][tick]
+                        
+                        # Concatenate and deduplicate the data
+                        df = pd.concat([df1, df2])
+                        df = df[~df.index.duplicated(keep='first')]
+                        
+                        # Update the data in the quotes dictionary
+                        quotes[pregao][tick] = df
+                    except Exception as e:
+                        pass
+
+    return quotes  # Return the updated dictionary of historical stock data
+
+def integrate_yahoo_quotes(fund):
+    '''
+    Retrieve, update, and save historical stock data for a fund using Yahoo Finance.
+
+    Returns:
+    - dict: A dictionary of historical stock data.
+    '''
+    try:
+        # Attempt to load existing quotes from a pickle file
+        quotes = load_pkl(f'{b3.app_folder}quotes')
+    except Exception:
+        # If loading fails, retrieve initial quotes using Yahoo Finance and save them
+        quotes = yahoo_quotes(fund)
+        quotes = save_pkl(quotes, f'{b3.app_folder}quotes')
+    
+    # Determine the start date for retrieving new data
+    start_date = min(df.index.max() for _, tickers in quotes.items() for _, df in tickers.items()).strftime('%Y-%m-%d')
+
+    # Retrieve new quotes from Yahoo Finance starting from the determined start date
+    quotes_new = yahoo_quotes(fund, start_date=start_date)
+    
+    # Update existing quotes with the new data
+    quotes = quotes_update(fund, quotes, quotes_new)
+    
+    # Save the updated quotes
+    quotes = save_pkl(quotes, f'{b3.app_folder}quotes')
+
+    return quotes  # Return the dictionary of historical stock data
