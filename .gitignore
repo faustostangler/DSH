@@ -12,3 +12,8 @@ temporary_task.py
 *.xlsx
 *.xls
 *.pdf
+*.png
+*.jpg
+*.jpeg
+*.htm
+*.html
