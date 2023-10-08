@@ -8,6 +8,7 @@ from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
+from selenium.webdriver.common.alert import Alert
 
 import unidecode
 import string
@@ -234,7 +235,7 @@ def remaining_time(start_time, size, i):
   return progress
 
 # selenium functions
-def load_browser():
+def load_browser_old():
     """
     Launches chromedriver and creates a wait object.
     
@@ -269,6 +270,41 @@ def load_browser():
         b3.set_driver_and_wait(driver, wait)
     except Exception as e:
         pass
+    # Return a tuple containing the driver and the wait object.
+    return driver, wait
+
+def load_browser(chromedriver_path, driver_wait_time):
+    """
+    Launches chromedriver and creates a wait object.
+    
+    Parameters:
+    - chromedriver_path (str): The path to the chromedriver executable.
+    - driver_wait_time (int): The time to wait for elements to appear.
+    
+    Returns:
+    tuple: A tuple containing a WebDriver instance and a WebDriverWait instance.
+    """
+    try:
+        # Define the options for the ChromeDriver.
+        options = webdriver.ChromeOptions()
+        # options.add_argument('--headless')  # Run in headless mode.
+        options.add_argument('--no-sandbox')  # Avoid sandboxing.
+        options.add_argument('--disable-dev-shm-usage')  # Disable shared memory usage.
+        options.add_argument('--disable-blink-features=AutomationControlled')  # Disable automated control.
+        options.add_argument('start-maximized')  # Maximize the window on startup.
+
+        # Initialize the ChromeDriver.
+        driver = webdriver.Chrome(executable_path=chromedriver_path, options=options)
+        
+        # Define the exceptions to ignore during WebDriverWait.
+        exceptions_ignore = (NoSuchElementException, StaleElementReferenceException)
+        
+        # Create a WebDriverWait instance for the driver, using the specified wait time and exceptions to ignore.
+        wait = WebDriverWait(driver, driver_wait_time, ignored_exceptions=exceptions_ignore)
+    except Exception as e:
+        print(f"Error initializing browser: {str(e)}")
+        return None, None
+    
     # Return a tuple containing the driver and the wait object.
     return driver, wait
 
@@ -3639,7 +3675,6 @@ def get_math_from_b3_cvm():
 
     return math
 
-
 def get_classificacao_setorial(setorial=''):
     driver, wait = load_browser()
     driver.get(b3.url_setorial)
@@ -5214,7 +5249,6 @@ def date_to_unix(date_string, date_format='%Y-%m-%d'):
     
     return unix_timestamp
 
-
 def get_yahoo_quotes(ticker, start_date, end_date=pd.Timestamp.today().strftime('%Y-%m-%d'), country='brazil', interval='1d', events='history', includeAdjustedClose=True):
     '''
     Generate a Yahoo Finance URL for downloading historical stock data.
@@ -5260,7 +5294,6 @@ def get_yahoo_quotes(ticker, start_date, end_date=pd.Timestamp.today().strftime(
         # print(run.remaining_time(start_time, len(ticker), i), tick)
     
     return quotes  # Return the dictionary of historical stock data
-
 
 def yahoo_quotes(fund, start_date='1970-01-02'):
     '''
@@ -5372,3 +5405,7 @@ def integrate_yahoo_quotes(fund):
     quotes = save_pkl(quotes, f'{b3.app_folder}quotes')
 
     return quotes  # Return the dictionary of historical stock data
+
+# macro
+def get_bcb_series():
+    pass
