@@ -17,7 +17,7 @@ import pandas as pd
 # Sidebar layout
 layout = html.Div([
     # store data
-    dcc.Store(id='store-data'), 
+    dcc.Store(id='store-data', storage_type='session'), 
 
     dcc.Interval(
         id='interval-component',

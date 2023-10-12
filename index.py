@@ -16,10 +16,10 @@ app.layout = html.Div([
     html.Hr(),
     dcc.Location(id='url', refresh=False),  
 
-    dcc.Store(id='store-selected-setor'),
-    dcc.Store(id='store-selected-subsetor'),
-    dcc.Store(id='store-selected-segmento'),
-    dcc.Store(id='store-selected-company'),
+    dcc.Store(id='store-selected-setor', storage_type='session'),
+    dcc.Store(id='store-selected-subsetor', storage_type='session'),
+    dcc.Store(id='store-selected-segmento', storage_type='session'),
+    dcc.Store(id='store-selected-company', storage_type='session'),
 
     dbc.Row([
         dbc.Col([

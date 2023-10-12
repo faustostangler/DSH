@@ -7,7 +7,7 @@ layout = html.Div([
     html.H1("Análise Fundamentalista"),
     html.H2(id='segmento-title'),
     # Your contents here...
-    dcc.Graph(id='graph-ativos'),
+    # dcc.Graph(id='graph-ativos'),
 ])
 
 # Callbacks for this page...

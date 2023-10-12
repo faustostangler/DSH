@@ -6,7 +6,7 @@ from app import app
 layout = html.Div([
     html.H1("Análise Fundamentalista"),
     html.H2(id='setor-title'),
-    dcc.Graph(id='graph-ativos'),
+    # dcc.Graph(id='graph-ativos'),
     # Your contents here...
 ])
 
