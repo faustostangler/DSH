@@ -1,4 +1,4 @@
-from dash import html, dcc
+from dash import html, dcc, exceptions
 from dash.dependencies import Input, Output
 
 from app import app
@@ -17,7 +17,7 @@ layout = html.Div([
 )
 def update_setor_content(stored_setor):
     if stored_setor is None:
-        raise dash.exceptions.PreventUpdate
+        raise exceptions.PreventUpdate
     
     setor = stored_setor.get('setor', '')
     if setor:

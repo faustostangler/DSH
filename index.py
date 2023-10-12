@@ -19,6 +19,7 @@ app.layout = html.Div([
 
     dcc.Store(id='store-selected-setor'),
     dcc.Store(id='store-selected-subsetor'),
+    dcc.Store(id='store-selected-segmento'), 
 
     dbc.Row([
         dbc.Col([

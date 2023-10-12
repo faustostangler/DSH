@@ -132,12 +132,12 @@ def load_data(_):
     
     return stored_data, dropdown_options
 
-@app.callback(
-    Output('store-selected-setor', 'data'),
-    Input('dropdown-setor', 'value')
-)
-def store_selected_setor(selected_setor):
-    return {'setor': selected_setor}
+# @app.callback(
+#     Output('store-selected-setor', 'data'),
+#     Input('dropdown-setor', 'value')
+# )
+# def store_selected_setor(selected_setor):
+#     return {'setor': selected_setor}
 
 # Toggle visibility and reset 'Subsetor' dropdown when 'Setor' is selected
 @app.callback(
@@ -168,12 +168,12 @@ def update_subsetor_options(selected_setor, stored_data):
     
     return subsetor_options
 
-@app.callback(
-    Output('store-selected-subsetor', 'data'),
-    Input('dropdown-subsetor', 'value')
-)
-def store_selected_subsetor(selected_subsetor):
-    return {'subsetor': selected_subsetor}
+# @app.callback(
+#     Output('store-selected-subsetor', 'data'),
+#     Input('dropdown-subsetor', 'value')
+# )
+# def store_selected_subsetor(selected_subsetor):
+#     return {'subsetor': selected_subsetor}
 
 
 # Toggle visibility and reset 'Segmento' dropdown when 'Subsetor' is selected
@@ -205,14 +205,14 @@ def update_segmento_options(selected_subsetor, stored_data):
     
     return segmento_options
 
-@app.callback(
-    [Output('store-selected-setor', 'data'),
-     Output('store-selected-segmento', 'data')],
-    [Input('dropdown-setor', 'value'),
-     Input('dropdown-segmento', 'value')]
-)
-def store_selected_values(selected_setor, selected_segmento):
-    return {'setor': selected_setor}, {'segmento': selected_segmento}
+# @app.callback(
+#     [Output('store-selected-setor', 'data'),
+#      Output('store-selected-segmento', 'data')],
+#     [Input('dropdown-setor', 'value'),
+#      Input('dropdown-segmento', 'value')]
+# )
+# def store_selected_values(selected_setor, selected_segmento):
+#     return {'setor': selected_setor}, {'segmento': selected_segmento}
 
 
 @app.callback(
