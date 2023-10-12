@@ -1,100 +1,58 @@
 import dash
 from dash import html, dcc
-from dash.dependencies import Input, Output, State
-    
 import dash_bootstrap_components as dbc
+from dash.dependencies import Input, Output
 
-app = dash.Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
-server = app.server
+from app import app
+from pages import sidebar, nav, dashboard, setor, subsetor, segmento, setup
 
-# Define a list of pages and their subpages using dash.page_registry.values()
-pages = list(dash.page_registry.values())
+import assets.helper as b3
+import assets.functions as run
 
-# Define the App Names
-title = "Análise Fundamentalista"
-footer = 'Copyright © 2023 FSVGS'
+import pandas as pd
 
-# Define the main navigation sidebar
-sidebar = dbc.Nav(
-            [
-                dbc.NavLink(
-                    [
-                        html.Div(page["name"], className="ms-2"),
-                    ],
-                    href=page["path"],
-                    active="exact",
-                )
-                for page in dash.page_registry.values()
-            ],
-            vertical=False,
-            pills=True,
-            className="bg-dark",
-)
+app.layout = html.Div([
+    nav.layout, 
+    html.H1("Análise Fundamentalista"),
+    html.Hr(),
+    dcc.Location(id='url', refresh=False),  
 
-# Define the secondary navigation sidebar that shows the sub-items based on the nav selection
-subnav = dbc.Nav(
-    [
-        dbc.NavLink(
-            [
-                html.Div(subpage["name"], className="ms-4"),
-            ],
-            href=subpage["path"],
-            active="exact",
-        )
-        for page in pages
-        for subpage in page.get("subpages", [])
-    ],
-    vertical=True,
-    pills=True,
-    className="bg-light",
-)
+    dcc.Store(id='store-selected-setor'),
+    dcc.Store(id='store-selected-subsetor'),
 
-
-# Define the app layout
-app.layout = dbc.Container([
-    # Title
     dbc.Row([
         dbc.Col([
-            html.H1(title),
-        ]),
-    ]),
+            dbc.Row([
+            sidebar.layout
+            ], id='sidebar'), 
+            dbc.Row([
+            # nav.layout
+            ], id='nav')
+            
+        ], width=2),
+        dbc.Col(children='teste', id="content", width=10),
+    ])
+])
 
-    # Horizontal menu row
-    dbc.Row([
-        dbc.Col([
-            sidebar,
-        ]),
-    ]),
+@app.callback(Output("content", "children"), 
+              [Input("url", "pathname")])
+def render_page_content(pathname):
+    if pathname in ['/', "/dashboard"]:
+        return dashboard.layout
+    elif pathname == "/setor":
+        return setor.layout
+    elif pathname == "/subsetor":
+        return subsetor.layout
+    elif pathname == "/segmento":
+        return segmento.layout
 
-    # Content
-    dbc.Row([
-        # Sub menu
-        dbc.Col([
-            'future submenu here',
-            dbc.Col(subnav,),
-            ], 
-            xs=4, sm=4, md=2, lg=2, xl=2, xxl=2,
-        ),
-        # Content
-        dbc.Col([
-            dash.page_container
-            ], 
-            xs=8, sm=8, md=10, lg=10, xl=10, xxl=10,
-        ),
-]),
-
-    # Footer
-    dbc.Row([
-        dbc.Col([
-            footer,
-        ], id='footer'),
-    ]),
-
-    ], fluid=True)
-
-
-
-
+    return dbc.Card([
+        dbc.CardBody([
+            html.H1("404: Not found", className="text-danger"),
+            html.Hr(),
+            html.P(f"The pathname '{pathname}' was not recognised..."),
+        ])
+    ], className='mt-5')
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(port=8051, debug=True)

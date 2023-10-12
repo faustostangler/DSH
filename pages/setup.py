@@ -3,12 +3,14 @@ from dash import dcc, html, callback, Output, Input
 import plotly.express as px
 import dash_bootstrap_components as dbc
 
+from app import app
+
 import assets.helper as b3
 # import assets.variables as var
 # import assets.system_variables as varsys
 # import assets.system_functions as runsys
 
-dash.register_page(__name__, path='/setup', name='Setup and Config')
+# dash.register_page(__name__, path='/setup', name='Setup and Config')
 
 options = dcc.RadioItems(id='options', options={
     'b3_companies': 'Atualizar Companhias da B3',
