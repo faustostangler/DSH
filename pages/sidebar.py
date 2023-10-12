@@ -301,9 +301,34 @@ def display_selected_other_companies(selected_other_companies):
 #     # If nothing is selected, navigate to the dashboard.
 #     else:
 #         return '/dashboard'
+# @app.callback(
+#     [Output('store-selected-setor', 'data'),
+#      Output('store-selected-subsetor', 'data'),
+#      Output('url', 'pathname')],
+#     [Input('dropdown-setor', 'value'),
+#      Input('dropdown-subsetor', 'value'),
+#      Input('dropdown-segmento', 'value')]
+# )
+# def update_stores_and_url(selected_setor, selected_subsetor, selected_segmento):
+#     stored_setor = {'setor': selected_setor}
+#     stored_subsetor = {'subsetor': selected_subsetor}
+    
+#     # Update URL
+#     if selected_segmento is not None:
+#         new_pathname = '/segmento'
+#     elif selected_subsetor is not None:
+#         new_pathname = '/subsetor'
+#     elif selected_setor is not None:
+#         new_pathname = '/setor'
+#     else:
+#         new_pathname = '/dashboard'
+    
+#     return stored_setor, stored_subsetor, new_pathname
+
 @app.callback(
     [Output('store-selected-setor', 'data'),
      Output('store-selected-subsetor', 'data'),
+     Output('store-selected-segmento', 'data'),
      Output('url', 'pathname')],
     [Input('dropdown-setor', 'value'),
      Input('dropdown-subsetor', 'value'),
@@ -312,6 +337,7 @@ def display_selected_other_companies(selected_other_companies):
 def update_stores_and_url(selected_setor, selected_subsetor, selected_segmento):
     stored_setor = {'setor': selected_setor}
     stored_subsetor = {'subsetor': selected_subsetor}
+    stored_segmento = {'segmento': selected_segmento}
     
     # Update URL
     if selected_segmento is not None:
@@ -323,4 +349,4 @@ def update_stores_and_url(selected_setor, selected_subsetor, selected_segmento):
     else:
         new_pathname = '/dashboard'
     
-    return stored_setor, stored_subsetor, new_pathname
+    return stored_setor, stored_subsetor, stored_segmento, new_pathname
