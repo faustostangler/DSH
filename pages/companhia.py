@@ -79,4 +79,4 @@ def update_titles(stored_company, stored_setor, stored_subsetor, stored_segmento
     compressed_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
 
-    return segmento_title, company_title, df
+    return segmento_title, company_title, compressed_data
