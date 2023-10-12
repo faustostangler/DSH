@@ -18,8 +18,8 @@ import pandas as pd
 layout = html.Div([
     # store data
     dcc.Store(id='store-data'), 
-    dcc.Store(id='store-selected-setor'),
-    dcc.Store(id='store-selected-subsetor'),
+    # dcc.Store(id='store-selected-setor'),
+    # dcc.Store(id='store-selected-subsetor'),
     dcc.Interval(
         id='interval-component',
         interval=1*1000,  # in milliseconds
@@ -206,6 +206,16 @@ def update_segmento_options(selected_subsetor, stored_data):
     return segmento_options
 
 @app.callback(
+    [Output('store-selected-setor', 'data'),
+     Output('store-selected-segmento', 'data')],
+    [Input('dropdown-setor', 'value'),
+     Input('dropdown-segmento', 'value')]
+)
+def store_selected_values(selected_setor, selected_segmento):
+    return {'setor': selected_setor}, {'segmento': selected_segmento}
+
+
+@app.callback(
     [Output('dropdown-company', 'value'),
      Output('col-company', 'style')],
     Input('dropdown-segmento', 'value')
@@ -272,3 +282,46 @@ def display_selected_other_companies(selected_other_companies):
         return ""
     else:
         return f"Comparar com: {', '.join(selected_other_companies)}"
+
+# @app.callback(
+#     Output('url', 'pathname'),
+#     [Input('dropdown-setor', 'value'),
+#      Input('dropdown-subsetor', 'value'),
+#      Input('dropdown-segmento', 'value')]
+# )
+# def update_url_path(selected_setor, selected_subsetor, selected_segmento):
+#     # If a segment is selected, navigate to the segment page.
+#     if selected_segmento is not None:
+#         return '/segmento'
+#     # If a subsetor is selected (and no segment), navigate to the subsetor page.
+#     elif selected_subsetor is not None:
+#         return '/subsetor'
+#     # If a setor is selected (and no subsetor or segment), navigate to the setor page.
+#     elif selected_setor is not None:
+#         return '/setor'
+#     # If nothing is selected, navigate to the dashboard.
+#     else:
+#         return '/dashboard'
+@app.callback(
+    [Output('store-selected-setor', 'data'),
+     Output('store-selected-subsetor', 'data'),
+     Output('url', 'pathname')],
+    [Input('dropdown-setor', 'value'),
+     Input('dropdown-subsetor', 'value'),
+     Input('dropdown-segmento', 'value')]
+)
+def update_stores_and_url(selected_setor, selected_subsetor, selected_segmento):
+    stored_setor = {'setor': selected_setor}
+    stored_subsetor = {'subsetor': selected_subsetor}
+    
+    # Update URL
+    if selected_segmento is not None:
+        new_pathname = '/segmento'
+    elif selected_subsetor is not None:
+        new_pathname = '/subsetor'
+    elif selected_setor is not None:
+        new_pathname = '/setor'
+    else:
+        new_pathname = '/dashboard'
+    
+    return stored_setor, stored_subsetor, new_pathname

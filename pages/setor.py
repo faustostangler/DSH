@@ -4,8 +4,7 @@ from dash.dependencies import Input, Output
 from app import app
 
 layout = html.Div([
-    html.H2("Setor Page"),
-    html.H3(id='setor-title'),
+    html.H2(id='setor-title'),
     dcc.Graph(id='graph-ativos'),
     # Your contents here...
 ])
@@ -22,6 +21,6 @@ def update_setor_content(stored_setor):
     
     setor = stored_setor.get('setor', '')
     if setor:
-        return f"Content for Setor: {setor}"
+        return f"{setor}"
     else:
         return ""
