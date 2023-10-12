@@ -21,9 +21,6 @@ app.layout = html.Div([
     dcc.Store(id='store-selected-subsetor'),
     dcc.Store(id='store-selected-segmento'),
 
-    # Add a Div to display stored values
-    html.Div(id='display-stored-values'),
-
     dbc.Row([
         dbc.Col([
             dbc.Row([
@@ -57,26 +54,6 @@ def render_page_content(pathname):
             html.P(f"The pathname '{pathname}' was not recognised..."),
         ])
     ], className='mt-5')
-
-@app.callback(
-    Output('display-stored-values', 'children'),
-    [
-        Input('store-selected-setor', 'data'),
-        Input('store-selected-subsetor', 'data'),
-        Input('store-selected-segmento', 'data')
-    ]
-)
-def update_display(stored_setor, stored_subsetor, stored_segmento):
-    # Create a string representation of the stored values
-    stored_values_str = (
-        f"Stored Setor: {stored_setor}\n"
-        f"Stored Subsetor: {stored_subsetor}\n"
-        f"Stored Segmento: {stored_segmento}\n"
-    )
-    # Convert the string to a format suitable for display in Dash
-    return dcc.Markdown(stored_values_str)
-
-
 
 
 
