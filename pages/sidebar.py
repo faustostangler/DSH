@@ -106,7 +106,6 @@ layout.children.extend([
         )
     ])
 ])
-layout.children.insert(3, dcc.Store(id='store-selected-company'))
 # callbacks
 
 # Load data, store it, and populate the 'Setor' dropdown

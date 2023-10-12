@@ -13,7 +13,6 @@ import pandas as pd
 
 app.layout = html.Div([
     nav.layout, 
-    html.H1("Análise Fundamentalista"),
     html.Hr(),
     dcc.Location(id='url', refresh=False),  
 
@@ -32,7 +31,7 @@ app.layout = html.Div([
             ], id='nav')
             
         ], width=2),
-        dbc.Col(children='teste', id="content", width=10),
+        dbc.Col(id="content", width=10),
     ])
 ])
 

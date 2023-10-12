@@ -4,9 +4,10 @@ from dash.dependencies import Input, Output
 from app import app
 
 layout = html.Div([
+    html.H1("Análise Fundamentalista"),
     html.H2(id='segmento-title'),
-    dcc.Graph(id='graph-ativos'),
     # Your contents here...
+    dcc.Graph(id='graph-ativos'),
 ])
 
 # Callbacks for this page...
@@ -27,4 +28,4 @@ def update_segmento_content(stored_setor, stored_subsetor, stored_segmento):
     if segmento:
         return f"{setor} - {subsetor} - {segmento}"
     else:
-        return "nenhum segmento"
+        return ""
