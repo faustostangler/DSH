@@ -298,9 +298,9 @@ def display_selected_other_companies(selected_other_companies):
 #     # If a setor is selected (and no subsetor or segment), navigate to the setor page.
 #     elif selected_setor is not None:
 #         return '/setor'
-#     # If nothing is selected, navigate to the dashboard.
+#     # If nothing is selected, navigate to the home.
 #     else:
-#         return '/dashboard'
+#         return '/home'
 # @app.callback(
 #     [Output('store-selected-setor', 'data'),
 #      Output('store-selected-subsetor', 'data'),
@@ -321,7 +321,7 @@ def display_selected_other_companies(selected_other_companies):
 #     elif selected_setor is not None:
 #         new_pathname = '/setor'
 #     else:
-#         new_pathname = '/dashboard'
+#         new_pathname = '/home'
     
 #     return stored_setor, stored_subsetor, new_pathname
 
@@ -345,7 +345,7 @@ def update_stores_and_url(selected_setor, selected_subsetor, selected_segmento, 
     
     # Update URL
     if selected_company is not None:
-        new_pathname = '/company'
+        new_pathname = '/companhia'
     elif selected_segmento is not None:
         new_pathname = '/segmento'
     elif selected_subsetor is not None:
@@ -353,6 +353,6 @@ def update_stores_and_url(selected_setor, selected_subsetor, selected_segmento, 
     elif selected_setor is not None:
         new_pathname = '/setor'
     else:
-        new_pathname = '/dashboard'
+        new_pathname = '/home'
     
     return stored_setor, stored_subsetor, stored_segmento, stored_company, new_pathname

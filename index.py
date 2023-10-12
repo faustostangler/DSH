@@ -4,7 +4,7 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 
 from app import app
-from pages import sidebar, nav, dashboard, setor, subsetor, segmento, companhia, setup
+from pages import sidebar, nav, home, setor, subsetor, segmento, companhia, setup
 
 import assets.helper as b3
 import assets.functions as run
@@ -39,8 +39,8 @@ app.layout = html.Div([
 @app.callback(Output("content", "children"), 
               [Input("url", "pathname")])
 def render_page_content(pathname):
-    if pathname in ['/', "/dashboard"]:
-        return dashboard.layout
+    if pathname in ['/', "/home"]:
+        return home.layout
     elif pathname == "/setor":
         return setor.layout
     elif pathname == "/subsetor":
