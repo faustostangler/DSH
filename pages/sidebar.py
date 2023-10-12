@@ -18,8 +18,7 @@ import pandas as pd
 layout = html.Div([
     # store data
     dcc.Store(id='store-data'), 
-    # dcc.Store(id='store-selected-setor'),
-    # dcc.Store(id='store-selected-subsetor'),
+
     dcc.Interval(
         id='interval-component',
         interval=1*1000,  # in milliseconds

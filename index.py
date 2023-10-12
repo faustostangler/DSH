@@ -16,10 +16,10 @@ app.layout = html.Div([
     html.H1("Análise Fundamentalista"),
     html.Hr(),
     dcc.Location(id='url', refresh=False),  
-
+    
     dcc.Store(id='store-selected-setor'),
     dcc.Store(id='store-selected-subsetor'),
-    dcc.Store(id='store-selected-segmento'), 
+    dcc.Store(id='store-selected-segmento'),
 
     dbc.Row([
         dbc.Col([
