@@ -38,7 +38,15 @@ layout = html.Div([
             width={"size": 10, "offset": 1}  
         ),
     ]),
-    
+
+    # Display selected setor
+    dbc.Row([
+        dbc.Col(
+            html.H4(id='display-setor'),
+            width={"size": 10, "offset": 1}
+        )
+    ]), 
+
     # Dropdown for 'Subsetor' selection
     dbc.Row([
         dbc.Col(
@@ -250,6 +258,17 @@ def display_selected_company(selected_company):
         return ""
     else:
         return f"{selected_company}"
+
+@app.callback(
+    Output('display-setor', 'children'),
+    Input('dropdown-setor', 'value')
+)
+def display_selected_setor(selected_setor):
+    if selected_setor is None:
+        return ""
+    else:
+        return f"{selected_setor}"
+
 
 # Toggle visibility and update 'Other Companies' options when 'COMPANY' is selected
 @app.callback(
