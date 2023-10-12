@@ -113,7 +113,7 @@ layout.children.extend([
         )
     ])
 ])
-
+layout.children.insert(3, dcc.Store(id='store-selected-company'))
 # callbacks
 
 # Load data, store it, and populate the 'Setor' dropdown
@@ -325,22 +325,28 @@ def display_selected_other_companies(selected_other_companies):
     
 #     return stored_setor, stored_subsetor, new_pathname
 
+# In the callbacks of sidebar.py
 @app.callback(
     [Output('store-selected-setor', 'data'),
      Output('store-selected-subsetor', 'data'),
      Output('store-selected-segmento', 'data'),
+     Output('store-selected-company', 'data'),
      Output('url', 'pathname')],
     [Input('dropdown-setor', 'value'),
      Input('dropdown-subsetor', 'value'),
-     Input('dropdown-segmento', 'value')]
+     Input('dropdown-segmento', 'value'),
+     Input('dropdown-company', 'value')]
 )
-def update_stores_and_url(selected_setor, selected_subsetor, selected_segmento):
+def update_stores_and_url(selected_setor, selected_subsetor, selected_segmento, selected_company):
     stored_setor = {'setor': selected_setor}
     stored_subsetor = {'subsetor': selected_subsetor}
     stored_segmento = {'segmento': selected_segmento}
+    stored_company = {'company': selected_company}
     
     # Update URL
-    if selected_segmento is not None:
+    if selected_company is not None:
+        new_pathname = '/company'
+    elif selected_segmento is not None:
         new_pathname = '/segmento'
     elif selected_subsetor is not None:
         new_pathname = '/subsetor'
@@ -349,4 +355,4 @@ def update_stores_and_url(selected_setor, selected_subsetor, selected_segmento):
     else:
         new_pathname = '/dashboard'
     
-    return stored_setor, stored_subsetor, stored_segmento, new_pathname
+    return stored_setor, stored_subsetor, stored_segmento, stored_company, new_pathname

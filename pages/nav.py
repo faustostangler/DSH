@@ -11,6 +11,7 @@ layout = html.Div([
         dbc.NavLink("Setor", href="/setor", id="setor"),
         dbc.NavLink("Subsetor", href="/subsetor", id="subsetor"),
         dbc.NavLink("Segmento", href="/segmento", id="segmento"),
+        dbc.NavLink("Companhia", href="/companhia", id="companhia"),
     ], vertical=False, pills=False)
 ])
 

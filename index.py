@@ -4,7 +4,7 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 
 from app import app
-from pages import sidebar, nav, dashboard, setor, subsetor, segmento, setup
+from pages import sidebar, nav, dashboard, setor, subsetor, segmento, companhia, setup
 
 import assets.helper as b3
 import assets.functions as run
@@ -20,6 +20,7 @@ app.layout = html.Div([
     dcc.Store(id='store-selected-setor'),
     dcc.Store(id='store-selected-subsetor'),
     dcc.Store(id='store-selected-segmento'),
+    dcc.Store(id='store-selected-company'),
 
     dbc.Row([
         dbc.Col([
@@ -46,6 +47,8 @@ def render_page_content(pathname):
         return subsetor.layout
     elif pathname == "/segmento":
         return segmento.layout
+    elif pathname == "/companhia":
+        return companhia.layout
 
     return dbc.Card([
         dbc.CardBody([
