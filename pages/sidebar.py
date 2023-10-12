@@ -39,14 +39,6 @@ layout = html.Div([
         ),
     ]),
 
-    # Display selected setor
-    dbc.Row([
-        dbc.Col(
-            html.H4(id='display-setor'),
-            width={"size": 10, "offset": 1}
-        )
-    ]), 
-
     # Dropdown for 'Subsetor' selection
     dbc.Row([
         dbc.Col(
@@ -89,13 +81,6 @@ layout = html.Div([
         ),
     ]),
     
-    # Display selected company name
-    dbc.Row([
-        dbc.Col(
-            html.H4(id='display-company'),
-            width={"size": 10, "offset": 1}
-        )
-    ]), 
 ])
 layout.children.extend([
     # Multiselect Dropdown for 'Other Companies' (PREGAO) selection
@@ -248,27 +233,6 @@ def update_company_options(selected_segmento, stored_data):
     company_options = [{'label': company, 'value': company} for company in filtered_df['PREGAO'].sort_values().unique()]
     
     return company_options
-
-@app.callback(
-    Output('display-company', 'children'),
-    Input('dropdown-company', 'value')
-)
-def display_selected_company(selected_company):
-    if selected_company is None:
-        return ""
-    else:
-        return f"{selected_company}"
-
-@app.callback(
-    Output('display-setor', 'children'),
-    Input('dropdown-setor', 'value')
-)
-def display_selected_setor(selected_setor):
-    if selected_setor is None:
-        return ""
-    else:
-        return f"{selected_setor}"
-
 
 # Toggle visibility and update 'Other Companies' options when 'COMPANY' is selected
 @app.callback(
