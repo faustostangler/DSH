@@ -1,4 +1,4 @@
-graphs_1 = {
+graphs_0 = {
     'Equity Multiplier': {
         'description': 'O Multiplicador de Patrimônio Líquido (Equity Multiplier) é uma métrica financeira que avalia a alavancagem financeira de uma empresa, calculada como o total de ativos dividido pelo patrimônio líquido total. Em termos práticos, um valor acima de 2.0 é frequentemente visto como elevado, indicando uma maior dependência de dívidas para financiar ativos e, portanto, um perfil de risco potencialmente mais alto. Valores abaixo de 1.5, por outro lado, são geralmente vistos como baixos, sugerindo uma abordagem financeira mais conservadora com menor alavancagem de dívida, mas possivelmente indicando um crescimento mais cauteloso. ', 
         'data': {
@@ -24,7 +24,7 @@ graphs_1 = {
         }
     },
 }
-graphs_2 = {
+graphs_1 = {
     'Proporção dos Ativos': {
         'description': 'bla-bla-bla equity', 
         'data': {

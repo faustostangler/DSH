@@ -4,7 +4,7 @@ from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 
 from app import app
-from assets.graphs import graphs_1, graphs_2
+from assets.graphs import graphs_0, graphs_1
 
 import assets.helper as b3
 import assets.functions as run
@@ -17,9 +17,7 @@ import gzip
 import io
 import base64
 
-from num2words import num2words
-
-# Function to decompress data
+# Decompresses data and returns it as a DataFrame.
 def decompress_data(compressed_data):
     """
     Decompress and decode the provided data.
@@ -36,7 +34,7 @@ def decompress_data(compressed_data):
         df = pd.read_parquet(f)
     return df
 
-# Function to generate callbacks for updating graphs
+# Generates a callback for updating graphs based on a line number, unit, and info.
 def generate_callback(line_num, unit, info):
     @app.callback(
         Output(f'graph_{unit}-{line_num}', 'figure'),
@@ -65,35 +63,29 @@ def generate_callback(line_num, unit, info):
 
     return update_graph
 
-# Generating callbacks using lines from graphs_1
-unit = 1
-for i, (title, info) in enumerate(graphs_1.items()):
-    generate_callback(i, unit, info)
+# Define units as a list of graphs
+units = [graphs_0, graphs_1]
+# Initialize a dictionary to store graph components
+graphs_components = {}
 
-# Preparing components to be displayed in the layout
-graphs_1_components = []
-for i, (line, info) in enumerate(graphs_1.items()):
-    graphs_1_components.extend([
-        html.H5(line, id=f'graph_1-title-{i}'), 
-        html.P(info['description'], id=f'graph_1-line-{i}'), 
-        dcc.Graph(id=f'graph_1-{i}'), 
-        html.Hr(), 
-    ])
+# Loop through each unit (graph) and generate callbacks and components
+for v, graph in enumerate(units):
+    # Generating callbacks using lines from the current graph
+    for i, (title, info) in enumerate(graph.items()):
+        generate_callback(i, v, info)
 
-# Generating callbacks using lines from graphs_2
-unit = 2
-for i, (title, info) in enumerate(graphs_2.items()):
-    generate_callback(i, unit, info)
-
-# Preparing components to be displayed in the layout
-graphs_2_components = []
-for i, (line, info) in enumerate(graphs_2.items()):
-    graphs_2_components.extend([
-        html.H5(line, id=f'graph-title_2-{i}'), 
-        html.P(info['description'], id=f'graph-line_2-{i}'), 
-        dcc.Graph(id=f'graph_2-{i}'), 
-        html.Hr(), 
-    ])
+    # Preparing components to be displayed in the layout
+    current_graph_components = []
+    for i, (line, info) in enumerate(graph.items()):
+        current_graph_components.extend([
+            html.H5(line, id=f'graph_{v}-title-{i}'), 
+            html.P(info['description'], id=f'graph_{v}-line-{i}'), 
+            dcc.Graph(id=f'graph_{v}-{i}'), 
+            html.Hr(), 
+        ])
+    
+    # Storing the created components in the dictionary using the unit index as the key
+    graphs_components[v] = current_graph_components
 
 # ----- LAYOUT -----
 layout = html.Div([
@@ -110,17 +102,18 @@ layout = html.Div([
             html.H2(id='company-segmento-title'), 
             html.H2(id='company-title'),
             html.Div(id='company-info'),
-            # Additional components like graphs, tables, etc.
+
+            # Include graph components in the layout
             dbc.Card([
-                dbc.CardHeader("Grupo 1 de Gráficos"), 
-                dbc.CardBody([*graphs_1_components,]), 
+                dbc.CardHeader("Equity"), 
+                dbc.CardBody([*graphs_components[0],]), 
                 dbc.CardFooter("informações finais"), 
             ]), 
             html.P(),
 
             dbc.Card([
                 dbc.CardHeader("Grupo 2 de Gráficos"), 
-                dbc.CardBody([*graphs_2_components,]), 
+                dbc.CardBody([*graphs_components[1],]), 
                 dbc.CardFooter("informações finais"), 
             ]), 
             html.P(),
