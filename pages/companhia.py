@@ -35,9 +35,9 @@ def decompress_data(compressed_data):
     return df
 
 # Generates a callback for updating graphs based on a line number, unit, and info.
-def generate_callback(line_num, unit, info):
+def generate_callback(i, g, info):
     @app.callback(
-        Output(f'graph_{unit}-{line_num}', 'figure'),
+        Output(f'graph_{g}-{i}', 'figure'),
         [Input('company-df', 'data')]
     )
     def update_graph(compressed_data):
@@ -64,28 +64,28 @@ def generate_callback(line_num, unit, info):
     return update_graph
 
 # Define units as a list of graphs
-units = [graphs_0, graphs_1]
+groups_of_graph = [graphs_0, graphs_1]
 # Initialize a dictionary to store graph components
 graphs_components = {}
 
 # Loop through each unit (graph) and generate callbacks and components
-for v, graph in enumerate(units):
+for g, graph in enumerate(groups_of_graph):
     # Generating callbacks using lines from the current graph
     for i, (title, info) in enumerate(graph.items()):
-        generate_callback(i, v, info)
+        generate_callback(i, g, info)
 
     # Preparing components to be displayed in the layout
     current_graph_components = []
     for i, (line, info) in enumerate(graph.items()):
         current_graph_components.extend([
-            html.H5(line, id=f'graph_{v}-title-{i}'), 
-            html.P(info['description'], id=f'graph_{v}-line-{i}'), 
-            dcc.Graph(id=f'graph_{v}-{i}'), 
+            html.H5(line, id=f'graph_{g}-title-{i}'), 
+            html.P(info['description'], id=f'graph_{g}-line-{i}'), 
+            dcc.Graph(id=f'graph_{g}-{i}'), 
             html.Hr(), 
         ])
     
     # Storing the created components in the dictionary using the unit index as the key
-    graphs_components[v] = current_graph_components
+    graphs_components[g] = current_graph_components
 
 # ----- LAYOUT -----
 layout = html.Div([
