@@ -39,15 +39,26 @@ def generate_callback(line_num, line):
         return px.line(df, x=df.index, y=df[line], title=title)
     return update_graph
 
-lines = [
-    '00.01.01 - Ações ON', 
-    '01 - Ativo Total',
-    '02.03 - Patrimônio Líquido',
-]
-line_descriptions = {'01': 'bla bla bla', '02': 'some description', }
+lines = {
+    '00.01.01 - Ações ON': 'Descrições das Ações ON', 
+    '01 - Ativo Total': 'Descrição dos Ativos Totais', 
+    '02.03 - Patrimônio Líquido': 'Descrição do Patrimônio Líquido', 
+    }
 
-for i, line in enumerate(lines):
+# Generate callbacks
+for i, (line, description) in enumerate(lines.items()):
     generate_callback(i, line)
+
+# Preparing components before layout
+additional_components = [
+    component
+    for i, (line, description) in enumerate(lines.items())
+    for component in [
+        html.H5(line, id=f'graph-title-{i}'), 
+        html.P(description, id=f'graph-line-{i}'), 
+        dcc.Graph(id=f'graph-{i}'),
+    ]
+]
 
 # ----- LAYOUT -----
 layout = html.Div([
@@ -65,11 +76,7 @@ layout = html.Div([
             html.H2(id='company-title'),
             
             # Additional components like graphs, tables, etc.
-(            [
-                (dcc.Graph(id=f'graph-{i}'), 
-                html.P(line_descriptions.get(line.split(' - ')[0], ''), id=f'line-description-{i}') )
-              for i, line in enumerate(lines)
-            ],)
+            *additional_components,
             # More contents here...
         ]
     )
