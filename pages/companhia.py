@@ -1,3 +1,4 @@
+# Importing necessary modules and libraries
 from dash import html, dcc, exceptions
 from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
@@ -18,6 +19,7 @@ import base64
 
 from num2words import num2words
 
+# Function to decompress data
 def decompress_data(compressed_data):
     """
     Decompress and decode the provided data.
@@ -28,11 +30,13 @@ def decompress_data(compressed_data):
     Returns:
     - pd.DataFrame: Decompressed and decoded data as a DataFrame.
     """
+    # Creating a buffer to hold compressed data and decompressing the data
     buffer = io.BytesIO(base64.b64decode(compressed_data))
     with gzip.GzipFile(fileobj=buffer, mode='r') as f:
         df = pd.read_parquet(f)
     return df
 
+# Function to generate callbacks for updating graphs
 def generate_callback(line_num, title, info):
     @app.callback(
         Output(f'graph-{line_num}', 'figure'),
@@ -44,6 +48,7 @@ def generate_callback(line_num, title, info):
             print("PreventUpdate triggered: compressed_data is not a string.")
             raise exceptions.PreventUpdate("Data is not valid")
 
+        # Decompressing the data
         df = decompress_data(compressed_data)
         tickers = np.sort(df['TICKER'].unique())
         df_ticker = []
@@ -51,19 +56,20 @@ def generate_callback(line_num, title, info):
             df_ticker.append(df[df['TICKER'] == ticker])
         df = df_ticker[0]
         
+        # Debugging log
         print(f'{ticker} df[0] attention please {tickers}')
 
-        # Assuming plot_tweak function exists in your `run` module
+        # Updating the graph
         fig = run.plot_tweak(df, info['data'], info['options'])
         return fig
 
     return update_graph
 
-# Generate callbacks using lines
+# Generating callbacks using lines from graphs_1
 for i, (title, info) in enumerate(graphs_1.items()):
     generate_callback(i, title, info)
 
-# Preparing components before layout
+# Preparing components to be displayed in the layout
 graphs_1_components = []
 for i, (line, info) in enumerate(graphs_1.items()):
     graphs_1_components.extend([
@@ -96,6 +102,8 @@ layout = html.Div([
 ])
 
 # ----- CALLBACKS -----
+
+# Callback to update titles and load company data
 @app.callback(
     [
         Output('company-segmento-title', 'children'),
@@ -162,6 +170,7 @@ def update_titles(stored_company, stored_setor, stored_subsetor, stored_segmento
 
     return segmento_title, company_title, compressed_data
 
+# Callback to update company information
 @app.callback(
     Output('company-info', 'children'),
     [Input('company-df', 'data')]
@@ -193,12 +202,11 @@ def update_company_info(compressed_data):
     acoes_on = df.iloc[-1]['00.01.01 - Ações ON'] if not df.empty else ''
     acoes_pn = df.iloc[-1]['00.02.01 - Ações PN'] if not df.empty else ''
     ativo_total = df.iloc[-1]['01 - Ativo Total'] if not df.empty else ''
-    acoes_on_words = num2words(acoes_on, lang='pt_BR')
-    acoes_pn_words = num2words(acoes_pn, lang='pt_BR') if not np.isnan(acoes_pn) else 'N/A'
-    ativo_total_words = num2words(ativo_total, lang='pt_BR')
-    acoes_on = "{:,.0f}".format(acoes_on).replace(",", "X").replace(".", ",").replace("X", ".")
-    acoes_pn = "{:,.0f}".format(acoes_pn).replace(",", "X").replace(".", ",").replace("X", ".") if not np.isnan(acoes_pn) else 'N/A'
-    ativo_total = "{:,.0f}".format(ativo_total).replace(",", "X").replace(".", ",").replace("X", ".")
+    patrimonio = df.iloc[-1]['02.03 - Patrimônio Líquido'] if not df.empty else ''
+    lucro = df.iloc[-1]['03.11 - Lucro Líquido'] if not df.empty else ''
+    divida = df.iloc[-1]['12.01.02 - Dívida Bruta'] if not df.empty else ''
+    roe = df.iloc[-1]['14.04.01 - ROE (Resultado por Patrimônio)'] if not df.empty else ''
+    preco = df.iloc[-1]['Adj Close'] if not df.empty else ''
 
     header_1 = [
         html.H4(f"{company_name}", id='company-name-info'),
@@ -222,27 +230,48 @@ def update_company_info(compressed_data):
     ]
 
     header_2 = [
-        html.H4(f'Últimos Dados'),
+        html.H4(f'ÚLTIMOS DADOS'),
         ]
     body_2 = [
-        html.P(["Ações ON: ", html.Strong(f"{acoes_on}"),  f" ações ({acoes_on_words})"], id='acoes_on-info'),
-        html.P(["Ações PN: ", html.Strong(f"{acoes_pn}"),  f" ações ({acoes_on_words})"], id='acoes_on-info'),
-        html.P(["Ativo Total: R$: ", html.Strong(f"{ativo_total}"),  f" ações ({ativo_total_words})"], id='ativo_total-info'),
+        html.P(["Ações ON: ", html.Strong("{:,.0f}".format(acoes_on).replace(',', '.')),  f" ações"], id='acoes_on-info'),
+        html.P(["Ações PN: ", html.Strong("{:,.0f}".format(acoes_pn).replace(',', '.')),  f" ações"], id='acoes_on-info'),
+        html.Hr(), 
+        html.P(["Ativo Total: R$: ", html.Strong("{:,.0f}".format(ativo_total).replace(',', '.')), ], id='ativo_total-info'),
+        html.P(["Pattrimônio: R$: ", html.Strong("{:,.0f}".format(patrimonio).replace(',', '.')), ], id='patrimonio-info'),
+        html.P(["Lucro Líquido: R$: ", html.Strong("{:,.0f}".format(lucro).replace(',', '.')), ], id='lucro-info'),
+        html.P(["Dívida Bruta: R$: ", html.Strong("{:,.0f}".format(divida).replace(',', '.')), ], id='divida-info'),
+        html.P(["ROE: ", html.Strong("{:,.2f}".format(roe*100).replace(",", "X").replace(".", ",").replace("X", ".")), "%"], id='roe-info'),
+        html.Hr(), 
+        html.P(["Preço por Ação: R$: ", html.Strong("{:,.2f}".format(preco).replace(",", "X").replace(".", ",").replace("X", ".")), ], id='preco-info'),
+        html.P(["Valor de Mercado: R$: ", html.Strong("{:,.0f}".format(preco*(acoes_on)).replace(",", "X").replace(".", ",").replace("X", ".")), ], id='preco-info'),
+
+
     ]
     footer_2 = [
         html.P(f"Dados disponíveis de {data_min} até {data_max}", id='data-info'),
     ]
 
+    # Creating a card to display company information (card 1)
     card_1 = dbc.Card([
         dbc.CardHeader(header_1), 
         dbc.CardBody(body_1), 
-        dbc.CardFooter(footer_1), 
-        ])
+        dbc.CardFooter(footer_1)
+    ])
+
+    # Creating a card to display company information (card 2)
     card_2 = dbc.Card([
         dbc.CardHeader(header_2), 
         dbc.CardBody(body_2), 
-        dbc.CardFooter(footer_2), 
-        ])
+        dbc.CardFooter(footer_2)
+    ])
 
-    return html.Div([card_1, html.P(), card_2, html.P()])
+    # Creating a row with two columns to hold card_1 and card_2 side by side
+    layout_row = dbc.Row([
+        dbc.Col(card_1, width=6),  # card_1 occupies half of the row
+        dbc.Col(card_2, width=6)   # card_2 occupies the other half
+    ])
+
+    # Returning a Div that contains the layout row
+    return html.Div([layout_row])
+
 
