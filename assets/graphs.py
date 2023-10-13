@@ -11,6 +11,18 @@ graphs_1 = {
             'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False}
         }
     },
+    'Equity Multiplier2': {
+        'description': 'bla-bla-bla equity', 
+        'data': {
+            'title': ['Equity Multiplier - 2', 'Reais (R$)', 'Porcentagem (%)'],
+            'left': ['01 - Ativo Total', '02.03 - Patrimônio Líquido'],
+            'right': ['11.03.01 - Equity Multiplier (Ativos por Patrimônio Líquido)']
+        },
+        'options': {
+            'left': {'shape': 'area', 'mode': 'cumulative', 'normalization': True, 'range': 'flexible'},
+            'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False}
+        }
+    },
 }
 graphs_2 = {
     'Proporção dos Ativos': {

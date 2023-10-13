@@ -37,9 +37,9 @@ def decompress_data(compressed_data):
     return df
 
 # Function to generate callbacks for updating graphs
-def generate_callback(line_num, title, info):
+def generate_callback(line_num, unit, info):
     @app.callback(
-        Output(f'graph-{line_num}', 'figure'),
+        Output(f'graph_{unit}-{line_num}', 'figure'),
         [Input('company-df', 'data')]
     )
     def update_graph(compressed_data):
@@ -66,16 +66,33 @@ def generate_callback(line_num, title, info):
     return update_graph
 
 # Generating callbacks using lines from graphs_1
+unit = 1
 for i, (title, info) in enumerate(graphs_1.items()):
-    generate_callback(i, title, info)
+    generate_callback(i, unit, info)
 
 # Preparing components to be displayed in the layout
 graphs_1_components = []
 for i, (line, info) in enumerate(graphs_1.items()):
     graphs_1_components.extend([
-        html.H5(line, id=f'graph-title-{i}'), 
-        html.P(info['description'], id=f'graph-line-{i}'), 
-        dcc.Graph(id=f'graph-{i}')
+        html.H5(line, id=f'graph_1-title-{i}'), 
+        html.P(info['description'], id=f'graph_1-line-{i}'), 
+        dcc.Graph(id=f'graph_1-{i}'), 
+        html.Hr(), 
+    ])
+
+# Generating callbacks using lines from graphs_2
+unit = 2
+for i, (title, info) in enumerate(graphs_2.items()):
+    generate_callback(i, unit, info)
+
+# Preparing components to be displayed in the layout
+graphs_2_components = []
+for i, (line, info) in enumerate(graphs_2.items()):
+    graphs_2_components.extend([
+        html.H5(line, id=f'graph-title_2-{i}'), 
+        html.P(info['description'], id=f'graph-line_2-{i}'), 
+        dcc.Graph(id=f'graph_2-{i}'), 
+        html.Hr(), 
     ])
 
 # ----- LAYOUT -----
@@ -94,8 +111,20 @@ layout = html.Div([
             html.H2(id='company-title'),
             html.Div(id='company-info'),
             # Additional components like graphs, tables, etc.
-            *graphs_1_components,
-            html.Hr(),
+            dbc.Card([
+                dbc.CardHeader("Grupo 1 de Gráficos"), 
+                dbc.CardBody([*graphs_1_components,]), 
+                dbc.CardFooter("informações finais"), 
+            ]), 
+            html.P(),
+
+            dbc.Card([
+                dbc.CardHeader("Grupo 2 de Gráficos"), 
+                dbc.CardBody([*graphs_2_components,]), 
+                dbc.CardFooter("informações finais"), 
+            ]), 
+            html.P(),
+
             # More contents here...
         ]
     )
@@ -209,7 +238,9 @@ def update_company_info(compressed_data):
     preco = df.iloc[-1]['Adj Close'] if not df.empty else ''
 
     header_1 = [
-        html.H4(f"{company_name}", id='company-name-info'),
+        html.H4([
+            html.A(f"{company_name}", href=f"https://www.google.com/search?q=RI+{company_name.replace(' ', '+')}", target='_blank', id='company-name-info')
+        ]),
         ]
     body_1 = [
         html.P(f"{atividade}", id='atividade-info'),
@@ -217,13 +248,15 @@ def update_company_info(compressed_data):
     footer_1 = [
         dbc.Row(
             [
-                dbc.Col(html.P(f"CNPJ: {cnpj}", id='cnpj-info'), width=6),
+                dbc.Col(html.P(["CNPJ: ", html.A(f"{cnpj}", href=f"https://casadosdados.com.br/solucao/cnpj/{''.join(filter(str.isdigit, cnpj))}", target='_blank', id='cnpj-link')]), width=6), 
                 dbc.Col(html.P(f"Listagem: {listagem}", id='listagem-info'), width=6)
             ]
         ),
         dbc.Row(
             [
-                dbc.Col(html.P(f"Site: {site}", id='site-info'), width=6),
+                
+
+                dbc.Col(html.P(html.P(["Site: ", html.A(site, href=site, target='_blank', id='site-link')])), width=6),
                 dbc.Col(html.P(f"Escriturador: {escriturador}", id='escriturador-info'), width=6)
             ]
         ), 
@@ -237,7 +270,7 @@ def update_company_info(compressed_data):
         html.P(["Ações PN: ", html.Strong("{:,.0f}".format(acoes_pn).replace(',', '.')),  f" ações"], id='acoes_on-info'),
         html.Hr(), 
         html.P(["Ativo Total: R$: ", html.Strong("{:,.0f}".format(ativo_total).replace(',', '.')), ], id='ativo_total-info'),
-        html.P(["Pattrimônio: R$: ", html.Strong("{:,.0f}".format(patrimonio).replace(',', '.')), ], id='patrimonio-info'),
+        html.P(["Patrimônio: R$: ", html.Strong("{:,.0f}".format(patrimonio).replace(',', '.')), ], id='patrimonio-info'),
         html.P(["Lucro Líquido: R$: ", html.Strong("{:,.0f}".format(lucro).replace(',', '.')), ], id='lucro-info'),
         html.P(["Dívida Bruta: R$: ", html.Strong("{:,.0f}".format(divida).replace(',', '.')), ], id='divida-info'),
         html.P(["ROE: ", html.Strong("{:,.2f}".format(roe*100).replace(",", "X").replace(".", ",").replace("X", ".")), "%"], id='roe-info'),
