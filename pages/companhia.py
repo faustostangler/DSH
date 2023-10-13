@@ -105,7 +105,7 @@ layout = html.Div([
         id="loading",
         type="circle",
         children=[
-            # Main titles of the page
+            # Main titles of the page 
             html.H1("Análise Fundamentalista"),
             html.H2(id='company-segmento-title'), 
             html.H2(id='company-title'),
