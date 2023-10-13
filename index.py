@@ -69,4 +69,5 @@ def render_page_content(pathname):
 
 # Run the app
 if __name__ == "__main__":
-    app.run_server(port=8051, debug=True)
+    app.run_server(port=8051, debug=True, dev_tools_props_check=True)
+    # app.run_server(port=8051, debug=True)

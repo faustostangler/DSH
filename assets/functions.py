@@ -1,5 +1,7 @@
 import assets.helper as b3
 
+from typing import Dict, Union, List, Optional, Any
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -19,6 +21,12 @@ import re
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.io as pio
+import plotly.graph_objects as go
+import plotly.graph_objects as go
+from plotly.graph_objs import Figure
+from plotly.subplots import make_subplots
+
 
 from google.cloud import storage
 import io
@@ -5409,3 +5417,405 @@ def integrate_yahoo_quotes(fund):
 # macro
 def get_bcb_series():
     pass
+
+# dash
+def normalize_data(df, subcolumns):
+    """
+    Normalize data columns in a dataframe to their percentage of row-wise total.
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Dataframe containing data to be normalized.
+    subcolumns : list of str
+        List of column names to be normalized.
+
+    Returns:
+    --------
+    normalized_df : pd.DataFrame
+        Dataframe with normalized columns.
+    """
+    # Filter subcolumns to include only columns that actually exist in df
+    subcolumns = [col for col in subcolumns if col in df.columns]
+
+    # Make a copy of the specified columns to prevent modifying the original dataframe
+    temp_df = df[subcolumns].copy()
+    
+    # Ensure there are no NaN values at the start of the columns
+    # [You might adapt this as per your requirement]
+    temp_df = temp_df.dropna(subset=subcolumns, how='all')
+    
+    # Calculate the total of the specified columns row-wise
+    temp_df['total'] = temp_df.sum(axis=1)
+
+    # Normalize each specified column by its percentage of the row-wise total
+    for column in subcolumns:
+        temp_df[column] = temp_df.apply(
+            lambda row: round(row[column] / row['total'] * 100, 2) if row['total'] != 0 else 0, 
+            axis=1
+        )
+    
+    # Drop the total column and return the normalized dataframe
+    normalized_df = temp_df.drop(columns=['total'])
+    
+    return normalized_df
+
+def exclude_outliers(item, multiplier=1.5):
+    """
+    Exclude outliers from a data series using 
+    the Interquartile Range (IQR) method and a personalized multiplier.
+
+    Parameters:
+    -----------
+    data_series : pd.Series
+        The original data series from which outliers will be excluded.
+    multiplier : float
+        The multiplier for the IQR. Outliers are defined as values below 
+        Q1 - (multiplier * IQR) or above Q3 + (multiplier * IQR).
+
+    Returns:
+    --------
+    inliers : pd.Series
+        The data series with outliers excluded.
+    """
+    data_series = df[item] if isinstance(item, str) else item
+
+    # Calculate the first (Q1) and third (Q3) quartiles
+    Q1 = data_series.quantile(0.25)
+    Q3 = data_series.quantile(0.75)
+    
+    # Calculate the Interquartile Range (IQR)
+    IQR = Q3 - Q1
+    
+    # Define lower and upper bounds for inliers
+    lower_bound = Q1 - multiplier * IQR
+    upper_bound = Q3 + multiplier * IQR
+    
+    # Identify and return inliers
+    inliers = data_series[(data_series > lower_bound) & (data_series < upper_bound)]
+    
+    return inliers
+
+def cagr(item, years=3):
+    """
+    Calculate the Compound Annual Growth Rate (CAGR) for a given data series.
+    
+    Parameters:
+    -----------
+    item : str or pd.Series
+        The actual values for which the CAGR will be calculated. 
+        Can be a string (column name) or a pandas Series.
+    years : int
+        The number of years over which the CAGR will be calculated.
+    
+    Returns:
+    --------
+    data_series : pd.Series
+        The CAGR values.
+    """
+    # Retrieve the data series from the dataframe if item is a string (column name)
+    data_series = df[item] if isinstance(item, str) else item
+    
+    # Calculate the CAGR: [ (Ending Value / Beginning Value) ^ (1 / Number of Years) ] - 1
+    # Shift the original data series by the number of periods to calculate the growth rate
+    data_series = ((data_series / data_series.shift(periods=round(21*12*years))) ** (1/years)) - 1
+    
+    # Convert CAGR to percentage and smooth (accordingly to year) the series by taking a moving average, and round the series to two decimal places
+    data_series = data_series * 100
+    data_series = data_series.rolling(window=int(years*4)).mean()
+    data_series = data_series.round(2)
+    
+    # Name it appropriately
+    data_series.name = f'CAGR {years}a - {data_series.name.split(" - ")[1]}'
+    
+    return data_series
+
+def ofs(item, years=3):
+    """
+    Calculate the Oscillator Following the Stock (OFS) for a given data series.
+
+    Parameters:
+    -----------
+    data_serie : pd.Series
+        The actual values for which the OFS oscillator will be calculated.
+    window : int
+        The window size for calculating the moving average and standard deviation.
+
+    Returns:
+    --------
+    ofs : pd.Series
+        The OFS oscillator values, smoothed with a moving average.
+    """
+    data_series = df[item] if isinstance(item, str) else item
+
+    # Calculate the moving average (mma) and standard deviation (std)
+    mma = data_series.rolling(window=int(21*12*years)).mean()
+    std = data_series.rolling(window=int(21*12*years)).std()
+    
+    # Define the high and low levels
+    high_level = mma + 2 * std
+    low_level = mma - 2 * std
+    
+    # Calculate the OFS oscillator, where +2 std=100 and -2 std=-100
+    data_series = ((data_series - low_level) / (high_level - low_level)) * 20 - 10
+    
+    # Smooth the OFS oscillator with a moving average
+    data_series = data_series.rolling(window=int(years*4)).mean()
+
+    # Name the series appropriately
+    data_series.name = f'OFS {years}a - {data_series.name.split(" - ")[1]}'
+
+    return data_series
+
+def plot_tweak(df: pd.DataFrame, data: Dict[str, Any], 
+               options: Optional[Dict[str, Dict[str, Any]]] = {}) -> go.Figure:
+    """
+    Generates a custom Plotly figure based on the provided data and visualization options.
+    
+    Parameters:
+    ----------
+    df : pd.DataFrame
+        The primary data source containing the columns to be plotted.
+        
+    data : dict
+        Contains metadata and column names/series for plotting. The dictionary should have the keys:
+        - 'title' : List containing the main title, left y-axis title, and right y-axis title.
+        - 'left' : List containing columns or series to be plotted on the left y-axis.
+        - 'right' : List containing columns or series to be plotted on the right y-axis.
+        
+    options : dict, optional
+        Contains visualization options for left and right data. Each side (left/right) can have:
+        - 'shape' : str, optional (default is 'line')
+            Shape of the plot, either 'line' or 'area'.
+        - 'mode' : str, optional (default is 'standalone')
+            Data representation mode, either 'standalone' or 'cumulative'.
+        - 'legendgroup' : str, optional
+            String to combine legend items into a group.
+        - 'normalization' : bool, optional (default is False)
+            Indicates if the data should be normalized.
+        - 'mma': tuple of (float, float), optional
+            Contains values for a moving average and its multiplier for standard deviation. 
+            Format is (moving_average_period, standard_deviation_multiplier). None by default.
+        - 'outliers': bool, optional (default is False)
+            Indicates if outliers should be excluded.
+        - 'flexible_range': bool, optional (default is False)
+            If True, the max_min range logic is not applied. If False, it is applied.
+            
+    Returns:
+    -------
+    plotly.graph_objs.Figure
+        The generated Plotly figure.
+    """
+
+    # Initialize the figure object and variables
+    company, ticker = df[['PREGAO', 'TICKER']].iloc[0]
+    fig = go.Figure()
+
+    def get_data_from_item(item, normalize=False, columns_for_normalization=None, 
+                        exclude_outliers_multiplier=None, ofs=None):
+        """
+        Retrieve data from either dataframe columns or directly from a pandas Series, 
+        with optional outlier exclusion and z-score calculation.
+        """
+        try:
+            data_series = df[item] if isinstance(item, str) else item
+        
+            if normalize:
+                if isinstance(item, str):
+                    # If item is a string (column name), normalize using other columns if provided
+                    data_series = normalize_data(df, columns_for_normalization or [item])[item]
+                else:
+                    # If item is a Series, normalize only the series
+                    data_series = (data_series - data_series.min()) / (data_series.max() - data_series.min())
+
+            if exclude_outliers_multiplier is not None:
+                data_series = exclude_outliers(data_series, exclude_outliers_multiplier)
+
+        except Exception as e:
+            return pd.DataFrame(index=df.index)
+
+        return data_series
+
+    def get_trace(item, group, shape, mode, normalization, 
+                columns_for_normalization=None, mma=None, 
+                exclude_outliers_multiplier=None):
+        """
+        Get trace(s) for the provided item with specified configurations.
+        """
+        column_data = get_data_from_item(
+            item, normalization, columns_for_normalization, 
+            exclude_outliers_multiplier
+        )
+        # Basic trace
+        try:
+            trace = {
+                'x': column_data.index,
+                'y': column_data,
+                'name': item.split(' - ')[1] if isinstance(item, str) else item.name,
+                'fill': 'tonexty' if shape == 'area' and mode == 'cumulative' else 
+                        'tozeroy' if shape == 'area' else 'none',
+                'stackgroup': group if mode == 'cumulative' else None
+            }
+
+            traces = [trace]
+
+            # Statistics based on MMA
+            if mma:
+                window = int(21 * 12 * mma[0])
+                rolling_average = column_data.rolling(window=window).mean()
+                rolling_std = column_data.rolling(window=window).std()
+                
+                # MMA trace
+                traces.append({
+                    'x': column_data.index,
+                    'y': rolling_average,
+                    'mode': 'lines',
+                    'name': f'Média {(mma[0]):.0f}a ± {mma[1]}dp',
+                    'line': {'color': 'green'}, 
+                    'legendgroup': 'mma', 
+                })
+
+                # Traces for ± standard deviations from the MMA
+                traces.append({
+                    'x': column_data.index,
+                    'y': rolling_average + mma[1] * rolling_std,
+                    'mode': 'lines',
+                    'name': f'+{mma[1]} STD',
+                    'line': {'color': 'green', 'dash': 'dash'}, 
+                    'legendgroup': 'mma', 
+                    'showlegend': False, 
+                })
+
+                traces.append({
+                    'x': column_data.index,
+                    'y': rolling_average - mma[1] * rolling_std,
+                    'mode': 'lines',
+                    'name': f'-{mma[1]} STD',
+                    'line': {'color': 'green', 'dash': 'dash'}, 
+                    'legendgroup': 'mma', 
+                    'showlegend': False, 
+                })
+
+        except Exception as e:
+            return []
+
+        return traces
+
+    def update_axis_bounds(fig, side, g_max, g_min, options, default_settings):
+        """
+        ...
+        options : dict, optional
+            Contains visualization options for left and right data. Each side (left/right) can have:
+            ...
+            - 'range': bool or str, optional (default is False)
+                Determines the logic used to set the y-axis bounds:
+                - 'flexible': No custom logic, Plotly determines y-axis bounds.
+                - False: Upper bound is set to the nearest power of 10 above the maximum data value.
+                - 'half': Upper bound is set to the nearest multiple of 5 above the maximum data value.
+                - 'full': Upper bound is set to the nearest power of 10 above the maximum data value.
+        ...
+        """
+        range_option = options.get(side, {}).get('range', default_settings['range'])
+        
+        # Check if range logic should be applied
+        if (
+            range_option not in ['flexible', 'full'] and 
+            g_max != float('-inf') and 
+            g_min != float('inf')
+        ):
+            # Determine upper bound
+            if range_option == 'half':
+                upper_bound = 5 * 10 ** math.ceil(math.log10(g_max) - 1)
+            elif range_option == False:  # or any other invalid value
+                upper_bound = 10 ** math.ceil(math.log10(g_max))
+            upper_bound = upper_bound if g_max > 0 else g_max
+            
+            # Determine lower bound
+            lower_bound = 10 ** math.floor(math.log10(g_min)) if g_min > 0 else g_min
+            
+            # Update layout
+            axis_key = 'yaxis' if side == 'left' else 'yaxis2'
+            fig.update_layout({axis_key: dict(range=[lower_bound, upper_bound])})
+
+   # Default settings for visualization
+    default_settings = {
+        'shape': 'line',
+        'mode': 'standalone',
+        'legendgroup': None,
+        'normalization': False, 
+        'normalization_columns': None, 
+        'mma': None, 
+        'outliers': None, 
+        'range': 'flexible', 
+    }
+    
+    # Flags to determine if we have data on either side
+    left_data_exists = any(item.startswith('left') for item in data.keys())
+    right_data_exists = any(item.startswith('right') for item in data.keys())
+
+    # Initialize variables for storing the global max and min values for each side
+    global_max = {'left': float('-inf'), 'right': float('-inf')}
+    global_min = {'left': float('inf'), 'right': float('inf')}
+
+    # Process each side separately
+    for side, items in data.items():
+        # Skip if the side is 'title'
+        if side == 'title':
+            continue
+        
+        # Determine the base side (left or right)
+        side_base = 'left' if 'left' in side else 'right' if 'right' in side else None
+        
+        if side_base:
+            # Get the options for this side, if any
+            side_options = {**default_settings, **options.get(side, {})}
+            
+            # Generate traces for this side
+            for item in items:
+                traces = get_trace(item, side, 
+                                   side_options['shape'],
+                                   side_options['mode'],
+                                   side_options['normalization'],
+                                   side_options['normalization_columns'] or items, 
+                                   side_options['mma'],
+                                   side_options['outliers'],
+                                   )
+                for trace in traces:
+                    if side_options.get('legendgroup'):
+                        trace['legendgroup'] = side_options['legendgroup']
+                    
+                    # If side contains 'right', assign to yaxis2
+                    trace['yaxis'] = 'y2' if 'right' in side and left_data_exists else 'y1'
+
+                    # Update global min and max
+                    y_values = trace['y']
+                    if not y_values.empty:
+                        max_val = max(y_values)
+                        min_val = min(y_values)
+                        global_max[side_base] = max(global_max[side_base], max_val)
+                        global_min[side_base] = min(global_min[side_base], min_val)
+
+                    fig.add_trace(go.Scatter(**trace))
+
+    # Figure Update Layout
+    fig.update_layout(
+        template='plotly_white',
+        title_text=f'{ticker} ({company}) {data.get("title", ["", "", ""])[0]}',
+
+        xaxis_title='Data',
+        yaxis_title=data.get('title', ["", "", ""])[1],
+        yaxis2={'title': data.get('title', ["", "", ""])[2], 'overlaying': 'y', 'side': 'right'} if left_data_exists and right_data_exists else {},
+
+        legend=dict(
+            orientation='h',
+            font_size=10,
+        ),
+        width=6.27 * 200,  # converting inches to 96 pixels for width
+        height=3.52 * 200,  # converting inches to 96 pixels for height
+    )
+    
+    # Applying the flexible_range logic. Note: The logic is NOT applied if flexible_range is True. If it's False, it IS applied.
+    update_axis_bounds(fig, 'left', global_max['left'], global_min['left'], options, default_settings)
+    update_axis_bounds(fig, 'right', global_max['right'], global_min['right'], options, default_settings)
+
+    return fig

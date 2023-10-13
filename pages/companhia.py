@@ -2,12 +2,14 @@ from dash import html, dcc, exceptions
 from dash.dependencies import Input, Output
 
 from app import app
+from assets.graphs import graphs_1, graphs_2
 
 import assets.helper as b3
 import assets.functions as run
 
 import os
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import gzip
 import io
@@ -28,37 +30,46 @@ def decompress_data(compressed_data):
         df = pd.read_parquet(f)
     return df
 
-def generate_callback(line_num, line):
+def generate_callback(line_num, title, info):
     @app.callback(
         Output(f'graph-{line_num}', 'figure'),
         [Input('company-df', 'data')]
     )
     def update_graph(compressed_data):
+        # Ensure compressed_data is string and not None or other type
+        if not isinstance(compressed_data, str):
+            print("PreventUpdate triggered: compressed_data is not a string.")
+            raise exceptions.PreventUpdate("Data is not valid")
+
         df = decompress_data(compressed_data)
-        title = line.split(' - ')[1]
-        return px.line(df, x=df.index, y=df[line], title=title)
+        tickers = np.sort(df['TICKER'].unique())
+        df_ticker = []
+        for ticker in tickers:
+            df_ticker.append(df[df['TICKER'] == ticker])
+        df = df_ticker[0]
+        
+        print(f'{ticker} df[0] attention please {tickers}')
+
+        # Assuming plot_tweak function exists in your `run` module
+        fig = run.plot_tweak(df, info['data'], info['options'])
+        return fig
+
     return update_graph
 
-lines = {
-    '00.01.01 - Ações ON': 'Descrições das Ações ON', 
-    '01 - Ativo Total': 'Descrição dos Ativos Totais', 
-    '02.03 - Patrimônio Líquido': 'Descrição do Patrimônio Líquido', 
-    }
-
-# Generate callbacks
-for i, (line, description) in enumerate(lines.items()):
-    generate_callback(i, line)
+# Generate callbacks using lines
+for i, (title, info) in enumerate(graphs_1.items()):
+    generate_callback(i, title, info)
 
 # Preparing components before layout
-additional_components = [
-    component
-    for i, (line, description) in enumerate(lines.items())
-    for component in [
+additional_components = [(
+    html.H2('secao graphs_1', id=f'graph-title-{i}'), 
+)]
+for i, (line, info) in enumerate(graphs_1.items()):
+    additional_components.extend([
         html.H5(line, id=f'graph-title-{i}'), 
-        html.P(description, id=f'graph-line-{i}'), 
-        dcc.Graph(id=f'graph-{i}'),
-    ]
-]
+        html.P(info['description'], id=f'graph-line-{i}'), 
+        dcc.Graph(id=f'graph-{i}')
+    ])
 
 # ----- LAYOUT -----
 layout = html.Div([
