@@ -6,11 +6,48 @@ from app import app
 import assets.helper as b3
 import assets.functions as run
 
-import pandas as pd
 import os
-import base64
+import pandas as pd
+import plotly.express as px
 import gzip
 import io
+import base64
+
+def decompress_data(compressed_data):
+    """
+    Decompress and decode the provided data.
+
+    Parameters:
+    - compressed_data (str): Compressed and encoded data.
+
+    Returns:
+    - pd.DataFrame: Decompressed and decoded data as a DataFrame.
+    """
+    buffer = io.BytesIO(base64.b64decode(compressed_data))
+    with gzip.GzipFile(fileobj=buffer, mode='r') as f:
+        df = pd.read_parquet(f)
+    return df
+
+def generate_callback(line_num, line):
+    @app.callback(
+        Output(f'graph-{line_num}', 'figure'),
+        [Input('company-df', 'data')]
+    )
+    def update_graph(compressed_data):
+        df = decompress_data(compressed_data)
+        title = line.split(' - ')[1]
+        return px.line(df, x=df.index, y=df[line], title=title)
+    return update_graph
+
+lines = [
+    '00.01.01 - Ações ON', 
+    '01 - Ativo Total',
+    '02.03 - Patrimônio Líquido',
+]
+line_descriptions = {'01': 'bla bla bla', '02': 'some description', }
+
+for i, line in enumerate(lines):
+    generate_callback(i, line)
 
 # ----- LAYOUT -----
 layout = html.Div([
@@ -28,7 +65,11 @@ layout = html.Div([
             html.H2(id='company-title'),
             
             # Additional components like graphs, tables, etc.
-            dcc.Graph(id='graph-ativos'),
+(            [
+                (dcc.Graph(id=f'graph-{i}'), 
+                html.P(line_descriptions.get(line.split(' - ')[0], ''), id=f'line-description-{i}') )
+              for i, line in enumerate(lines)
+            ],)
             # More contents here...
         ]
     )
