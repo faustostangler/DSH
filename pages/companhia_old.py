@@ -17,7 +17,6 @@ import gzip
 import io
 import base64
 
-# ----- FUNCTIONS -----
 # Decompresses data and returns it as a DataFrame.
 def decompress_data(compressed_data):
     """
@@ -36,26 +35,27 @@ def decompress_data(compressed_data):
     return df
 
 # Generates a callback for updating graphs based on a line number, unit, and info.
-def generate_callback(g, p, title, info):
+def generate_callback(i, g, title, info):
     @app.callback(
-        Output(f'graph_{g}_{p}', 'figure'),
+        Output(f'graph_{g}_{i}', 'figure'),
         [Input('company-df', 'data')]
     )
     def update_graph(compressed_data):
         # Ensure compressed_data is string and not None or other type
         if not isinstance(compressed_data, str):
+            print("PreventUpdate triggered: compressed_data is not a string.")
             raise exceptions.PreventUpdate("Data is not valid")
 
         # Decompressing the data
         df = decompress_data(compressed_data)
-        
-        # Debugging log
         tickers = np.sort(df['TICKER'].unique())
-        df_ticker = ticker = []
+        df_ticker = []
         for ticker in tickers:
             df_ticker.append(df[df['TICKER'] == ticker])
         df = df_ticker[0]
-        print(f'{ticker} Debugging log - df[0] attention please {tickers}')
+        
+        # Debugging log
+        print(f'{ticker} df[0] attention please {tickers}')
 
         # Updating the graph
         plot_info = {
@@ -68,65 +68,69 @@ def generate_callback(g, p, title, info):
 
     return update_graph
 
-# ----- CODE LOGIC -----
+def get_headers_and_footers_from_graphs(groups_of_graph):
+    headers_and_footers = []
+    for graph in groups_of_graph:
+        for title, info in graph.items():
+            headers_and_footers.append((info['info']['header'], info['info']['footer']))
+    return headers_and_footers
+
+# Dynamically create card components based on the graphs dictionaries
+def create_cards(graphs_components):
+    cards = []
+    for g, graph in enumerate(groups_of_graph):
+        for i, (title, info) in enumerate(graph.items()):
+            header = info['info']['header']
+            footer = info['info']['footer']
+            cards.append(
+                dbc.Card([
+                    dbc.CardHeader(header), 
+                    dbc.CardBody([*graphs_components[g],]), 
+                    dbc.CardFooter(footer), 
+                ])
+            )
+            cards.append(html.P())  # Add a space between cards
+    return cards
+
 # Define units as a list of graphs
 groups_of_graph = [graphs_0, graphs_1]
-all_plots = {}
+# Initialize a dictionary to store graph components
+graphs_components = {}
+
+print(len(graphs_components))
+print(len(get_headers_and_footers_from_graphs(groups_of_graph)))
+print(graphs_components.keys())
 
 # Loop through each unit (graph) and generate callbacks and components
 for g, graph in enumerate(groups_of_graph):
-    current_graph_components = []
-    for p, (title, info) in enumerate(graph.items()):
-        # Generating callbacks using lines from the current graph
-        generate_callback(g, p, title, info)  # Passing title and info to callback generator
+    # Generating callbacks using lines from the current graph
+    for i, (title, info) in enumerate(graph.items()):
+        generate_callback(i, g, title, info)  # Passing title and info to callback generator
 
-        # Creating a dbc.Card component for each graph and appending it to current_graph_components
-        current_graph_components.append(
-            dbc.Card([
-                dbc.CardHeader([
-                    html.H5(title, id=f'graph_{g}_{p}_title'),  # Using title as H5 content
-                ]), 
-                dbc.CardBody([
-                    html.P(info['info']['description'], id=f'graph_{g}_{p}_info'), 
-                    dcc.Graph(id=f'graph_{g}_{p}'), 
-                ]),
-                dbc.CardFooter([
-                    html.P(f"Footer for {title}", id=f'graph_{g}_{p}_footer'), 
-                    # html.Hr(), 
-                    ]),  # footer
+    # Preparing components to be displayed in the layout
+    current_graph_components = []
+    for i, (title, info) in enumerate(graph.items()):
+        current_graph_components.extend([
+            html.H5(title, id=f'graph_{g}_{i}'),  # Using title as H5 content
+            html.P(info['info']['description'], id=f'graph_{g}-line-{i}'), 
+            dcc.Graph(id=f'graph_{g}-{i}'), 
             html.Hr(), 
-            ]), 
-        )
+        ])
     
     # Storing the created components in the dictionary using the unit index as the key
-    all_plots[g] = current_graph_components
+    graphs_components[g] = current_graph_components
+    print(f'Populating graphs_components with key {g} and value {current_graph_components}')
 
-def create_layout_from_plots(all_plots):
-    """
-    Create layout components from a dictionary of plots.
+# Construct Cards in the Layout with Dynamic Headers and Footers
+layout_cards = [
+    dbc.Card([
+        dbc.CardHeader(graph_title),  # Dynamic header from graphs dict
+        dbc.CardBody(graphs_components[i]),  # Inserting the previously prepared graph components
+        dbc.CardFooter(graph_footer),  # Dynamic footer from graphs dict
+    ]) 
+    for i, (graph_title, graph_footer) in enumerate(get_headers_and_footers_from_graphs(groups_of_graph))
+]
 
-    Parameters:
-    - all_plots (dict): Dictionary containing plot components.
-
-    Returns:
-    - list: List of components to be added to the layout.
-    """
-    layout_components = []
-    try:
-        for g, plots in all_plots.items():
-            # You might want to include some kind of header or separator between groups of plots
-            # layout_components.append(html.Hr())
-            # layout_components.append(html.H3(f"Group {g} Plots"))
-            
-            # Append each plot (which is a dbc.Card component) directly to layout_components
-            layout_components.extend(plots)
-    except Exception as e:
-        print(f"Error creating layout: {str(e)}")
-        # You might want to return a placeholder or error message in the layout in case of error
-        layout_components.append(html.P("Error loading plots."))
-        
-    return layout_components
-        
 
 # ----- LAYOUT -----
 layout = html.Div([
@@ -145,7 +149,7 @@ layout = html.Div([
             html.Div(id='company-info'),
 
             # Include dynamically generated graph components in the layout
-            *create_layout_from_plots(all_plots), 
+            *create_cards(graphs_components),
             # More contents here...
         ]
     )

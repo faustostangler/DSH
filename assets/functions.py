@@ -1,6 +1,6 @@
 import assets.helper as b3
 
-from typing import Dict, Union, List, Optional, Any
+from typing import Dict, List, Union, Tuple, Optional, Any
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -5567,8 +5567,7 @@ def ofs(item, years=3):
 
     return data_series
 
-def plot_tweak(df: pd.DataFrame, data: Dict[str, Any], 
-               options: Optional[Dict[str, Dict[str, Any]]] = {}) -> go.Figure:
+def plot_tweak(df: pd.DataFrame, plot_info: Dict[str, Any]) -> go.Figure:
     """
     Generates a custom Plotly figure based on the provided data and visualization options.
     
@@ -5577,49 +5576,83 @@ def plot_tweak(df: pd.DataFrame, data: Dict[str, Any],
     df : pd.DataFrame
         The primary data source containing the columns to be plotted.
         
-    data : dict
-        Contains metadata and column names/series for plotting. The dictionary should have the keys:
-        - 'title' : List containing the main title, left y-axis title, and right y-axis title.
-        - 'left' : List containing columns or series to be plotted on the left y-axis.
-        - 'right' : List containing columns or series to be plotted on the right y-axis.
-        
-    options : dict, optional
-        Contains visualization options for left and right data. Each side (left/right) can have:
-        - 'shape' : str, optional (default is 'line')
-            Shape of the plot, either 'line' or 'area'.
-        - 'mode' : str, optional (default is 'standalone')
-            Data representation mode, either 'standalone' or 'cumulative'.
-        - 'legendgroup' : str, optional
-            String to combine legend items into a group.
-        - 'normalization' : bool, optional (default is False)
-            Indicates if the data should be normalized.
-        - 'mma': tuple of (float, float), optional
-            Contains values for a moving average and its multiplier for standard deviation. 
-            Format is (moving_average_period, standard_deviation_multiplier). None by default.
-        - 'outliers': bool, optional (default is False)
-            Indicates if outliers should be excluded.
-        - 'flexible_range': bool, optional (default is False)
-            If True, the max_min range logic is not applied. If False, it is applied.
+    plot_info : dict
+        Contains metadata and various configurations for plotting. The dictionary should have the keys:
+        - 'plot_title' : str
+            Main title of the plot.
+        - 'data' : dict
+            Contains column names/series and axis titles for plotting. Sub-keys should be:
+            - 'left' : List containing columns or series to be plotted on the left y-axis.
+            - 'right' : List containing columns or series to be plotted on the right y-axis.
+            - 'axis' : List containing the left y-axis title and right y-axis title.
+        - 'options' : dict, optional
+            Contains visualization options for left and right data. Each side (left/right) can have:
+            - 'shape' : str, optional (default is 'line')
+                Shape of the plot, either 'line' or 'area'.
+            - 'mode' : str, optional (default is 'standalone')
+                Data representation mode, either 'standalone' or 'cumulative'.
+            - 'legendgroup' : str, optional
+                String to combine legend items into a group.
+            - 'normalization' : bool, optional (default is False)
+                Indicates if the data should be normalized.
+            - 'mma': tuple of (float, float), optional
+                Contains values for a moving average and its multiplier for standard deviation. 
+                Format is (moving_average_period, standard_deviation_multiplier). None by default.
+            - 'outliers': bool, optional (default is False)
+                Indicates if outliers should be excluded.
+            - 'flexible_range': bool, optional (default is False)
+                If True, the max_min range logic is not applied. If False, it is applied.
+            - 'range': bool or str, optional (default is False)
+                Determines the logic used to set the y-axis bounds:
+                - 'flexible': No custom logic, Plotly determines y-axis bounds.
+                - False: Upper bound is set to the nearest power of 10 above the maximum data value.
+                - 'half': Upper bound is set to the nearest multiple of 5 above the maximum data value.
+                - 'full': Upper bound is set to the nearest power of 10 above the maximum data value.
             
     Returns:
     -------
     plotly.graph_objs.Figure
         The generated Plotly figure.
+        
+    Notes:
+    -----
+    The 'data' dictionary within 'plot_info' should contain keys for 'left', 'right', and 'axis' to specify data series 
+    and axis titles. If 'axis' is not provided, default empty titles are used. 'left' and 'right' should contain lists of 
+    column names or Pandas Series objects that represent the data to be plotted on the left and right y-axes, respectively.
+    
+    The 'options' dictionary within 'plot_info' provides additional configurations for shaping the visual aspects of the plot.
+    Different options can be specified for 'left' and 'right' side data.
     """
 
-    # Initialize the figure object and variables
-    company, ticker = df[['PREGAO', 'TICKER']].iloc[0]
-    fig = go.Figure()
-
-    def get_data_from_item(item, normalize=False, columns_for_normalization=None, 
-                        exclude_outliers_multiplier=None, ofs=None):
+    def get_data_from_item(item: Union[str, pd.Series], normalize: bool=False, 
+                        columns_for_normalization: Optional[List[str]]=None, 
+                        exclude_outliers_multiplier: Optional[float]=None, 
+                        ofs: Optional[Any]=None) -> pd.DataFrame:
         """
         Retrieve data from either dataframe columns or directly from a pandas Series, 
         with optional outlier exclusion and z-score calculation.
+
+        Parameters:
+        ----------
+        item : Union[str, pd.Series]
+            The column name (str) or actual data (pd.Series) to be retrieved and processed.
+        normalize : bool, optional (default is False)
+            If True, the data will be normalized.
+        columns_for_normalization : List[str], optional
+            List of column names used for normalization if `item` is a column name.
+        exclude_outliers_multiplier : float, optional
+            If provided, outliers will be excluded based on this multiplier.
+        ofs : any, optional
+            [Explanation needed for this parameter]
+
+        Returns:
+        -------
+        pd.DataFrame
+            A DataFrame containing the retrieved and possibly processed data.
         """
         try:
             data_series = df[item] if isinstance(item, str) else item
-        
+
             if normalize:
                 if isinstance(item, str):
                     # If item is a string (column name), normalize using other columns if provided
@@ -5636,11 +5669,39 @@ def plot_tweak(df: pd.DataFrame, data: Dict[str, Any],
 
         return data_series
 
-    def get_trace(item, group, shape, mode, normalization, 
-                columns_for_normalization=None, mma=None, 
-                exclude_outliers_multiplier=None):
+    def get_trace(
+        item: Union[str, pd.Series], group: str, shape: str, mode: str, 
+        normalization: bool, columns_for_normalization: Optional[List[str]] = None, 
+        mma: Optional[Tuple[float, float]] = None, 
+        exclude_outliers_multiplier: Optional[float] = None) -> List[dict]:
         """
         Get trace(s) for the provided item with specified configurations.
+        
+        Parameters:
+        ----------
+        item : Union[str, pd.Series]
+            The column name or actual data to be retrieved and processed.
+        group : str
+            The group for the trace which is used for stacking groups of traces.
+        shape : str
+            The shape of the plot, either 'line' or 'area'.
+        mode : str
+            Data representation mode, either 'standalone' or 'cumulative'.
+        normalization : bool
+            Indicates if the data should be normalized.
+        columns_for_normalization : List[str], optional
+            List of column names used for normalization if `item` is a column name.
+        mma : Tuple[float, float], optional
+            Contains values for a moving average and its multiplier for standard deviation.
+            Format is (moving_average_period, standard_deviation_multiplier). None by default.
+        exclude_outliers_multiplier : float, optional
+            If provided, outliers will be excluded based on this multiplier.
+        
+        Returns:
+        -------
+        List[dict]
+            A list of trace dictionaries, which contain the data and style options 
+            for each trace that will be added to the plot.
         """
         column_data = get_data_from_item(
             item, normalization, columns_for_normalization, 
@@ -5701,19 +5762,50 @@ def plot_tweak(df: pd.DataFrame, data: Dict[str, Any],
 
         return traces
 
-    def update_axis_bounds(fig, side, g_max, g_min, options, default_settings):
+    def update_axis_bounds(fig: go.Figure, side: str, g_max: float, g_min: float, 
+        options: Dict[str, Union[bool, str, float, Tuple[float, float]]], 
+        default_settings: Dict[str, Union[bool, str, float, Tuple[float, float]]]) -> None:
         """
-        ...
-        options : dict, optional
+        Updates the axis bounds of a Plotly figure based on provided options and default settings.
+
+        Parameters:
+        ----------
+        fig : go.Figure
+            The Plotly figure object to be updated.
+        side : str
+            Specifies which y-axis ('left' or 'right') to update.
+        g_max : float
+            The global maximum value in the data to be plotted on the specified y-axis.
+        g_min : float
+            The global minimum value in the data to be plotted on the specified y-axis.
+        options : dict
             Contains visualization options for left and right data. Each side (left/right) can have:
-            ...
+            - 'shape' : str, optional (default is 'line')
+                Shape of the plot, either 'line' or 'area'.
+            - 'mode' : str, optional (default is 'standalone')
+                Data representation mode, either 'standalone' or 'cumulative'.
+            - 'legendgroup' : str, optional
+                String to combine legend items into a group.
+            - 'normalization' : bool, optional (default is False)
+                Indicates if the data should be normalized.
+            - 'mma': tuple of (float, float), optional
+                Contains values for a moving average and its multiplier for standard deviation. 
+                Format is (moving_average_period, standard_deviation_multiplier). None by default.
+            - 'outliers': bool, optional (default is False)
+                Indicates if outliers should be excluded.
             - 'range': bool or str, optional (default is False)
                 Determines the logic used to set the y-axis bounds:
                 - 'flexible': No custom logic, Plotly determines y-axis bounds.
                 - False: Upper bound is set to the nearest power of 10 above the maximum data value.
                 - 'half': Upper bound is set to the nearest multiple of 5 above the maximum data value.
                 - 'full': Upper bound is set to the nearest power of 10 above the maximum data value.
-        ...
+        default_settings : dict
+            A dictionary containing default visualization settings, should have keys similar to `options`.
+            
+        Returns:
+        -------
+        None
+            The function modifies the `fig` object in-place and does not return anything.
         """
         range_option = options.get(side, {}).get('range', default_settings['range'])
         
@@ -5736,6 +5828,14 @@ def plot_tweak(df: pd.DataFrame, data: Dict[str, Any],
             # Update layout
             axis_key = 'yaxis' if side == 'left' else 'yaxis2'
             fig.update_layout({axis_key: dict(range=[lower_bound, upper_bound])})
+
+    plot_title = plot_info['plot_title']
+    data = plot_info['data']
+    options = plot_info.get('options', {})
+
+    # Initialize the figure object and variables
+    company, ticker = df[['PREGAO', 'TICKER']].iloc[0]
+    fig = go.Figure()
 
    # Default settings for visualization
     default_settings = {
@@ -5800,11 +5900,15 @@ def plot_tweak(df: pd.DataFrame, data: Dict[str, Any],
     # Figure Update Layout
     fig.update_layout(
         template='plotly_white',
-        title_text=f'{ticker} ({company}) {data.get("title", ["", "", ""])[0]}',
+        # xxx changes
+        # where plot_title is the key of your graphs_0 dict that you're currently processing. This may require a small restructuring in how you call plot_tweak, ensuring that the title is passed as a parameter.
+        # title_text=f'{ticker} ({company}) {data.get("title", ["", "", ""])[0]}',
+        title_text=f'{ticker} ({company}) {plot_title}',
 
+        # xxx changes
         xaxis_title='Data',
-        yaxis_title=data.get('title', ["", "", ""])[1],
-        yaxis2={'title': data.get('title', ["", "", ""])[2], 'overlaying': 'y', 'side': 'right'} if left_data_exists and right_data_exists else {},
+        yaxis_title=data.get('axis', ["", ""])[0],
+        yaxis2={'title': data.get('axis', ["", ""])[1], 'overlaying': 'y', 'side': 'right'} if left_data_exists and right_data_exists else {},
 
         legend=dict(
             orientation='h',
