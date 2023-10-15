@@ -1,6 +1,6 @@
 # Importing necessary modules and libraries
 from dash import html, dcc, exceptions
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 
 from app import app
@@ -68,6 +68,65 @@ def generate_callback(g, p, title, info):
 
     return update_graph
 
+def generate_collapse_callbacks(n_groups):
+    """
+    Generate callbacks to manage the collapse components for each graph group.
+    
+    Parameters:
+    - n_groups (int): The number of graph groups.
+    """
+    for g in range(n_groups):
+        @app.callback(
+            Output(f"collapse-{g}", "is_open"),
+            [Input(f"btn-{g}", "n_clicks")],
+            [State(f"collapse-{g}", "is_open")]
+        )
+        def toggle_collapse(n, is_open, g=g):  # Use default arg to remember the loop variable
+            if n:
+                return not is_open
+            return is_open
+
+def create_layout_from_plots(all_plots):
+    """
+    Create layout components from a dictionary of plots.
+
+    Parameters:
+    - all_plots (dict): Dictionary containing plot components.
+
+    Returns:
+    - list: List of components to be added to the layout.
+    """
+    layout_components = []
+    try:
+        for g, plots in all_plots.items():
+           # Append each plot (which is a dbc.Card component) directly to layout_components
+            layout_components.append(
+                dbc.Button(
+                    f"Toggle Graph Group {g}", 
+                    id=f"btn-{g}", 
+                    className="mb-3", 
+                    color="primary"
+                )
+            )
+
+            # Add a line break for spacing
+            layout_components.append(html.Br())
+
+            # Collapsible section containing the graph group
+            layout_components.append(
+                dbc.Collapse(
+                    plots, 
+                    id=f"collapse-{g}", 
+                    is_open=True  # Setting this to True will make it visible at start
+                )
+            )
+    except Exception as e:
+        print(f"Error creating layout: {str(e)}")
+        # You might want to return a placeholder or error message in the layout in case of error
+        layout_components.append(html.P("Error loading plots."))
+        
+    return layout_components
+
 # ----- CODE LOGIC -----
 # Define units as a list of graphs
 groups_of_graph = [graphs_0, graphs_1]
@@ -92,41 +151,17 @@ for g, graph in enumerate(groups_of_graph):
                 ]),
                 dbc.CardFooter([
                     html.P(f"Footer for {title}", id=f'graph_{g}_{p}_footer'), 
-                    # html.Hr(), 
                     ]),  # footer
-            html.Hr(), 
+            # html.Hr(), 
             ]), 
         )
-    
+        # Add a line break for spacing
+        current_graph_components.append(html.Br())
+
     # Storing the created components in the dictionary using the unit index as the key
     all_plots[g] = current_graph_components
 
-def create_layout_from_plots(all_plots):
-    """
-    Create layout components from a dictionary of plots.
-
-    Parameters:
-    - all_plots (dict): Dictionary containing plot components.
-
-    Returns:
-    - list: List of components to be added to the layout.
-    """
-    layout_components = []
-    try:
-        for g, plots in all_plots.items():
-            # You might want to include some kind of header or separator between groups of plots
-            # layout_components.append(html.Hr())
-            # layout_components.append(html.H3(f"Group {g} Plots"))
-            
-            # Append each plot (which is a dbc.Card component) directly to layout_components
-            layout_components.extend(plots)
-    except Exception as e:
-        print(f"Error creating layout: {str(e)}")
-        # You might want to return a placeholder or error message in the layout in case of error
-        layout_components.append(html.P("Error loading plots."))
-        
-    return layout_components
-        
+generate_collapse_callbacks(len(all_plots))
 
 # ----- LAYOUT -----
 layout = html.Div([
