@@ -8,7 +8,7 @@ from pages import sidebar, nav, home, setor, subsetor, segmento, companhia, setu
 
 import assets.helper as b3
 import assets.functions as run
-
+ 
 import pandas as pd
 
 # ----- LAYOUT -----
