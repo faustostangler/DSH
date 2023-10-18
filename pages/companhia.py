@@ -4,7 +4,7 @@ from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 
 from app import app
-from assets.graphs import graphs_0, graphs_1
+from assets.graphs import graphs_0, graphs_1, graphs_default
 
 import assets.helper as b3
 import assets.functions as run
@@ -36,9 +36,9 @@ def decompress_data(compressed_data):
     return df
 
 # Generates a callback for updating graphs based on a line number, unit, and info.
-def generate_callback(g, p, title, info):
+def generate_callback(g, l, p, info):
     @app.callback(
-        Output(f'graph_{g}_{p}', 'figure'),
+        Output(f'graph_{g}_{l}_{p}', 'figure'),
         [Input('company-df', 'data')]
     )
     def update_graph(compressed_data):
@@ -59,11 +59,11 @@ def generate_callback(g, p, title, info):
 
         # Updating the graph
         plot_info = {
-            'plot_title': title,  # Using the dict key as plot title
+            'info': info['info'],  # New key for the title and other info
             'data': info['data'],
             'options': info['options']
         }
-        fig = run.plot_tweak(df, plot_info)
+        fig = run.plot_tweak(plot_info, df)
         return fig
 
     return update_graph
@@ -129,36 +129,40 @@ def create_layout_from_plots(all_plots):
 
 # ----- CODE LOGIC -----
 # Define units as a list of graphs
-groups_of_graph = [graphs_0, graphs_1]
+# groups_of_graph = [graphs_0, graphs_1]
+groups_of_graph = {}
+for key, value in graphs_default.items():
+    groups_of_graph[key] = value
+
 all_plots = {}
 
 # Loop through each unit (graph) and generate callbacks and components
-for g, graph in enumerate(groups_of_graph):
+for g, (key, group) in enumerate(groups_of_graph.items()):
     current_graph_components = []
-    for p, (title, info) in enumerate(graph.items()):
-        # Generating callbacks using lines from the current graph
-        generate_callback(g, p, title, info)  # Passing title and info to callback generator
+    for l, (line_number, line_content) in enumerate(group.items()):
+        for p, (plot_type, info) in enumerate(line_content.items()):
+            # Generating callbacks using lines from the current graph
+            generate_callback(g, l, p, info)
 
-        # Creating a dbc.Card component for each graph and appending it to current_graph_components
-        current_graph_components.append(
-            dbc.Card([
-                dbc.CardHeader([
-                    html.H5(title, id=f'graph_{g}_{p}_title'),  # Using title as H5 content
-                ]), 
-                dbc.CardBody([
-                    html.P(info['info']['description'], id=f'graph_{g}_{p}_info'), 
-                    dcc.Graph(id=f'graph_{g}_{p}'), 
+            # Creating a dbc.Card component for each graph and appending it to current_graph_components
+            current_graph_components.append(
+                dbc.Card([
+                    dbc.CardHeader([
+                        html.H5(info['info']['title'], id=f'graph_{g}_{l}_{p}_title'),
+                    ]),
+                    dbc.CardBody([
+                        html.P(info['info']['description'], id=f'graph_{g}_{l}_{p}_info'),
+                        dcc.Graph(id=f'graph_{g}_{l}_{p}'),
+                    ]),
+                    dbc.CardFooter([
+                        html.P(f"Footer for {info['info']['title']}", id=f'graph_{g}_{l}_{p}_footer'),
+                    ]),
                 ]),
-                dbc.CardFooter([
-                    html.P(f"Footer for {title}", id=f'graph_{g}_{p}_footer'), 
-                    ]),  # footer
-            # html.Hr(), 
-            ]), 
-        )
-        # Add a line break for spacing
-        current_graph_components.append(html.Br())
+            )
+            # Add a line break for spacing
+            current_graph_components.append(html.Br())
 
-    # Storing the created components in the dictionary using the unit index as the key
+    # Storing the created components in the dictionary using the group index as the key
     all_plots[g] = current_graph_components
 
 generate_collapse_callbacks(len(all_plots))
@@ -171,7 +175,8 @@ layout = html.Div([
     # Loading spinner that appears while callbacks are performed
     dcc.Loading(
         id="loading",
-        type="circle",
+        type="default", # default, circle, cube, dot
+        style={"position": "fixed", "top": "50%", "left": "50%", "transform": "translate(-50%, -50%)"},
         children=[
             # Main titles of the page 
             html.H1("Análise Fundamentalista"),
@@ -319,7 +324,7 @@ def update_company_info(compressed_data):
     ]
 
     header_2 = [
-        html.H4(f'ÚLTIMOS DADOS'),
+        html.H4(f'ÚLTIMOS DADOS FUNDAMENTALISTAS'),
         ]
     body_2 = [
         html.P(["Ações ON: ", html.Strong("{:,.0f}".format(acoes_on).replace(',', '.')),  f" ações"], id='acoes_on-info'),

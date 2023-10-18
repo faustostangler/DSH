@@ -5419,7 +5419,7 @@ def get_bcb_series():
     pass
 
 # dash
-def normalize_data(df, subcolumns):
+def normalize_data(subcolumns, df):
     """
     Normalize data columns in a dataframe to their percentage of row-wise total.
 
@@ -5460,7 +5460,7 @@ def normalize_data(df, subcolumns):
     
     return normalized_df
 
-def exclude_outliers(item, multiplier=1.5):
+def exclude_outliers(item, df, multiplier=1.5):
     """
     Exclude outliers from a data series using 
     the Interquartile Range (IQR) method and a personalized multiplier.
@@ -5496,7 +5496,7 @@ def exclude_outliers(item, multiplier=1.5):
     
     return inliers
 
-def cagr(item, years=3):
+def cagr(item, df, years=3):
     """
     Calculate the Compound Annual Growth Rate (CAGR) for a given data series.
     
@@ -5530,7 +5530,7 @@ def cagr(item, years=3):
     
     return data_series
 
-def ofs(item, years=3):
+def ofs(item, df, years=3):
     """
     Calculate the Oscillator Following the Stock (OFS) for a given data series.
 
@@ -5567,7 +5567,7 @@ def ofs(item, years=3):
 
     return data_series
 
-def plot_tweak(df: pd.DataFrame, plot_info: Dict[str, Any]) -> go.Figure:
+def plot_tweak(plot_info: Dict[str, Any], df: pd.DataFrame) -> go.Figure:
     """
     Generates a custom Plotly figure based on the provided data and visualization options.
     
@@ -5829,7 +5829,7 @@ def plot_tweak(df: pd.DataFrame, plot_info: Dict[str, Any]) -> go.Figure:
             axis_key = 'yaxis' if side == 'left' else 'yaxis2'
             fig.update_layout({axis_key: dict(range=[lower_bound, upper_bound])})
 
-    plot_title = plot_info['plot_title']
+    info = plot_info['info']
     data = plot_info['data']
     options = plot_info.get('options', {})
 
@@ -5903,7 +5903,7 @@ def plot_tweak(df: pd.DataFrame, plot_info: Dict[str, Any]) -> go.Figure:
         # xxx changes
         # where plot_title is the key of your graphs_0 dict that you're currently processing. This may require a small restructuring in how you call plot_tweak, ensuring that the title is passed as a parameter.
         # title_text=f'{ticker} ({company}) {data.get("title", ["", "", ""])[0]}',
-        title_text=f'{ticker} ({company}) {plot_title}',
+        title_text=f'{ticker} ({company}) {info["title"]}',
 
         # xxx changes
         xaxis_title='Data',
@@ -5914,8 +5914,8 @@ def plot_tweak(df: pd.DataFrame, plot_info: Dict[str, Any]) -> go.Figure:
             orientation='h',
             font_size=10,
         ),
-        width=6.27 * 200,  # converting inches to 96 pixels for width
-        height=3.52 * 200,  # converting inches to 96 pixels for height
+        # width=6.27 * 200,  # converting inches to 96 pixels for width
+        # height=3.52 * 200,  # converting inches to 96 pixels for height
     )
     
     # Applying the flexible_range logic. Note: The logic is NOT applied if flexible_range is True. If it's False, it IS applied.
