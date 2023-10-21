@@ -5927,3 +5927,122 @@ def plot_tweak(plot_info: Dict[str, Any], df: pd.DataFrame) -> go.Figure:
     update_axis_bounds(fig, 'right', global_max['right'], global_min['right'], options, default_settings)
 
     return fig
+
+def convert_series_to_list(graphs_dict):
+    for section_key, section_value in graphs_dict.items():
+        for line_key, line_value in section_value.items():
+            for plot_key, plot_value in line_value.items():
+                if 'data' in plot_value:
+                    data = plot_value['data']
+                    for axis in ['left', 'right']:
+                        if axis in data:
+                            new_data_list = []
+                            for item in data[axis]:
+                                if isinstance(item, pd.Series):
+                                    series_data = [[item.name, str(idx), val] for idx, val in item.items()]
+                                    new_data_list.append(series_data)
+                                else:
+                                    new_data_list.append(item)
+                            data[axis] = new_data_list
+    return graphs_dict
+
+def serialize_data(data):
+    """
+    Convert dictionary data into a JSON string.
+    """
+    return json.dumps(data)
+
+def compress_data(data: str) -> str:
+    """
+    Compress a string and return it as a base64 encoded string.
+    """
+    buffer = io.BytesIO()
+    with gzip.GzipFile(fileobj=buffer, mode='w') as f:
+        f.write(data.encode())
+    compressed_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    return compressed_data
+
+def convert_and_compress(graphs_dict):
+    """
+    Convert a dictionary into a list, serialize it, and compress it.
+    Returns compressed data.
+    """
+    graphs_as_list = convert_series_to_list(graphs_dict)
+    serialized_data = serialize_data(graphs_as_list)
+    compressed_data = compress_data(serialized_data)
+    return compressed_data
+
+
+def reverse_to_series(graphs_dict):
+    # Iterate through each section of the graph
+    for section_key, section_value in graphs_dict.items():
+        for line_key, line_value in section_value.items():
+            for plot_key, plot_value in line_value.items():
+                if 'data' in plot_value:
+                    data = plot_value['data']
+                    for axis in ['left', 'right']:
+                        if axis in data:
+                            new_data_list = []
+                            for item in data[axis]:
+                                # Check if the item is a list of lists
+                                if isinstance(item, list) and item and isinstance(item[0], list):
+                                    # Check if it can be converted to a pd.Series
+                                    try:
+                                        series_name = item[0][0]
+
+                                        # Extracting datetime index
+                                        index = pd.to_datetime([elem[1] for elem in item])
+
+                                        # Extracting values and converting to float or NaN
+                                        values = [float(elem[2]) if elem[2] != 'nan' else np.nan for elem in item]
+
+                                        # Creating the series
+                                        series = pd.Series(data=values, index=index, name=series_name)
+                                        new_data_list.append(series)
+                                    except:
+                                        new_data_list.append(item)
+                                else:
+                                    new_data_list.append(item)
+                            data[axis] = new_data_list
+    return graphs_dict
+
+def deserialize_data(data_str):
+    """
+    Convert a JSON string into dictionary data.
+    Convert string keys that are numbers into integers (except for the top level).
+    """
+    data = json.loads(data_str)
+
+    def int_key_converter(obj):
+        if isinstance(obj, dict):
+            new_obj = {}
+            for key, value in obj.items():
+                new_key = int(key) if key.isdigit() else key
+                new_obj[new_key] = int_key_converter(value)
+            return new_obj
+        return obj
+
+    for key in data:
+        data[key] = int_key_converter(data[key])
+
+    return data
+
+def decompress_data(compressed_data: str) -> str:
+    """
+    Decompress a base64 encoded string and return it as a decoded string.
+    """
+    buffer = io.BytesIO(base64.b64decode(compressed_data))
+    with gzip.GzipFile(fileobj=buffer, mode='r') as f:
+        decompressed_data = f.read().decode()
+    return decompressed_data
+
+def decompress_and_convert(compressed_data):
+    """
+    Decompress the data, deserialize it, and convert the result back into the original dictionary structure.
+    Returns the dictionary.
+    """
+    decompressed_str = decompress_data(compressed_data)
+    deserialized_data = deserialize_data(decompressed_str)
+    original_data = reverse_to_series(deserialized_data)
+    return original_data
+ 

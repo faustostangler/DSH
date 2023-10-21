@@ -21,42 +21,15 @@ import base64
 
 # ----- FUNCTIONS -----
 # Decompresses data and returns it as a DataFrame.
-def convert_series(data):
-    if isinstance(data, pd.Series):
-        return {"index": data.index.astype(str).tolist(), "values": data.tolist()}
-    elif isinstance(data, dict):
-        return {str(k): convert_series(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [convert_series(v) for v in data]
-    else:
-        return data
-    
-def revert_series(data):
-    if isinstance(data, dict) and "index" in data and "values" in data:
-        return pd.Series(data=data["values"], index=pd.to_datetime(data["index"]))
-    elif isinstance(data, dict):
-        return {k: revert_series(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [revert_series(v) for v in data]
-    else:
-        return data
+from assets.graphs import construct_graphs
+graphs_manual = construct_graphs(df)
+compressed_data = run.convert_and_compress(graphs_manual)
+graphs_manual = run.decompress_and_convert(compressed_data)
 
-def compress_data(data):
-    """Compress a Python dictionary and return a base64 encoded string."""
-    serialized_data = json.dumps(data)
-    buffer = io.BytesIO()
-    with gzip.GzipFile(fileobj=buffer, mode='w') as f:
-        f.write(serialized_data.encode())
-    compressed_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
-    return compressed_data
+compressed_df = run.compress_data(df.to_csv(index=True))
+df2 = pd.read_csv(io.StringIO(run.decompress_data(compressed_df)))
 
-def decompress_data(compressed_data):
-    """Decompress a base64 encoded string and return a Python dictionary."""
-    buffer = io.BytesIO(base64.b64decode(compressed_data))
-    with gzip.GzipFile(fileobj=buffer, mode='r') as f:
-        decompressed_data = f.read().decode()
-    data = json.loads(decompressed_data)
-    return data
+
 
 def extract_company_info(df):
     # Extract information from DataFrame and generate components
