@@ -245,6 +245,7 @@ def update_company_info(compressed_data):
         raise exceptions.PreventUpdate("Data is not valid")
 
     df = decompress_data(compressed_data)
+
     # Extract information from DataFrame and generate components
     company_name = df.iloc[0]['DENOM_CIA'] if not df.empty else ''
     atividade = df.iloc[0]['ATIVIDADE'] if not df.empty else ''
