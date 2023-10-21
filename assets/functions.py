@@ -29,7 +29,10 @@ from plotly.subplots import make_subplots
 
 
 from google.cloud import storage
+import json
+import gzip
 import io
+import base64
 
 import requests
 from bs4 import BeautifulSoup
