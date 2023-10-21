@@ -20,19 +20,6 @@ import io
 import base64
 
 # ----- FUNCTIONS -----
-# Decompresses data and returns it as a DataFrame.
-
-To Finish the compress and graphs_manual dcc.Store
-
-from assets.graphs import construct_graphs
-graphs_manual = construct_graphs(df)
-compressed_data = run.convert_and_compress(graphs_manual)
-graphs_manual = run.decompress_and_convert(compressed_data)
-
-compressed_df = run.compress_data(df.to_csv(index=True))
-df2 = pd.read_csv(io.StringIO(run.decompress_data(compressed_df)))
-
-
 def extract_company_info(df):
     # Extract information from DataFrame and generate components
     company_name = df.iloc[0]['DENOM_CIA'] if not df.empty else ''
@@ -169,6 +156,21 @@ layout = html.Div([
 
 # ----- CALLBACKS -----
 @app.callback(
+    Output({'type': 'collapse-content', 'index': ALL}, 'is_open'),
+    Input({'type': 'toggle-button', 'index': ALL}, 'n_clicks'),
+    State({'type': 'collapse-content', 'index': ALL}, 'is_open'),
+    prevent_initial_call=True
+)
+def toggle_content_visibility(n_clicks, is_open_states):
+    ctx = dash.callback_context
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    group_index = eval(button_id)['index']
+
+    # Toggle the is_open state for the clicked button's collapse
+    is_open_states[group_index] = not is_open_states[group_index]
+    return is_open_states
+
+@app.callback(
     [
         Output('company-segmento-title', 'children'),
         Output('company-title', 'children'),
@@ -228,16 +230,13 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
         company_title = companhia
 
     # Compress and encode data for efficient storage
-    buffer = io.BytesIO()
-    with gzip.GzipFile(fileobj=buffer, mode='w') as f:
-        df.to_parquet(f)
-    compressed_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    compressed_df = run.compress_data(df.to_csv(index=True))
 
     # Generate and serialize graphs_manual
     graphs_manual = construct_graphs(df)
-    serialized_graphs = json.dumps(graphs_manual)
+    compressed_graphs = run.convert_and_compress(graphs_manual)
 
-    return segmento_title, company_title, compressed_data, serialized_graphs
+    return segmento_title, company_title, compressed_df, compressed_graphs
 
 
 @app.callback(
@@ -250,16 +249,16 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
         Input('store-graphs-manual', 'data'), 
     ]
 )
-def update_company_info(compressed_data, serialized_graphs):
+def update_company_info(compressed_df, compressed_graphs):
 
     # Decompress the data
-    df = decompress_data(compressed_data)
+    df = pd.read_csv(io.StringIO(run.decompress_data(compressed_df)))
     # If df is empty, return an error message
     if df.empty:
         return html.P("No company data available.")
 
     # De serialize graphs_manual
-    graphs_manual = json.loads(serialized_graphs)
+    graphs_manual = run.decompress_and_convert(compressed_graphs)
 
     # Get Company Info
     company_info = extract_company_info(df)
@@ -276,17 +275,3 @@ def update_company_info(compressed_data, serialized_graphs):
     return company_info, blocks
 
 
-@app.callback(
-    Output({'type': 'collapse-content', 'index': ALL}, 'is_open'),
-    Input({'type': 'toggle-button', 'index': ALL}, 'n_clicks'),
-    State({'type': 'collapse-content', 'index': ALL}, 'is_open'),
-    prevent_initial_call=True
-)
-def toggle_content_visibility(n_clicks, is_open_states):
-    ctx = dash.callback_context
-    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    group_index = eval(button_id)['index']
-
-    # Toggle the is_open state for the clicked button's collapse
-    is_open_states[group_index] = not is_open_states[group_index]
-    return is_open_states
