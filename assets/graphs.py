@@ -54,24 +54,24 @@ def default_plots(df):
                     sub_lines = [column for column in df.columns if column.startswith(line.split(' - ')[0] + '.') and column.count('.') == line.count('.') + 1]
                     
                     # If sub_lines exist, create additional graph_dicts for the current index
-                    # for sub_line in sub_lines:
-                    #     # ... Your logic to define graph_dict for sub_lines goes here ...
-                    #     sub_graph_dict_1 = {
-                    #         'info': {
-                    #             'title': f'{line} - Composição Relativa',
-                    #             'header': f'{line}',
-                    #             'footer': f'{line}',
-                    #             'description': f'Linha {line} do balanço estruturado, com a composição relativa de cada sub-item, que permite visualizar quanto cada item representa em relação ao todo ao longo do tempo',
-                    #             }, 
-                    #         'data': {
-                    #             'axis': ['Porcentagem (%)'],
-                    #             'left': sub_lines,
-                    #             },
-                    #         'options': {
-                    #             'left': {'shape': 'line', 'mode': 'standalone', 'normalization': True,},
-                    #             }, 
-                    #         }
-                    #     graphs[index][1] = sub_graph_dict_1
+                    for sub_line in sub_lines:
+                        # ... Your logic to define graph_dict for sub_lines goes here ...
+                        sub_graph_dict_1 = {
+                            'info': {
+                                'title': f'{line} - Composição Relativa',
+                                'header': f'{line}',
+                                'footer': f'{line}',
+                                'description': f'Linha {line} do balanço estruturado, com a composição relativa de cada sub-item, que permite visualizar quanto cada item representa em relação ao todo ao longo do tempo',
+                                }, 
+                            'data': {
+                                'axis': ['Porcentagem (%)'],
+                                'left': sub_lines,
+                                },
+                            'options': {
+                                'left': {'shape': 'line', 'mode': 'standalone', 'normalization': True,},
+                                }, 
+                            }
+                        graphs[index][1] = sub_graph_dict_1
 
                     index += 1  # Increment the index for the next item
                     # break
@@ -82,59 +82,167 @@ def default_plots(df):
 
 graphs_default = default_plots(df_columns)
 
-graphs_0 = {
-    'Plot Title': {
+graphs_default = run.save_pkl(graphs_default, f'{b3.app_folder}graphs_default')
+
+############################################
+
+graphs_manual = {}
+
+def construct_graphs(df):
+    # Step 1: Initialize the main dictionary
+    graphs_manual = {}
+
+
+    # Step 2: Add the first section key to the main dictionary
+    graphs_manual['01'] = {}
+
+    # Step 3: Add the first line key to the first section
+    graphs_manual['01'][0] = {}
+
+    # Step 4: Add the first plot key-value to the first line
+
+    line = '01 - Ativo Total'
+    graphs_manual['01'][0][0] = {
         'info': {
-            'header': 'CardHeader', 
-            'footer': 'CardFooter', 
-            'description': 'Plot explanation', 
-        }, 
+            'title': f'{line}',
+            'header': f'{line}',
+            'footer': f'{line}',
+            'description': f'Linha {line} do balanço estruturado. Graph generator'
+        },
         'data': {
-            'axis': ['Reais (R$)', 'Unitário (un)'],
-            'left': ['01 - Ativo Total', '02.03 - Patrimônio Líquido'],
-            'right': ['11.03.01 - Equity Multiplier (Ativos por Patrimônio Líquido)']
+            'axis': ['Reais (R$)', 'Porcentagem (%)'],
+            'left': [line],
+            'right': [run.cagr(line, df)]
         },
         'options': {
-            'left': {'shape': 'area', 'mode': 'cumulative', 'normalization': True, 'range': 'flexible'},
-            'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]}
-        }
-    },
-    'Equity Multiplier2': {
+            'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
+            'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False, 'range': 'flexible'}, 
+        }, 
+    }
+
+    sub_lines = [column for column in df.columns if column.startswith(line.split(' - ')[0] + '.') and column.count('.') == line.count('.') + 1]
+
+    graphs_manual['01'][0][1] = {
         'info': {
-            'description': 'Plot explanation', 
-            # 'description': 'O Multiplicador de Patrimônio Líquido (Equity Multiplier) é uma métrica financeira que avalia a alavancagem financeira de uma empresa, calculada como o total de ativos dividido pelo patrimônio líquido total. Em termos práticos, um valor acima de 2.0 é frequentemente visto como elevado, indicando uma maior dependência de dívidas para financiar ativos e, portanto, um perfil de risco potencialmente mais alto. Valores abaixo de 1.5, por outro lado, são geralmente vistos como baixos, sugerindo uma abordagem financeira mais conservadora com menor alavancagem de dívida, mas possivelmente indicando um crescimento mais cauteloso. ', 
-            'header': 'CardHeader', 
-            'footer': 'CardFooter', 
+            'title': f'{line} - Composição Relativa',
+            'header': f'{line} header relativo',
+            'footer': f'{line} footer relativo',
+            'description': f'{line} description relativa',
         }, 
         'data': {
-            'axis': ['Reais (R$)', 'Unitário (un)'],
-            'left': ['01 - Ativo Total', '02.03 - Patrimônio Líquido'],
-            'right': ['11.03.01 - Equity Multiplier (Ativos por Patrimônio Líquido)']
+            'axis': ['Reais (R$)', 'Porcentagem (%)'],
+            'left': sub_lines,
+            # 'right': ['PLACEHOLDER_for_run.cagr_function_result'],  # Placeholder for run.cagr function
         },
         'options': {
-            'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'range': 'flexible'},
-            'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False}
+            'left': {'shape': 'line', 'mode': 'standalone', 'normalization': True,},
+            # 'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False, 'range': 'flexible'}, 
         }
-    },
-}
-graphs_1 = {
-    'Plot Title2': {
-        'info': {
-            'description': 'Plot explanation', 
-            'header': 'CardHeader', 
-            'footer': 'CardFooter', 
-        }, 
-        'data': {
-            'axis': ['Reais (R$)', 'Unitário (un)'],
-            'left': ['01 - Ativo Total', '02.03 - Patrimônio Líquido'],
-            'right': ['11.03.01 - Equity Multiplier (Ativos por Patrimônio Líquido)']
-        },
-        'options': {
-            'left': {'shape': 'area', 'mode': 'cumulative', 'normalization': True, 'range': 'flexible'},
-            'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]}
-        }
-    },
-}
+    }
+
+    return graphs_manual
+
+
+###################################
+
+
+
+
+
+# # first section, first line, secondary plot key-value
+# sub_lines = [column for column in df_columns.columns if column.startswith(line.split(' - ')[0] + '.') and column.count('.') == line.count('.') + 1]
+# graphs_manual['01'][0][1] = {
+#     'info': {
+#         'title': f'{line} - Composição Relativa',
+#         'header': f'{line} header relativo',
+#         'footer': f'{line} footer relativo',
+#         'description': f'{line} description relativa',
+#         }, 
+#    'data': {
+#         'axis': ['Reais (R$)', 'Porcentagem (%)'],
+#         'left': sub_lines,
+#         # 'right': [run.cagr('01 - Ativo Total', df)], 
+#         },
+#     'options': {
+#         'left': {'shape': 'line', 'mode': 'standalone', 'normalization': True,},
+#         # 'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False, 'range': 'flexible'}, 
+#     }, 
+# }, 
+# graphs_manual = {
+#     '01': {
+#         0: {
+#             'info': {
+#                 'title': '01 - Ativo Total',
+#                 'header': '01 - Ativo Total header',
+#                 'footer': '01 - Ativo Total footer',
+#                 'description': '01 - Ativo Total description'
+#             }
+#         },
+#         1: {
+#             'info': {
+#                 'title': '01 - Ativo Total - Composição Relativa',
+#                 'header': '01 - Ativo Total header relativo',
+#                 'footer': '01 - Ativo Total footer relativo',
+#                 'description': '01 - Ativo Total description relativa'
+#             }
+#         }
+#     }
+# }
+
+
+# graphs_0 = {
+#     'Plot Title': {
+#         'info': {
+#             'header': 'CardHeader', 
+#             'footer': 'CardFooter', 
+#             'description': 'Plot explanation', 
+#         }, 
+#         'data': {
+#             'axis': ['Reais (R$)', 'Unitário (un)'],
+#             'left': ['01 - Ativo Total', '02.03 - Patrimônio Líquido'],
+#             'right': ['11.03.01 - Equity Multiplier (Ativos por Patrimônio Líquido)']
+#         },
+#         'options': {
+#             'left': {'shape': 'area', 'mode': 'cumulative', 'normalization': True, 'range': 'flexible'},
+#             'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]}
+#         }
+#     },
+#     'Equity Multiplier2': {
+#         'info': {
+#             'description': 'Plot explanation', 
+#             # 'description': 'O Multiplicador de Patrimônio Líquido (Equity Multiplier) é uma métrica financeira que avalia a alavancagem financeira de uma empresa, calculada como o total de ativos dividido pelo patrimônio líquido total. Em termos práticos, um valor acima de 2.0 é frequentemente visto como elevado, indicando uma maior dependência de dívidas para financiar ativos e, portanto, um perfil de risco potencialmente mais alto. Valores abaixo de 1.5, por outro lado, são geralmente vistos como baixos, sugerindo uma abordagem financeira mais conservadora com menor alavancagem de dívida, mas possivelmente indicando um crescimento mais cauteloso. ', 
+#             'header': 'CardHeader', 
+#             'footer': 'CardFooter', 
+#         }, 
+#         'data': {
+#             'axis': ['Reais (R$)', 'Unitário (un)'],
+#             'left': ['01 - Ativo Total', '02.03 - Patrimônio Líquido'],
+#             'right': ['11.03.01 - Equity Multiplier (Ativos por Patrimônio Líquido)']
+#         },
+#         'options': {
+#             'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'range': 'flexible'},
+#             'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False}
+#         }
+#     },
+# }
+# graphs_1 = {
+#     'Plot Title2': {
+#         'info': {
+#             'description': 'Plot explanation', 
+#             'header': 'CardHeader', 
+#             'footer': 'CardFooter', 
+#         }, 
+#         'data': {
+#             'axis': ['Reais (R$)', 'Unitário (un)'],
+#             'left': ['01 - Ativo Total', '02.03 - Patrimônio Líquido'],
+#             'right': ['11.03.01 - Equity Multiplier (Ativos por Patrimônio Líquido)']
+#         },
+#         'options': {
+#             'left': {'shape': 'area', 'mode': 'cumulative', 'normalization': True, 'range': 'flexible'},
+#             'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]}
+#         }
+#     },
+# }
 
 graphs_0 = {
     'Plot Title': {
