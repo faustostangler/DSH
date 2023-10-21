@@ -21,6 +21,9 @@ import base64
 
 # ----- FUNCTIONS -----
 # Decompresses data and returns it as a DataFrame.
+
+To Finish the compress and graphs_manual dcc.Store
+
 from assets.graphs import construct_graphs
 graphs_manual = construct_graphs(df)
 compressed_data = run.convert_and_compress(graphs_manual)
@@ -28,7 +31,6 @@ graphs_manual = run.decompress_and_convert(compressed_data)
 
 compressed_df = run.compress_data(df.to_csv(index=True))
 df2 = pd.read_csv(io.StringIO(run.decompress_data(compressed_df)))
-
 
 
 def extract_company_info(df):
