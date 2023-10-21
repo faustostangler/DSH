@@ -14,27 +14,49 @@ import os
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import json
 import gzip
 import io
 import base64
 
 # ----- FUNCTIONS -----
 # Decompresses data and returns it as a DataFrame.
+def convert_series(data):
+    if isinstance(data, pd.Series):
+        return {"index": data.index.astype(str).tolist(), "values": data.tolist()}
+    elif isinstance(data, dict):
+        return {str(k): convert_series(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [convert_series(v) for v in data]
+    else:
+        return data
+    
+def revert_series(data):
+    if isinstance(data, dict) and "index" in data and "values" in data:
+        return pd.Series(data=data["values"], index=pd.to_datetime(data["index"]))
+    elif isinstance(data, dict):
+        return {k: revert_series(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [revert_series(v) for v in data]
+    else:
+        return data
+
+def compress_data(data):
+    """Compress a Python dictionary and return a base64 encoded string."""
+    serialized_data = json.dumps(data)
+    buffer = io.BytesIO()
+    with gzip.GzipFile(fileobj=buffer, mode='w') as f:
+        f.write(serialized_data.encode())
+    compressed_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    return compressed_data
+
 def decompress_data(compressed_data):
-    """
-    Decompress and decode the provided data.
-
-    Parameters:
-    - compressed_data (str): Compressed and encoded data.
-
-    Returns:
-    - pd.DataFrame: Decompressed and decoded data as a DataFrame.
-    """
-    # Creating a buffer to hold compressed data and decompressing the data
+    """Decompress a base64 encoded string and return a Python dictionary."""
     buffer = io.BytesIO(base64.b64decode(compressed_data))
     with gzip.GzipFile(fileobj=buffer, mode='r') as f:
-        df = pd.read_parquet(f)
-    return df
+        decompressed_data = f.read().decode()
+    data = json.loads(decompressed_data)
+    return data
 
 def extract_company_info(df):
     # Extract information from DataFrame and generate components
@@ -230,16 +252,17 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
         segmento_title = f"{setor} - {subsetor} - {segmento}"
         company_title = companhia
 
-    # Generate graphs_manual
-    graphs_manual = construct_graphs(df)
-
     # Compress and encode data for efficient storage
     buffer = io.BytesIO()
     with gzip.GzipFile(fileobj=buffer, mode='w') as f:
         df.to_parquet(f)
     compressed_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-    return segmento_title, company_title, compressed_data, graphs_manual
+    # Generate and serialize graphs_manual
+    graphs_manual = construct_graphs(df)
+    serialized_graphs = json.dumps(graphs_manual)
+
+    return segmento_title, company_title, compressed_data, serialized_graphs
 
 
 @app.callback(
@@ -249,28 +272,31 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
     ], 
     [
         Input('company-df', 'data'), 
+        Input('store-graphs-manual', 'data'), 
     ]
 )
-def update_company_info(compressed_data):
+def update_company_info(compressed_data, serialized_graphs):
+
     # Decompress the data
     df = decompress_data(compressed_data)
     # If df is empty, return an error message
     if df.empty:
         return html.P("No company data available.")
 
+    # De serialize graphs_manual
+    graphs_manual = json.loads(serialized_graphs)
+
     # Get Company Info
     company_info = extract_company_info(df)
 
-    graphs_manual = construct_graphs(df)
-
     blocks = []
     for g, (group_key, group) in enumerate(graphs_manual.items()):
-        titles = []
+        plots = []
         for l, (line_key, line) in enumerate(group.items()):
             for p, (plot_key, plot_info) in enumerate(line.items()):
-                title = plot_info['info']['title']
-                titles.append(html.P(f'g {g} l {l} p {p} {plot_info}'))
-        blocks.extend(generate_button_and_content(g, titles))  # Use extend, not append
+                plot_obj = run.plot_tweak(plot_info, df)
+                plots.append(dcc.Graph(figure=plot_obj))
+        blocks.extend(generate_button_and_content(g, plots))
 
     return company_info, blocks
 

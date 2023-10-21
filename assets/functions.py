@@ -5419,7 +5419,7 @@ def get_bcb_series():
     pass
 
 # dash
-def normalize_data(subcolumns, df):
+def normalize_data(df, subcolumns):
     """
     Normalize data columns in a dataframe to their percentage of row-wise total.
 
@@ -5441,20 +5441,24 @@ def normalize_data(subcolumns, df):
     # Make a copy of the specified columns to prevent modifying the original dataframe
     temp_df = df[subcolumns].copy()
     
+    # Remove columns where the sum is close to zero
+    temp_df = temp_df.loc[:, (temp_df.sum(axis=0) > 1e-10)]
+
     # Ensure there are no NaN values at the start of the columns
     # [You might adapt this as per your requirement]
-    temp_df = temp_df.dropna(subset=subcolumns, how='all')
+    temp_df = temp_df.dropna(subset=temp_df.columns, how='all')
     
     # Calculate the total of the specified columns row-wise
     temp_df['total'] = temp_df.sum(axis=1)
 
     # Normalize each specified column by its percentage of the row-wise total
-    for column in subcolumns:
-        temp_df[column] = temp_df.apply(
-            lambda row: round(row[column] / row['total'] * 100, 2) if row['total'] != 0 else 0, 
-            axis=1
-        )
-    
+    for column in temp_df.columns:
+        if column != 'total':
+            temp_df[column] = temp_df.apply(
+                lambda row: round(row[column] / row['total'] * 100, 2) if row['total'] != 0 else 0, 
+                axis=1
+            )
+        
     # Drop the total column and return the normalized dataframe
     normalized_df = temp_df.drop(columns=['total'])
     
@@ -5515,7 +5519,7 @@ def cagr(item, df, years=3):
     """
     # Retrieve the data series from the dataframe if item is a string (column name)
     data_series = df[item] if isinstance(item, str) else item
-    
+
     # Calculate the CAGR: [ (Ending Value / Beginning Value) ^ (1 / Number of Years) ] - 1
     # Shift the original data series by the number of periods to calculate the growth rate
     data_series = ((data_series / data_series.shift(periods=round(21*12*years))) ** (1/years)) - 1
