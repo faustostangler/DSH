@@ -222,6 +222,10 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
         # Check if the file exists and load the data
         if os.path.exists(file+'.pkl'):
             df = run.load_pkl(file)
+            size = len(df)
+            # remove un-wanted index     #  this debug related to the merge formation and repetition of uncorrect values in index.max(). Shortcut drop index.max and remove wrong values
+            df = df.drop_duplicates(subset='index', keep='first')
+            print(f'{size} to {len(df)}, drop index duplicates, cheat debug in action, fix it later')
         else:
             print(f"No data file found for company: {companhia}")
 
@@ -253,6 +257,26 @@ def update_company_info(compressed_df, compressed_graphs):
 
     # Decompress the data
     df = pd.read_csv(io.StringIO(run.decompress_data(compressed_df)))
+    # Remove the columns named 'level_0' and 'index' from the dataframe
+    df = df[[col for col in df.columns if col not in ['level_0', 'index']]]
+    # Convert the 'VERSAO' column values to integers, then to strings (objects)
+    df['VERSAO'] = df['VERSAO'].astype(int).astype(str)
+    # Convert the 'CD_CVM' column values to integers, then to strings (objects)
+    df['CD_CVM'] = df['CD_CVM'].astype(int).astype(str)
+    # Convert the 'DT' columns values to datetime format
+    datetime_cols = [col for col in df.columns if col.startswith('DT')]
+    df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime)
+    # Convert the 'COLUNA_DF' column values to strings (objects)
+    df['COLUNA_DF'] = df['COLUNA_DF'].astype(str)
+    # Identify all columns that start with a digit
+    float_cols = [col for col in df.columns if col[0].isdigit()]
+    df[float_cols] = df[float_cols].astype('float64')
+    # Identify all object columns that do not contain the word "original" (case-insensitive) in their name
+    # category_columns = [col for col in df.select_dtypes(include=['object']).columns if "original" not in col.lower()]
+    # df[category_columns] = df[category_columns].astype('category')
+    df['Date'] = pd.to_datetime(df['Date'])  # Convert the 'Date' column to datetime format (if it isn't already)
+    df = df.set_index('Date')
+
     # If df is empty, return an error message
     if df.empty:
         return html.P("No company data available.")

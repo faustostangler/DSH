@@ -5534,7 +5534,7 @@ def cagr(item, df, years=3):
     
     # Name it appropriately
     data_series.name = f'CAGR {years}a - {data_series.name.split(" - ")[1]}'
-    
+
     return data_series
 
 def ofs(item, df, years=3):
@@ -5901,6 +5901,7 @@ def plot_tweak(plot_info: Dict[str, Any], df: pd.DataFrame) -> go.Figure:
                         min_val = min(y_values)
                         global_max[side_base] = max(global_max[side_base], max_val)
                         global_min[side_base] = min(global_min[side_base], min_val)
+                        # print('debug data', info['header'], global_max[side_base], global_min[side_base])
 
                     fig.add_trace(go.Scatter(**trace))
 
