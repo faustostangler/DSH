@@ -20,7 +20,7 @@ import io
 import base64
 
 # ----- FUNCTIONS -----
-def extract_company_info(df):
+def get_company_info(df):
     # Extract information from DataFrame and generate components
     company_name = df.iloc[0]['DENOM_CIA'] if not df.empty else ''
     atividade = df.iloc[0]['ATIVIDADE'] if not df.empty else ''
@@ -55,8 +55,6 @@ def extract_company_info(df):
         ),
         dbc.Row(
             [
-                
-
                 dbc.Col(html.P(html.P(["Site: ", html.A(site, href=site, target='_blank', id='site-link')])), width=6),
                 dbc.Col(html.P(f"Escriturador: {escriturador}", id='escriturador-info'), width=6)
             ]
@@ -78,7 +76,6 @@ def extract_company_info(df):
         html.Hr(), 
         html.P(["Preço por Ação: R$: ", html.Strong("{:,.2f}".format(preco).replace(",", "X").replace(".", ",").replace("X", ".")), ], id='preco-info'),
         html.P(["Valor de Mercado: R$: ", html.Strong("{:,.0f}".format(preco*(acoes_on)).replace(",", "X").replace(".", ",").replace("X", ".")), ], id='preco-info'),
-
 
     ]
     footer_2 = [
@@ -111,7 +108,7 @@ def extract_company_info(df):
     # Return the constructed layout
     return company_info
 
-def generate_button_and_content(group_index, content_list):
+def generate_button_and_content(group_index, content_list, status):
     button =  [
         dbc.Button(
             f"Mostrar Gráficos", 
@@ -122,19 +119,16 @@ def generate_button_and_content(group_index, content_list):
         dbc.Collapse(
             content_list, 
             id={'type': 'collapse-content', 'index': group_index},
-            is_open=False
+            is_open=status
         )
     ]
     return button
-
-# ----- CODE LOGIC -----
-
 
 # ----- LAYOUT -----
 layout = html.Div([
     # Storing data to be passed between callbacks
     dcc.Store(id='company-df', storage_type='session'), 
-    dcc.Store(id='store-graphs-manual', storage_type='session'), 
+    dcc.Store(id='graphs', storage_type='session'), 
 
     # Loading spinner that appears while callbacks are performed
     dcc.Loading(
@@ -175,7 +169,7 @@ def toggle_content_visibility(n_clicks, is_open_states):
         Output('company-segmento-title', 'children'),
         Output('company-title', 'children'),
         Output('company-df', 'data'), 
-        Output('store-graphs-manual', 'data')
+        Output('graphs', 'data')
     ],  
     [
         Input('store-selected-company', 'data'),
@@ -222,8 +216,8 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
         # Check if the file exists and load the data
         if os.path.exists(file+'.pkl'):
             df = run.load_pkl(file)
-            size = len(df)
             # remove un-wanted index     #  this debug related to the merge formation and repetition of uncorrect values in index.max(). Shortcut drop index.max and remove wrong values
+            size = len(df)
             df = df.drop_duplicates(subset='index', keep='first')
             print(f'{size} to {len(df)}, drop index duplicates, cheat debug in action, fix it later')
         else:
@@ -236,9 +230,9 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
     # Compress and encode data for efficient storage
     compressed_df = run.compress_data(df.to_csv(index=True))
 
-    # Generate and serialize graphs_manual
-    graphs_manual = construct_graphs(df)
-    compressed_graphs = run.convert_and_compress(graphs_manual)
+    # Generate and serialize graphs
+    graphs = construct_graphs(df)
+    compressed_graphs = run.convert_and_compress(graphs)
 
     return segmento_title, company_title, compressed_df, compressed_graphs
 
@@ -250,51 +244,50 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
     ], 
     [
         Input('company-df', 'data'), 
-        Input('store-graphs-manual', 'data'), 
+        Input('graphs', 'data'), 
     ]
 )
 def update_company_info(compressed_df, compressed_graphs):
 
-    # Decompress the data
-    df = pd.read_csv(io.StringIO(run.decompress_data(compressed_df)))
-    # Remove the columns named 'level_0' and 'index' from the dataframe
-    df = df[[col for col in df.columns if col not in ['level_0', 'index']]]
-    # Convert the 'VERSAO' column values to integers, then to strings (objects)
-    df['VERSAO'] = df['VERSAO'].astype(int).astype(str)
-    # Convert the 'CD_CVM' column values to integers, then to strings (objects)
-    df['CD_CVM'] = df['CD_CVM'].astype(int).astype(str)
-    # Convert the 'DT' columns values to datetime format
-    datetime_cols = [col for col in df.columns if col.startswith('DT')]
-    df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime)
-    # Convert the 'COLUNA_DF' column values to strings (objects)
-    df['COLUNA_DF'] = df['COLUNA_DF'].astype(str)
-    # Identify all columns that start with a digit
-    float_cols = [col for col in df.columns if col[0].isdigit()]
-    df[float_cols] = df[float_cols].astype('float64')
-    # Identify all object columns that do not contain the word "original" (case-insensitive) in their name
-    # category_columns = [col for col in df.select_dtypes(include=['object']).columns if "original" not in col.lower()]
-    # df[category_columns] = df[category_columns].astype('category')
-    df['Date'] = pd.to_datetime(df['Date'])  # Convert the 'Date' column to datetime format (if it isn't already)
-    df = df.set_index('Date')
+    # Decompress the data and format from csv to pd
+    decompressed_df = run.decompress_data(compressed_df)
+    df = pd.read_csv(io.StringIO(decompressed_df))
+    df = run.clean_df(df)
 
     # If df is empty, return an error message
     if df.empty:
         return html.P("No company data available.")
 
-    # De serialize graphs_manual
-    graphs_manual = run.decompress_and_convert(compressed_graphs)
+    # De serialize graphs
+    graphs = run.decompress_and_convert(compressed_graphs)
 
     # Get Company Info
-    company_info = extract_company_info(df)
+    company_info = get_company_info(df)
 
     blocks = []
-    for g, (group_key, group) in enumerate(graphs_manual.items()):
+    for g, (group_key, group) in enumerate(graphs.items()):
+        status = True if g == 0 else False
         plots = []
         for l, (line_key, line) in enumerate(group.items()):
             for p, (plot_key, plot_info) in enumerate(line.items()):
                 plot_obj = run.plot_tweak(plot_info, df)
-                plots.append(dcc.Graph(figure=plot_obj))
-        blocks.extend(generate_button_and_content(g, plots))
+                # Create the card for this plot
+                plot_obj = run.plot_tweak(plot_info, df)
+                
+                # Create the card for this plot
+                card = dbc.Card([
+                    dbc.CardHeader(html.Strong(f"{plot_info['info']['title']} - {plot_info['info']['header']}")),
+                    dbc.CardBody([
+                        dcc.Graph(figure=plot_obj), 
+                        html.P(f"{plot_info['info']['description']}"),
+                    ]),
+                    dbc.CardFooter(html.I(f"{plot_info['info']['footer']}")), 
+                ])
+                plots.append(card)
+
+                # Adding a break after each card for better visual separation
+                plots.append(html.Br())
+        blocks.extend(generate_button_and_content(g, plots, status))
 
     return company_info, blocks
 

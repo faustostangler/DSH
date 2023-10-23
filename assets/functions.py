@@ -6050,3 +6050,26 @@ def decompress_and_convert(compressed_data):
     original_data = reverse_to_series(deserialized_data)
     return original_data
  
+def clean_df(df):
+    df = df.copy()
+    # Remove the columns named 'level_0' and 'index' from the dataframe
+    df = df[[col for col in df.columns if col not in ['level_0', 'index']]]
+    # Convert the 'VERSAO' column values to integers, then to strings (objects)
+    df['VERSAO'] = df['VERSAO'].astype(int).astype(str)
+    # Convert the 'CD_CVM' column values to integers, then to strings (objects)
+    df['CD_CVM'] = df['CD_CVM'].astype(int).astype(str)
+    # Convert the 'DT' columns values to datetime format
+    datetime_cols = [col for col in df.columns if col.startswith('DT')]
+    df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime)
+    # Convert the 'COLUNA_DF' column values to strings (objects)
+    df['COLUNA_DF'] = df['COLUNA_DF'].astype(str)
+    # Identify all columns that start with a digit
+    float_cols = [col for col in df.columns if col[0].isdigit()]
+    df[float_cols] = df[float_cols].astype('float64')
+    # Identify all object columns that do not contain the word "original" (case-insensitive) in their name
+    # category_columns = [col for col in df.select_dtypes(include=['object']).columns if "original" not in col.lower()]
+    # df[category_columns] = df[category_columns].astype('category')
+    df['Date'] = pd.to_datetime(df['Date'])  # Convert the 'Date' column to datetime format (if it isn't already)
+    df = df.set_index('Date')
+
+    return df
