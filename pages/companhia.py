@@ -270,21 +270,35 @@ def update_company_info(compressed_df, compressed_graphs):
         plots = []
         for l, (line_key, line) in enumerate(group.items()):
             for p, (plot_key, plot_info) in enumerate(line.items()):
+                print(f'{g} {line}')
+                print(f'{plot_info}')
+                
+
                 plot_obj = run.plot_tweak(plot_info, df)
                 # Create the card for this plot
                 plot_obj = run.plot_tweak(plot_info, df)
                 
-                # Create the card for this plot
+                # Create the base CardBody list with the Graph and Description
+                card_body_content = [
+                    dcc.Graph(figure=plot_obj), 
+                    html.P(f"{plot_info['info']['description']}")
+                ]
+
+                # Check if 'mma' exists in plot_info['info'] and add it to the list
+                if 'mma' in plot_info['info']:
+                    card_body_content.append(html.P(f"{plot_info['info']['mma']}"))
+
+                # Check if 'cagr' exists in plot_info['info'] and add it to the list
+                if 'cagr' in plot_info['info']:
+                    card_body_content.append(html.P(f"{plot_info['info']['cagr']}"))
+
+                # Create the Card using the content
                 card = dbc.Card([
                     dbc.CardHeader(html.Strong(f"{plot_info['info']['title']} - {plot_info['info']['header']}")),
-                    dbc.CardBody([
-                        dcc.Graph(figure=plot_obj), 
-                        html.P(f"{plot_info['info']['description']}"),
-                        html.P(f"{plot_info['info']['mma']}"),
-                        html.P(f"{plot_info['info']['cagr']}"),
-                    ]),
+                    dbc.CardBody(card_body_content),
                     dbc.CardFooter(html.I(f"{plot_info['info']['footer']}")), 
                 ])
+                
                 plots.append(card)
 
                 # Adding a break after each card for better visual separation
