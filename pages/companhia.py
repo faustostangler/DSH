@@ -280,6 +280,8 @@ def update_company_info(compressed_df, compressed_graphs):
                     dbc.CardBody([
                         dcc.Graph(figure=plot_obj), 
                         html.P(f"{plot_info['info']['description']}"),
+                        html.P(f"{plot_info['info']['mma']}"),
+                        html.P(f"{plot_info['info']['cagr']}"),
                     ]),
                     dbc.CardFooter(html.I(f"{plot_info['info']['footer']}")), 
                 ])
