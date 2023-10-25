@@ -111,7 +111,7 @@ def get_default_graphs(df):
                     'right': [run.cagr(line["line"], df)], 
                 }, 
                 'options': {
-                    'left': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2], },
+                    'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2], },
                     'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False, }, 
                 }, 
             }
