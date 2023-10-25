@@ -270,6 +270,10 @@ def update_company_info(compressed_df, compressed_graphs):
         plots = []
         for l, (line_key, line) in enumerate(group.items()):
             for p, (plot_key, plot_info) in enumerate(line.items()):
+                print(f'{g} {line}')
+                print(f'{plot_info}')
+                
+
                 plot_obj = run.plot_tweak(plot_info, df)
                 # Create the card for this plot
                 plot_obj = run.plot_tweak(plot_info, df)
@@ -294,7 +298,7 @@ def update_company_info(compressed_df, compressed_graphs):
                     dbc.CardBody(card_body_content),
                     dbc.CardFooter(html.I(f"{plot_info['info']['footer']}")), 
                 ])
-
+                
                 plots.append(card)
 
                 # Adding a break after each card for better visual separation
