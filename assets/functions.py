@@ -5306,7 +5306,7 @@ def get_yahoo_quotes(ticker, start_date, end_date=pd.Timestamp.today().strftime(
     
     return quotes  # Return the dictionary of historical stock data
 
-def yahoo_quotes(fund, start_date='1970-01-02'):
+def yahoo_quotes(fund, quotes, start_date='1970-01-02'):
     '''
     Retrieve historical stock data for a fund's tickers from Yahoo Finance.
 
@@ -5329,11 +5329,13 @@ def yahoo_quotes(fund, start_date='1970-01-02'):
         df_tickers['TICKERS'] = df_tickers['TICKERS'].apply(lambda x: [item.strip() for item in x.split(',')] if isinstance(x, str) else x)
 
         start_time_2 = time.time()
-        
         # Iterate over tickers in the sector
         for j, (index, row) in enumerate(df_tickers.iterrows()):
             cnpj, pregao, ticker = row
             try:
+                max_date = max(df['Date'].max() for df in quotes[pregao].values())
+                start_date = max(pd.Timestamp(start_date), max_date).strftime('%Y-%m-%d')
+
                 # Retrieve historical stock data using the get_yahoo_quotes function
                 df_quotes = get_yahoo_quotes(ticker, start_date=start_date)
                 
@@ -5400,14 +5402,14 @@ def integrate_yahoo_quotes(fund):
         quotes = load_pkl(f'{b3.app_folder}quotes')
     except Exception:
         # If loading fails, retrieve initial quotes using Yahoo Finance and save them
-        quotes = yahoo_quotes(fund)
+        quotes = yahoo_quotes(fund, quotes)
         quotes = save_pkl(quotes, f'{b3.app_folder}quotes')
     
     # Determine the start date for retrieving new data
     start_date = min(df.index.max() for _, tickers in quotes.items() for _, df in tickers.items()).strftime('%Y-%m-%d')
 
     # Retrieve new quotes from Yahoo Finance starting from the determined start date
-    quotes_new = yahoo_quotes(fund, start_date=start_date)
+    quotes_new = yahoo_quotes(fund, quotes)
     
     # Update existing quotes with the new data
     quotes = quotes_update(fund, quotes, quotes_new)
