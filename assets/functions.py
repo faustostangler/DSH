@@ -5494,8 +5494,14 @@ def cleanup_dataframe(df):
 
     try:        
         # Convert the 'VERSAO' and 'CD_CVM' column values
-        df['VERSAO'] = df['VERSAO'].astype(int).astype(str)
-        df['CD_CVM'] = df['CD_CVM'].astype(int).astype(str)
+        columns_to_convert = ['VERSAO', 'CD_CVM', 'COLUNA_DF']
+
+        for col in columns_to_convert:
+            try:
+                df[col] = df[col].astype(int)
+            except Exception as e:
+                pass
+            df[col] = df[col].astype(str)
     except Exception as e:
         pass
 
@@ -5507,15 +5513,15 @@ def cleanup_dataframe(df):
         pass
 
     try:
-        # Convert the 'COLUNA_DF' column values to strings (objects)
-        df['COLUNA_DF'] = df['COLUNA_DF'].astype(str)
-    except Exception as e:
-        pass
+        # Add prefix to the column names
+        quote_cols = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
+        new_cols = {col: f"50.{i:02} - {col}" for i, col in enumerate(quote_cols, start=1)}
+        df.rename(columns=new_cols, inplace=True)
 
-    try:
         # Identify all columns that start with a digit and convert them to float
-        float_cols = [col for col in df.columns if col[0].isdigit()]
-        df[float_cols] = df[float_cols].astype('float64')
+        num_cols = [col for col in df.columns if col[0].isdigit()]
+        df[num_cols] = df[num_cols].astype('float64')
+
     except Exception as e:
         pass
 
@@ -5541,12 +5547,13 @@ def add_metrics(df):
     df.replace(0, np.nan, inplace=True)
 
     # add now df columns and metrics here
+    df['99 - PVPA'] = df['50.05 - Adj Close']/df['02.03 - Patrimônio Líquido']
 
     return df
 
 def merge_quotes(fund, quotes):
+    bigdata = []
     try:
-        bigdata = []
         for pregao, d in quotes.items():
             for ticker, df in d.items():
                 df['PREGAO'] = pregao  # Set or update 'PREGAO' column
@@ -5556,9 +5563,9 @@ def merge_quotes(fund, quotes):
     except Exception as e:
         pass
 
+    df_preplot = {}
     try:
         # pivot, merge, resample, cleanup and add metrics
-        df_preplot = {}
         start_time = time.time()
         for i, (setor, df) in enumerate(fund.items()):
             df = preprocess_data(df) # ok
@@ -5570,7 +5577,7 @@ def merge_quotes(fund, quotes):
             df = df.groupby('PREGAO', group_keys=False).apply(add_metrics)
 
             df_preplot[setor] = df
-
+            df = save_pkl(df, 'df')
             print(setor, remaining_time(start_time, len(fund), i))
     except Exception as e:
         pass

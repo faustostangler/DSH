@@ -1,4 +1,4 @@
-lines_inf_test = [
+test = [
 {
     'line': '00.01.01 - Ações ON',
     'title': '00.01.01 - Ações ON',
@@ -29,7 +29,7 @@ lines_inf_test = [
 },
 ]
 
-lines_info = [
+default = [
 {
     'line': '00.01.01 - Ações ON',
     'title': '00.01.01 - Ações ON',
@@ -2070,13 +2070,20 @@ lines_info = [
 
 ]
 
-lines_report = [
-    {
-    'line': '00.02.01 - Ações PN',
-    'title': '00.02.01 - Ações PN',
-    'header': 'Ações Preferenciais Nominativas',
-    'description': 'Ações PN em quantidades normais mostram equilíbrio na estrutura de capital da empresa. Valores ascendentes podem refletir busca por financiamento sem diluição de controle, enquanto declínios sugerem preferência por outras formas de financiamento.',
-    'footer': 'Ações PN, ou Ações Preferenciais Nominativas, são aquelas que conferem a seus detentores alguns privilégios em relação às ações ordinárias, especialmente no que tange ao recebimento de dividendos ou reembolso de capital. Diferentemente das ações ON, as ações PN não dão direito pleno de voto nas assembleias, mas em compensação, oferecem vantagens como receber dividendos antes ou receber um valor maior em dividendos. Também, em caso de venda ou liquidação da empresa, os detentores de ações PN têm prioridade no recebimento dos valores. Pense em uma sala de cinema onde alguns assentos são mais confortáveis e oferecem uma visão privilegiada da tela. Quem possui esses assentos talvez não possa escolher o filme que será exibido, mas com certeza terá uma experiência de visualização superior.', 
+report = [
+{
+    'line': '01 - Ativo Total',
+    'title': '01 - Ativo Total',
+    'header': 'Totalidade dos Bens e Direitos',
+    'description': 'O Ativo Total representa a soma de todos os bens e direitos que uma empresa possui em um determinado momento. Valores ascendentes podem indicar crescimento e expansão da empresa, enquanto declínios podem sinalizar venda de ativos ou redução das operações.',
+    'footer': 'O Ativo Total é a consolidação de todos os recursos controlados por uma entidade, resultantes de eventos passados e dos quais se espera que a entidade obtenha benefícios econômicos futuros. É a combinação dos ativos circulantes (aqueles que serão convertidos em dinheiro ou consumidos no ciclo operacional) e dos ativos não circulantes (bens e direitos que não serão convertidos em dinheiro no curto prazo). Pense no Ativo Total como uma grande caixa onde uma empresa armazena tudo o que possui, desde dinheiro em caixa até prédios e maquinários.', 
+},
+{
+    'line': '02.03 - Patrimônio Líquido',
+    'title': '02.03 - Patrimônio Líquido',
+    'header': 'Valor Total dos Ativos da Empresa',
+    'description': 'Representa o valor que os proprietários ou acionistas têm na empresa após deduzir todas as obrigações. É basicamente a diferença entre ativos e passivos da organização.',
+    'footer': 'Imagine que você tenha uma caixa de dinheiro e algumas dívidas. O dinheiro que sobra após pagar todas as dívidas é o seu "patrimônio líquido".', 
 },
 
 ]
