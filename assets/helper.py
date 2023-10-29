@@ -23,7 +23,9 @@ bin_size = 50
 chunksize = 10**6  # Adjust this value based on your available memory
 
 # variables 1
-app_folder = 'datasets/'
+app_folder = 'datasets'
+company_folder = 'company'
+
 cols_b3_companies = ['pregao', 'company_name', 'cvm', 'listagem', 'ticker', 'tickers', 'asin', 'cnpj', 'site', 'setor', 'subsetor', 'segmento', 'atividade', 'escriturador', 'url']
 cols_b3_tickers = ['ticker', 'company_name']
 cols_world_markets = ['symbol', 'shortName', 'longName', 'exchange', 'market', 'quoteType']
@@ -397,7 +399,7 @@ def dre_math(value):
 
     avpi.append(f'{progress[0]:.6f}')
     if (size-l-1) % (bin_size*100) == 0 and status != True:
-        pd.DataFrame(avpi).to_csv(app_folder + filename + '.csv', index=False)
+        pd.DataFrame(avpi).to_csv(f'{app_folder}/{filename}.csv', index=False)
 
         dre_math = pd.concat([dre_math, df_temp], axis=0, ignore_index=True)
         df_temp = pd.DataFrame(columns=cols_dre_math)
@@ -469,7 +471,7 @@ def dre_intel(value):
 
         avpi.append(f'{progress[0]:.6f}')
         if (size-item-1) % (bin_size/10) == 0:
-            pd.DataFrame(avpi).to_csv(app_folder + filename + '.csv', index=False)
+            pd.DataFrame(avpi).to_csv(f'{app_folder}/{filename}.csv', index=False)
 
             dre_intel = dre_intel.astype(str)
             dre_intel = dre_intel.reset_index(drop=True).drop_duplicates().fillna(0)
@@ -530,9 +532,9 @@ def yahoo_quotes(value):
   fund = run.load_database()
 
   quotes = run.integrate_yahoo_quotes(fund)
-  quotes = run.save_pkl(quotes, f'{app_folder}quotes')
+  quotes = run.save_pkl(quotes, f'{app_folder}/quotes')
 
-  prices = run.merge_quotes(fund, quotes)
-  prices = run.save_pkl(prices, f'{app_folder}prices')
+  pre_plot = run.merge_quotes(fund, quotes)
+  pre_plot = run.save_pkl(pre_plot, f'{app_folder}/pre_plot')
 
   return value

@@ -2589,7 +2589,7 @@ def create_demo_file():
 
         for i, year in enumerate(years):
             print(remaining_time(start_time, len(years), i))
-            dataframe = load_pkl(f'{b3.app_folder}dataframe_{year}')
+            dataframe = load_pkl(f'{b3.app_folder}/dataframe_{year}')
             cvm_new[year] = dataframe
     except Exception as e:
         # print(e)
@@ -3053,7 +3053,7 @@ def get_filelist(url):
 
     try:
         # Read last update date from 'last_update.txt' if available, else set to '1970-01-01'
-        with open(f'{b3.app_folder}last_update.txt', 'r') as f:
+        with open(f'{b3.app_folder}/last_update.txt', 'r') as f:
             last_update = f.read().strip()
         if not last_update:
             last_update = '1970-01-01'
@@ -3074,7 +3074,7 @@ def create_cvm(base_cvm):
     
     # Save last_update
     if len(cvm_new) > 0:
-        cvm_new = save_pkl(cvm_new, f'{b3.app_folder}cvm_new')
+        cvm_new = save_pkl(cvm_new, f'{b3.app_folder}/cvm_new')
 
     # Get metadata and categories from filelist
     try:
@@ -3091,7 +3091,7 @@ def create_cvm(base_cvm):
     try:
         # Write the maximum date from filtered filelist_df to 'last_update.txt'
         print('last update', last_update)
-        with open(f'{b3.app_folder}last_update.txt', 'w') as f:
+        with open(f'{b3.app_folder}/last_update.txt', 'w') as f:
             f.write(last_update)
     except Exception as e:
         pass
@@ -3382,8 +3382,8 @@ def get_calculated_math(math):
         
         # Store the adjusted dataframe in the result dictionary
         math_new[year] = adjusted_df
-        math_new = save_pkl(math_new, f'{b3.app_folder}math_now')
-        math_new[year] = save_pkl(math_new[year], f'{b3.app_folder}math_new_{year}')
+        math_new = save_pkl(math_new, f'{b3.app_folder}/math_now')
+        math_new[year] = save_pkl(math_new[year], f'{b3.app_folder}/math_new_{year}')
     return math_new
 
 def year_to_company(cvm_new):
@@ -3410,7 +3410,7 @@ def year_to_company(cvm_new):
         pass    
         # Concatenate the data for the company across all years
 
-    companies = save_pkl(companies, f'{b3.app_folder}database')
+    companies = save_pkl(companies, f'{b3.app_folder}/database')
     return companies
 
 def get_diff(df1, df2):
@@ -3563,7 +3563,7 @@ def math_from_cvm(cvm_now):
     df_columns = cvm_now[min(years)].columns
     for year in years:
         try:
-            math_now[year] = load_pkl(f'{b3.app_folder}math_new_{year}')
+            math_now[year] = load_pkl(f'{b3.app_folder}/math_new_{year}')
         except Exception as e:
             math_now[year] = pd.DataFrame(columns=df_columns)
 
@@ -3625,7 +3625,7 @@ def get_math(math='', cvm_now='', cvm_new='', math_now='', math_new=''):
         # prepare CVM
         if not cvm_now:
             try:
-                cvm_now = load_pkl(f'{b3.app_folder}cvm_now')
+                cvm_now = load_pkl(f'{b3.app_folder}/cvm_now')
             except Exception as e:
                 cvm_now = {}
         if not cvm_new:
@@ -3634,21 +3634,21 @@ def get_math(math='', cvm_now='', cvm_new='', math_now='', math_new=''):
         # prepare MATH
         # math_now
         try:
-            math_now = load_pkl(f'{b3.app_folder}math_now')
+            math_now = load_pkl(f'{b3.app_folder}/math_now')
         except Exception as e:
             try:
                 math_now = math_from_cvm(cvm_now)
             except Exception as e:
                 try:
                     math_now = get_calculated_math(cvm_now)
-                    math_now = save_pkl(math_now, f'{b3.app_folder}math_now')
+                    math_now = save_pkl(math_now, f'{b3.app_folder}/math_now')
                 except Exception as e:
                     math_now = {}
 
         # math_new
         if not math_new:
             try:
-                math_new = load_pkl(f'{b3.app_folder}math_new')
+                math_new = load_pkl(f'{b3.app_folder}/math_new')
             except Exception as e:
                 cvm_now, math_new = get_math_new_from_cvm(cvm_now, cvm_new)
         math = math_merge(math_now, math_new)
@@ -3659,7 +3659,7 @@ def get_math(math='', cvm_now='', cvm_new='', math_now='', math_new=''):
     return math
 
 def get_math_from_b3_cvm():
-    b3_cvm = load_pkl(f'{b3.app_folder}b3_cvm')
+    b3_cvm = load_pkl(f'{b3.app_folder}/b3_cvm')
 
     # Initialize a new dictionary to hold the results
     math = {}
@@ -3803,7 +3803,7 @@ def get_companies(math, company):
         print(sector)
         b3_cvm[sector] = pd.concat(df_list, ignore_index=True)
 
-    b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}b3_cvm')
+    b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
 
     return b3_cvm
 
@@ -3960,18 +3960,18 @@ def check_for_new_companies_in_b3():
 
     # Load the current company list from the local database
     try:
-        company_list_now = load_pkl(f'{b3.app_folder}company_list')
+        company_list_now = load_pkl(f'{b3.app_folder}/company_list')
     except Exception as e:
         company_list_now = pd.DataFrame(columns=cols)
 
     # Merge the newly scraped companies with the current list and remove duplicates
     company_list_new = pd.DataFrame(company_list_new, columns=cols)
     company_list = pd.concat([company_list_now, company_list_new], ignore_index=True).drop_duplicates().reset_index(drop=True)
-    company_list = save_pkl(company_list, f'{b3.app_folder}company_list')
+    company_list = save_pkl(company_list, f'{b3.app_folder}/company_list')
 
     # Load the detailed company data from the local database
     try:
-        company = load_pkl(f'{b3.app_folder}company')
+        company = load_pkl(f'{b3.app_folder}/company')
     except Exception as e:
         company = pd.DataFrame(columns=cols)
 
@@ -4159,7 +4159,7 @@ def b3_grab(url):
 
             # Save the current progress intermittently
             if (len(new_companies) - i - 1) % 50 == 0:
-                company = save_pkl(company, f'{b3.app_folder}company')
+                company = save_pkl(company, f'{b3.app_folder}/company')
                 print('Partial save completed')
 
     # Handle any exceptions that might have occurred during scraping
@@ -4171,7 +4171,7 @@ def b3_grab(url):
         driver.quit()
 
     # Save the final scraped data
-    company = save_pkl(company, f'{b3.app_folder}company')
+    company = save_pkl(company, f'{b3.app_folder}/company')
     print('Final save completed')
 
     return company
@@ -5186,56 +5186,56 @@ def load_database():
     """
     # Step 1: Load or prepare 'acoes'
     try:
-        acoes = load_pkl(f'{b3.app_folder}acoes')
+        acoes = load_pkl(f'{b3.app_folder}/acoes')
     except Exception:
         acoes = get_composicao_acionaria()
-        acoes = save_pkl(acoes, f'{b3.app_folder}acoes')
+        acoes = save_pkl(acoes, f'{b3.app_folder}/acoes')
 
     # Step 2: Load or prepare 'fund'
     try:
-        fund = load_pkl(f'{b3.app_folder}fund')
+        fund = load_pkl(f'{b3.app_folder}/fund')
     except Exception:
         # Nested step: Load or prepare 'intelacoes'
         try:
-            intelacoes = load_pkl(f'{b3.app_folder}intelacoes')
+            intelacoes = load_pkl(f'{b3.app_folder}/intelacoes')
         except Exception:
             # Nested step: Load or prepare 'intel_b3'
             try:
-                intel_b3 = load_pkl(f'{b3.app_folder}intel_b3')
+                intel_b3 = load_pkl(f'{b3.app_folder}/intel_b3')
             except Exception:
                 # Further nested step: Load or prepare 'b3_cvm'
                 try:
-                    b3_cvm = load_pkl(f'{b3.app_folder}b3_cvm')
+                    b3_cvm = load_pkl(f'{b3.app_folder}/b3_cvm')
                 except Exception:
                     # Further nested step: Load or prepare 'company'
                     try:
-                        company = load_pkl(f'{b3.app_folder}company')
+                        company = load_pkl(f'{b3.app_folder}/company')
                     except Exception:
                         company = b3_grab(b3.search_url)
-                        company = save_pkl(company, f'{b3.app_folder}company')
+                        company = save_pkl(company, f'{b3.app_folder}/company')
                     
                     # Further nested step: Load or prepare 'math'
                     try:
-                        math = load_pkl(f'{b3.app_folder}math')
+                        math = load_pkl(f'{b3.app_folder}/math')
                     except Exception:
                         math = get_math_from_b3_cvm()
-                        math = save_pkl(math, f'{b3.app_folder}math')
+                        math = save_pkl(math, f'{b3.app_folder}/math')
                     
                     # Use 'math' and 'company' to prepare 'b3_cvm'
                     b3_cvm = get_companies(math, company)
-                    b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}b3_cvm')
+                    b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
                 
                 # Use 'b3_cvm' to prepare 'intel_b3'
                 intel_b3 = prepare_b3_cvm(b3_cvm)
-                intel_b3 = save_pkl(intel_b3, f'{b3.app_folder}intel_b3')
+                intel_b3 = save_pkl(intel_b3, f'{b3.app_folder}/intel_b3')
 
             # Use 'intel_b3' to prepare 'intelacoes'
             intelacoes = compose_intel(acoes, intel_b3)
-            intelacoes = save_pkl(intelacoes, f'{b3.app_folder}intelacoes')
+            intelacoes = save_pkl(intelacoes, f'{b3.app_folder}/intelacoes')
         
         # Use 'intelacoes' to prepare 'fund'
         fund = compose_fund(intelacoes)
-        fund = save_pkl(fund, f'{b3.app_folder}fund')
+        fund = save_pkl(fund, f'{b3.app_folder}/fund')
 
 
 
@@ -5401,12 +5401,12 @@ def integrate_yahoo_quotes(fund):
     '''
     try:
         # Attempt to load existing quotes from a pickle file
-        quotes = load_pkl(f'{b3.app_folder}quotes')
+        quotes = load_pkl(f'{b3.app_folder}/quotes')
     except Exception:
         # If loading fails, retrieve initial quotes using Yahoo Finance and save them
         no_quotes = {}
         quotes = yahoo_quotes(fund, no_quotes)
-        quotes = save_pkl(quotes, f'{b3.app_folder}quotes')
+        quotes = save_pkl(quotes, f'{b3.app_folder}/quotes')
     
     # Retrieve new quotes from Yahoo Finance starting from the determined start date
     quotes_new = yahoo_quotes(fund, quotes)
@@ -5415,14 +5415,138 @@ def integrate_yahoo_quotes(fund):
     quotes = quotes_update(fund, quotes, quotes_new)
     
     # Save the updated quotes
-    quotes = save_pkl(quotes, f'{b3.app_folder}quotes')
+    quotes = save_pkl(quotes, f'{b3.app_folder}/quotes')
 
     return quotes  # Return the dictionary of historical stock data
 
-def merge_quotes(fund, quotes):
-    prices = fund
+def preprocess_data(df):
+    # Convert specific columns to object type and 'DT_REFER' to datetime
+    df[['VERSAO', 'CD_CVM']] = df[['VERSAO', 'CD_CVM']].astype('object')
+    df['DT_REFER'] = pd.to_datetime(df['DT_REFER'])
+    return df
 
-    return prices
+def pivot_data(df):
+    # Pivot for CD_CONTA
+    df_pivot = df.pivot_table(index=['DT_REFER', 'PREGAO'], 
+                              columns=['CD_CONTA', 'DS_CONTA'], 
+                              values='VL_CONTA', 
+                              aggfunc='sum').reset_index()
+
+    # Flatten the multi-level columns after pivot
+    df_pivot.columns = [' - '.join(col).strip(' - ') for col in df_pivot.columns.values]
+    return df_pivot
+
+def resample_data(df):
+    # Group by 'PREGAO' and apply resampling
+    df_resampled = (df.reset_index()
+                     .groupby('PREGAO')
+                     .apply(lambda group: group.set_index('DT_REFER').resample('D').asfreq().ffill().bfill().fillna(0))
+                     .drop('PREGAO', axis=1))  # Drop the redundant 'PREGAO' column introduced by `groupby`
+    return df_resampled
+
+def merge_with_bigdata(df, bigdata):
+    bigdata = bigdata.reset_index()
+    bigdata['Date'] = pd.to_datetime(bigdata['Date'])
+    
+    df = df.reset_index()
+    df['DT_REFER'] = pd.to_datetime(df['DT_REFER'])
+
+    companies = df['PREGAO'].unique()
+    filtered_bigdata = bigdata[bigdata['PREGAO'].isin(companies)]
+
+    df_merged = pd.merge(filtered_bigdata, df, left_on=['Date', 'PREGAO'], right_on=['DT_REFER', 'PREGAO'], how='outer')
+    df_merged = df_merged.sort_values(by=['PREGAO', 'Date'])
+    df_merged = df_merged.groupby('PREGAO', group_keys=False).apply(lambda group: group.ffill().bfill()).fillna(0).reset_index(drop=True)
+    return df_merged
+
+def cleanup_dataframe(df):
+    # Remove unwanted index
+    df = df.drop_duplicates(subset='index', keep='first')
+    
+    # Remove the columns named 'level_0' and 'index' from the dataframe
+    df = df[[col for col in df.columns if col not in ['level_0', 'index']]]
+    
+    # Convert the 'VERSAO' and 'CD_CVM' column values
+    df['VERSAO'] = df['VERSAO'].astype(int).astype(str)
+    df['CD_CVM'] = df['CD_CVM'].astype(int).astype(str)
+    
+    # Convert the 'DT' columns values to datetime format
+    datetime_cols = [col for col in df.columns if col.startswith('DT')]
+    df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime)
+    
+    # Convert the 'COLUNA_DF' column values to strings (objects)
+    df['COLUNA_DF'] = df['COLUNA_DF'].astype(str)
+    
+    # Identify all columns that start with a digit and convert them to float
+    float_cols = [col for col in df.columns if col[0].isdigit()]
+    df[float_cols] = df[float_cols].astype('float64')
+    
+    # Uncommented the conversion to category as it's commented in the original code
+    # category_columns = [col for col in df.select_dtypes(include=['object']).columns if "original" not in col.lower()]
+    # df[category_columns] = df[category_columns].astype('category')
+    
+    # Convert the 'Date' column to datetime format (if it isn't already)
+    try:
+        df['Date'] = pd.to_datetime(df['Date'])
+        df = df.set_index('Date')
+    except Exception as e:
+        pass
+
+    return df
+
+def add_metrics(df):
+    # Ensure no division by zero for all columns
+    df.replace(0, np.nan, inplace=True)
+
+
+
+    return df
+
+def merge_quotes(fund, quotes):
+    bigdata = []
+
+    for pregao, d in quotes.items():
+        for ticker, df in d.items():
+            df['PREGAO'] = pregao  # Set or update 'PREGAO' column
+            df['TICKER'] = ticker  # Set or update 'TICKER' column
+            bigdata.append(df)
+
+    bigdata = pd.concat(bigdata, ignore_index=False)
+
+    df_preplot = {}
+    start_time = time.time()
+
+    for i, (setor, df_fund) in enumerate(fund.items()):
+        df_fund = preprocess_data(df_fund)
+        df_cd_conta = pivot_data(df_fund)
+
+        df_unique = df_fund.drop_duplicates(subset=['DT_REFER', 'PREGAO']).drop(['CD_CONTA', 'DS_CONTA', 'VL_CONTA'], axis=1)
+        df_premerged = pd.merge(df_unique, df_cd_conta, on=['DT_REFER', 'PREGAO'])
+        df_resampled = resample_data(df_premerged)
+        
+        df_merged = merge_with_bigdata(df_resampled, bigdata)
+        df_merged = df_merged.set_index('Date', drop=True)
+        df_merged = df_merged.groupby('PREGAO', group_keys=False).apply(add_metrics)
+
+        # Clean up the dataframe using the cleanup_dataframe function
+        df_merged = cleanup_dataframe(df_merged)
+
+        df_merged = add_metrics(df_merged)
+
+        df_preplot[setor] = df_merged
+
+        print(setor, remaining_time(start_time, len(fund), i))
+
+
+    # Define the path to the folder
+    folder_path = os.path.join(b3.app_folder, company_folder)
+
+    # Check if the folder does not exist
+    if not os.path.exists(folder_path):
+        # Create the folder
+        os.makedirs(folder_path)
+
+    return df_preplot
 
 # macro
 def get_bcb_series():

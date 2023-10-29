@@ -211,7 +211,7 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
     # Load data and construct titles when a company is selected
     if companhia:
         # Construct the path to the file
-        file = os.path.join(f'{b3.app_folder}company/{companhia}')
+        file = os.path.join(f'{b3.app_folder}/company/{companhia}')
         
         # Check if the file exists and load the data
         if os.path.exists(file+'.pkl'):
