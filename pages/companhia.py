@@ -31,12 +31,16 @@ def get_company_info(df):
     escriturador = df.iloc[0]['ESCRITURADOR'] if not df.empty else ''
     acoes_on = df.iloc[-1]['00.01.01 - Ações ON'] if not df.empty else ''
     acoes_pn = df.iloc[-1]['00.02.01 - Ações PN'] if not df.empty else ''
+    if pd.isna(acoes_pn):
+        acoes_pn_display = 0
+    else:
+        acoes_pn_display = "{:,.0f}".format(acoes_pn).replace(',', '.')
     ativo_total = df.iloc[-1]['01 - Ativo Total'] if not df.empty else ''
     patrimonio = df.iloc[-1]['02.03 - Patrimônio Líquido'] if not df.empty else ''
     lucro = df.iloc[-1]['03.11 - Lucro Líquido'] if not df.empty else ''
     divida = df.iloc[-1]['12.01.02 - Dívida Bruta'] if not df.empty else ''
     roe = df.iloc[-1]['14.04.01 - ROE (Resultado por Patrimônio)'] if not df.empty else ''
-    preco = df.iloc[-1]['Adj Close'] if not df.empty else ''
+    preco = df.iloc[-1]['50.05 - Adj Close'] if not df.empty else ''
 
     header_1 = [
         html.H4([
@@ -66,7 +70,7 @@ def get_company_info(df):
         ]
     body_2 = [
         html.P(["Ações ON: ", html.Strong("{:,.0f}".format(acoes_on).replace(',', '.')),  f" ações"], id='acoes_on-info'),
-        html.P(["Ações PN: ", html.Strong("{:,.0f}".format(acoes_pn).replace(',', '.')),  f" ações"], id='acoes_on-info'),
+        html.P(["Ações PN: ", html.Strong(acoes_pn_display),  f" ações"], id='acoes_on-info'), 
         html.Hr(), 
         html.P(["Ativo Total: R$: ", html.Strong("{:,.0f}".format(ativo_total).replace(',', '.')), ], id='ativo_total-info'),
         html.P(["Patrimônio: R$: ", html.Strong("{:,.0f}".format(patrimonio).replace(',', '.')), ], id='patrimonio-info'),
@@ -108,10 +112,10 @@ def get_company_info(df):
     # Return the constructed layout
     return company_info
 
-def generate_button_and_content(group_index, content_list, status):
+def generate_button_and_content(group_index, group_key, content_list, status):
     button =  [
         dbc.Button(
-            f"Mostrar Gráficos", 
+            f"Ver {group_key}", 
             id={'type': 'toggle-button', 'index': group_index}, 
             className="mb-2"
         ),
@@ -300,7 +304,7 @@ def update_company_info(compressed_df, compressed_graphs):
 
                 # Adding a break after each card for better visual separation
                 plots.append(html.Br())
-        blocks.extend(generate_button_and_content(g, plots, status))
+        blocks.extend(generate_button_and_content(g, group_key, plots, status))
 
     return company_info, blocks
 

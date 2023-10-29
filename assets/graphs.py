@@ -126,4 +126,14 @@ def construct_graphs(df):
             if not data_dict.get('left') and not data_dict.get('right'):
                 del filtered_entries[main_key]
 
+
+    # Define the mapping for the replacements
+    key_mapping = {
+        '00': 'Ações',
+        '01': 'Ativos'
+    }
+
+    # Use a dictionary comprehension to rename the main keys
+    filtered_entries = {key_mapping.get(key, key): value for key, value in filtered_entries.items()}
+
     return filtered_entries
