@@ -5504,18 +5504,16 @@ def add_metrics(df):
 
 def merge_quotes(fund, quotes):
     bigdata = []
-
     for pregao, d in quotes.items():
         for ticker, df in d.items():
             df['PREGAO'] = pregao  # Set or update 'PREGAO' column
             df['TICKER'] = ticker  # Set or update 'TICKER' column
             bigdata.append(df)
-
     bigdata = pd.concat(bigdata, ignore_index=False)
 
+    # pivot, merge, resample, cleanup and add metrics
     df_preplot = {}
     start_time = time.time()
-
     for i, (setor, df_fund) in enumerate(fund.items()):
         df_fund = preprocess_data(df_fund)
         df_cd_conta = pivot_data(df_fund)
@@ -5528,7 +5526,6 @@ def merge_quotes(fund, quotes):
         df_merged = df_merged.set_index('Date', drop=True)
         df_merged = df_merged.groupby('PREGAO', group_keys=False).apply(add_metrics)
 
-        # Clean up the dataframe using the cleanup_dataframe function
         df_merged = cleanup_dataframe(df_merged)
 
         df_merged = add_metrics(df_merged)
@@ -5537,14 +5534,24 @@ def merge_quotes(fund, quotes):
 
         print(setor, remaining_time(start_time, len(fund), i))
 
-
     # Define the path to the folder
-    folder_path = os.path.join(b3.app_folder, company_folder)
-
-    # Check if the folder does not exist
+    folder_path = os.path.join(b3.app_folder, b3.company_folder)
     if not os.path.exists(folder_path):
         # Create the folder
         os.makedirs(folder_path)
+
+    # save per company file (for size and speed)
+    start_time = time.time()
+    for i, (setor, df) in enumerate(df_preplot.items()):
+        companies = df['PREGAO'].unique()
+        for i2, company in enumerate(companies):
+            mask = df['PREGAO'] == company
+            df_temp = df[mask]
+            try:
+                df_temp = save_pkl(df_temp, f'{b3.app_folder}/{b3.company_folder}/{company}')
+            except Exception as e:
+                pass
+        print(setor, remaining_time(start_time, len(df_preplot), i))
 
     return df_preplot
 
@@ -6106,7 +6113,6 @@ def convert_and_compress(graphs_dict):
     serialized_data = serialize_data(graphs_as_list)
     compressed_data = compress_data(serialized_data)
     return compressed_data
-
 
 def reverse_to_series(graphs_dict):
     # Iterate through each section of the graph

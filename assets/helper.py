@@ -534,7 +534,7 @@ def yahoo_quotes(value):
   quotes = run.integrate_yahoo_quotes(fund)
   quotes = run.save_pkl(quotes, f'{app_folder}/quotes')
 
-  pre_plot = run.merge_quotes(fund, quotes)
-  pre_plot = run.save_pkl(pre_plot, f'{app_folder}/pre_plot')
+  df_preplot = run.merge_quotes(fund, quotes)
+  df_preplot = run.save_pkl(df_preplot, f'{app_folder}/df_preplot')
 
   return value
