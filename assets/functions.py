@@ -5579,8 +5579,8 @@ def merge_quotes(fund, quotes):
         # Define the path to the folder
         folder_path = os.path.join(b3.app_folder, b3.company_folder)
         if not os.path.exists(folder_path):
-        # Create the folder
-        os.makedirs(folder_path)
+            # Create the folder
+            os.makedirs(folder_path)
     except Exception as e:
         pass
 

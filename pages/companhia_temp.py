@@ -147,6 +147,7 @@ layout = html.Div([
     )
 ])
 
+
 # ----- CALLBACKS -----
 @app.callback(
     Output({'type': 'collapse-content', 'index': ALL}, 'is_open'),
@@ -210,18 +211,18 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
     # Load data and construct titles when a company is selected
     if companhia:
         # Construct the path to the file
-        file = os.path.join(f'{b3.app_folder}/{b3.company_folder}/{companhia}')
-
+        file = os.path.join(f'{b3.app_folder}/company/{companhia}')
+        
         # Check if the file exists and load the data
         if os.path.exists(file+'.pkl'):
             df = run.load_pkl(file)
             # remove un-wanted index     #  this debug related to the merge formation and repetition of uncorrect values in index.max(). Shortcut drop index.max and remove wrong values
+            size = len(df)
             try:
-                size = len(df)
                 df = df.drop_duplicates(subset='index', keep='first')
-                print(f'{size} to {len(df)}, drop index duplicates, cheat debug in action, fix it later')
             except Exception as e:
                 pass
+            print(f'{size} to {len(df)}, drop index duplicates, cheat debug in action, fix it later')
         else:
             print(f"No data file found for company: {companhia}")
 
@@ -237,6 +238,7 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
     compressed_graphs = run.convert_and_compress(graphs)
 
     return segmento_title, company_title, compressed_df, compressed_graphs
+
 
 @app.callback(
     [
@@ -271,6 +273,10 @@ def update_company_info(compressed_df, compressed_graphs):
         plots = []
         for l, (line_key, line) in enumerate(group.items()):
             for p, (plot_key, plot_info) in enumerate(line.items()):
+                print(f'{g} {line}')
+                print(f'{plot_info}')
+                
+
                 plot_obj = run.plot_tweak(plot_info, df)
                 # Create the card for this plot
                 plot_obj = run.plot_tweak(plot_info, df)
@@ -295,7 +301,7 @@ def update_company_info(compressed_df, compressed_graphs):
                     dbc.CardBody(card_body_content),
                     dbc.CardFooter(html.I(f"{plot_info['info']['footer']}")), 
                 ])
-
+                
                 plots.append(card)
 
                 # Adding a break after each card for better visual separation

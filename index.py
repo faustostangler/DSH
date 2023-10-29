@@ -4,7 +4,7 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 
 from app import app
-from pages import sidebar, nav, home, setor, subsetor, segmento, companhia, setup
+from pages import companhia, sidebar, nav, home, setor, subsetor, segmento, setup
 
 import assets.helper as b3
 import assets.functions as run
