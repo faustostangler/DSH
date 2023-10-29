@@ -5545,48 +5545,60 @@ def add_metrics(df):
     return df
 
 def merge_quotes(fund, quotes):
-    bigdata = []
-    for pregao, d in quotes.items():
-        for ticker, df in d.items():
-            df['PREGAO'] = pregao  # Set or update 'PREGAO' column
-            df['TICKER'] = ticker  # Set or update 'TICKER' column
-            bigdata.append(df)
-    bigdata = pd.concat(bigdata, ignore_index=False)
+    try:
+        bigdata = []
+        for pregao, d in quotes.items():
+            for ticker, df in d.items():
+                df['PREGAO'] = pregao  # Set or update 'PREGAO' column
+                df['TICKER'] = ticker  # Set or update 'TICKER' column
+                bigdata.append(df)
+        bigdata = pd.concat(bigdata, ignore_index=False)
+    except Exception as e:
+        pass
 
-    # pivot, merge, resample, cleanup and add metrics
-    df_preplot = {}
-    start_time = time.time()
-    for i, (setor, df) in enumerate(fund.items()):
-        df = preprocess_data(df) # ok
-        df = pivot_data(df)
-        df = resample_data(df)
-        df = merge_with_bigdata(df, bigdata)
-        df = cleanup_dataframe(df)
+    try:
+        # pivot, merge, resample, cleanup and add metrics
+        df_preplot = {}
+        start_time = time.time()
+        for i, (setor, df) in enumerate(fund.items()):
+            df = preprocess_data(df) # ok
+            df = pivot_data(df)
+            df = resample_data(df)
+            df = merge_with_bigdata(df, bigdata)
+            df = cleanup_dataframe(df)
 
-        df = df.groupby('PREGAO', group_keys=False).apply(add_metrics)
+            df = df.groupby('PREGAO', group_keys=False).apply(add_metrics)
 
-        df_preplot[setor] = df
+            df_preplot[setor] = df
 
-        print(setor, remaining_time(start_time, len(df), i))
+            print(setor, remaining_time(start_time, len(fund), i))
+    except Exception as e:
+        pass
 
-    # Define the path to the folder
-    folder_path = os.path.join(b3.app_folder, b3.company_folder)
-    if not os.path.exists(folder_path):
+    try:
+        # Define the path to the folder
+        folder_path = os.path.join(b3.app_folder, b3.company_folder)
+        if not os.path.exists(folder_path):
         # Create the folder
         os.makedirs(folder_path)
+    except Exception as e:
+        pass
 
-    # save per company file (for size and speed)
-    start_time = time.time()
-    for i, (setor, df) in enumerate(df_preplot.items()):
-        companies = df['PREGAO'].unique()
-        for i2, company in enumerate(companies):
-            mask = df['PREGAO'] == company
-            df_temp = df[mask]
-            try:
-                df_temp = save_pkl(df_temp, f'{b3.app_folder}/{b3.company_folder}/{company}')
-            except Exception as e:
-                pass
-        print(setor, remaining_time(start_time, len(df_preplot), i))
+    try:
+        # save per company file (for size and speed)
+        start_time = time.time()
+        for i, (setor, df) in enumerate(df_preplot.items()):
+            companies = df['PREGAO'].unique()
+            for i2, company in enumerate(companies):
+                mask = df['PREGAO'] == company
+                df_temp = df[mask]
+                try:
+                    df_temp = save_pkl(df_temp, f'{b3.app_folder}/{b3.company_folder}/{company}')
+                except Exception as e:
+                    pass
+            print(setor, remaining_time(start_time, len(df_preplot), i))
+    except Exception as e:
+        pass
 
     return df_preplot
 
