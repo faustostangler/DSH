@@ -5547,7 +5547,7 @@ def add_metrics(df):
     df.replace(0, np.nan, inplace=True)
 
     # add now df columns and metrics here
-    df['99 - PVPA'] = df['50.05 - Adj Close']/df['02.03 - Patrimônio Líquido']
+    df['99.01 - PVPA'] = df['50.05 - Adj Close']/df['02.03 - Patrimônio Líquido']
 
     return df
 
