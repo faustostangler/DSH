@@ -5409,7 +5409,9 @@ def integrate_yahoo_quotes(fund):
         quotes = save_pkl(quotes, f'{b3.app_folder}/quotes')
     
     # Retrieve new quotes from Yahoo Finance starting from the determined start date
-    quotes_new = yahoo_quotes(fund, quotes)
+    # quotes_new = yahoo_quotes(fund, quotes)
+    quotes_new = {}
+    print('temp debug')
     
     # Update existing quotes with the new data
     quotes = quotes_update(fund, quotes, quotes_new)
@@ -5426,6 +5428,9 @@ def preprocess_data(df):
     return df
 
 def pivot_data(df):
+    # Extract unique combinations of DT_REFER and PREGAO without the account details and get an unique mapping between the dates, PREGAO, and the pivoted account data.
+    df_unique = df.reset_index(drop=True).drop_duplicates(subset=['DT_REFER', 'PREGAO']).drop(['CD_CONTA', 'DS_CONTA', 'VL_CONTA'], axis=1)
+
     # Pivot for CD_CONTA
     df_pivot = df.pivot_table(index=['DT_REFER', 'PREGAO'], 
                               columns=['CD_CONTA', 'DS_CONTA'], 
@@ -5434,7 +5439,13 @@ def pivot_data(df):
 
     # Flatten the multi-level columns after pivot
     df_pivot.columns = [' - '.join(col).strip(' - ') for col in df_pivot.columns.values]
-    return df_pivot
+
+    df_merge = pd.merge(df_unique, df_pivot, on=['DT_REFER', 'PREGAO'])
+
+    # Set index and handle missing values
+    df_merge = df_merge.set_index(['DT_REFER', 'PREGAO'], drop=True)
+
+    return df_merge
 
 def resample_data(df):
     # Group by 'PREGAO' and apply resampling
@@ -5445,48 +5456,58 @@ def resample_data(df):
     return df_resampled
 
 def merge_with_bigdata(df, bigdata):
-    bigdata = bigdata.reset_index()
-    bigdata['Date'] = pd.to_datetime(bigdata['Date'])
-    
-    df = df.reset_index()
+    try:
+        df = df.reset_index()
+    except Exception as e:
+        pass
     df['DT_REFER'] = pd.to_datetime(df['DT_REFER'])
 
+    try:
+        bigdata = bigdata.reset_index()
+    except Exception as e:
+        pass
+    bigdata['Date'] = pd.to_datetime(bigdata['Date'])
+    
     companies = df['PREGAO'].unique()
     filtered_bigdata = bigdata[bigdata['PREGAO'].isin(companies)]
 
+    print('change to inner to restrict time range')
     df_merged = pd.merge(filtered_bigdata, df, left_on=['Date', 'PREGAO'], right_on=['DT_REFER', 'PREGAO'], how='outer')
     df_merged = df_merged.sort_values(by=['PREGAO', 'Date'])
     df_merged = df_merged.groupby('PREGAO', group_keys=False).apply(lambda group: group.ffill().bfill()).fillna(0).reset_index(drop=True)
+
+    df_merged = df_merged.set_index('Date', drop=True)
+
     return df_merged
 
 def cleanup_dataframe(df):
-    # Remove unwanted index
-    df = df.drop_duplicates(subset='index', keep='first')
-    
-    # Remove the columns named 'level_0' and 'index' from the dataframe
-    df = df[[col for col in df.columns if col not in ['level_0', 'index']]]
-    
-    # Convert the 'VERSAO' and 'CD_CVM' column values
-    df['VERSAO'] = df['VERSAO'].astype(int).astype(str)
-    df['CD_CVM'] = df['CD_CVM'].astype(int).astype(str)
-    
-    # Convert the 'DT' columns values to datetime format
-    datetime_cols = [col for col in df.columns if col.startswith('DT')]
-    df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime)
-    
-    # Convert the 'COLUNA_DF' column values to strings (objects)
-    df['COLUNA_DF'] = df['COLUNA_DF'].astype(str)
-    
-    # Identify all columns that start with a digit and convert them to float
-    float_cols = [col for col in df.columns if col[0].isdigit()]
-    df[float_cols] = df[float_cols].astype('float64')
-    
-    # Uncommented the conversion to category as it's commented in the original code
-    # category_columns = [col for col in df.select_dtypes(include=['object']).columns if "original" not in col.lower()]
-    # df[category_columns] = df[category_columns].astype('category')
-    
-    # Convert the 'Date' column to datetime format (if it isn't already)
     try:
+        # Remove unwanted index
+        df = df.drop_duplicates(subset='index', keep='first')
+        
+        # Remove the columns named 'level_0' and 'index' from the dataframe
+        df = df[[col for col in df.columns if col not in ['level_0', 'index']]]
+        
+        # Convert the 'VERSAO' and 'CD_CVM' column values
+        df['VERSAO'] = df['VERSAO'].astype(int).astype(str)
+        df['CD_CVM'] = df['CD_CVM'].astype(int).astype(str)
+        
+        # Convert the 'DT' columns values to datetime format
+        datetime_cols = [col for col in df.columns if col.startswith('DT')]
+        df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime)
+        
+        # Convert the 'COLUNA_DF' column values to strings (objects)
+        df['COLUNA_DF'] = df['COLUNA_DF'].astype(str)
+        
+        # Identify all columns that start with a digit and convert them to float
+        float_cols = [col for col in df.columns if col[0].isdigit()]
+        df[float_cols] = df[float_cols].astype('float64')
+        
+        # Uncommented the conversion to category as it's commented in the original code
+        # category_columns = [col for col in df.select_dtypes(include=['object']).columns if "original" not in col.lower()]
+        # df[category_columns] = df[category_columns].astype('category')
+        
+        # Convert the 'Date' column to datetime format (if it isn't already)
         df['Date'] = pd.to_datetime(df['Date'])
         df = df.set_index('Date')
     except Exception as e:
@@ -5514,25 +5535,18 @@ def merge_quotes(fund, quotes):
     # pivot, merge, resample, cleanup and add metrics
     df_preplot = {}
     start_time = time.time()
-    for i, (setor, df_fund) in enumerate(fund.items()):
-        df_fund = preprocess_data(df_fund)
-        df_cd_conta = pivot_data(df_fund)
+    for i, (setor, df) in enumerate(fund.items()):
+        df = preprocess_data(df) # ok
+        df = pivot_data(df)
+        df = resample_data(df)
+        df = merge_with_bigdata(df, bigdata)
+        df = cleanup_dataframe(df)
 
-        df_unique = df_fund.drop_duplicates(subset=['DT_REFER', 'PREGAO']).drop(['CD_CONTA', 'DS_CONTA', 'VL_CONTA'], axis=1)
-        df_premerged = pd.merge(df_unique, df_cd_conta, on=['DT_REFER', 'PREGAO'])
-        df_resampled = resample_data(df_premerged)
-        
-        df_merged = merge_with_bigdata(df_resampled, bigdata)
-        df_merged = df_merged.set_index('Date', drop=True)
-        df_merged = df_merged.groupby('PREGAO', group_keys=False).apply(add_metrics)
+        df = df.groupby('PREGAO', group_keys=False).apply(add_metrics)
 
-        df_merged = cleanup_dataframe(df_merged)
+        df_preplot[setor] = df
 
-        df_merged = add_metrics(df_merged)
-
-        df_preplot[setor] = df_merged
-
-        print(setor, remaining_time(start_time, len(fund), i))
+        print(setor, remaining_time(start_time, len(df), i))
 
     # Define the path to the folder
     folder_path = os.path.join(b3.app_folder, b3.company_folder)
