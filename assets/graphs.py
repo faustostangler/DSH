@@ -1,5 +1,6 @@
 import assets.helper as b3
 import assets.functions as run
+import pandas as pd
 import assets.lines
 
 def get_manual_entries(df):
@@ -29,8 +30,8 @@ def get_default_entries(df):
     lines = assets.lines.report
 
     # basic info
-    cagr = 'O CAGR, ou Taxa de Crescimento Anual Composta, avalia o crescimento médio anual do indicador ao longo do intervalo, ignorando as flutuações, e mostra o ritmo médio de crescimento anual no período.'
     mma = 'A Média Móvel mostra a tendência central e os limites da variação do indicador no período, na forma de uma faixa típica de valores. Essencialmente, nos mostra o caminho e se o indicador está dentro ou fora da variação normal passada.'
+    cagr = 'O CAGR, ou Taxa de Crescimento Anual Composta, avalia o crescimento médio anual do indicador ao longo do intervalo, ignorando as flutuações, e mostra o ritmo médio de crescimento anual no período.'
 
     # Extract unique groups (first two digits) from the lines
     groups = set(entry['line'][:2] for entry in lines)
@@ -48,37 +49,37 @@ def get_default_entries(df):
                     'title': f'{line["title"]}', 
                     'header': f'{line["header"]}', 
                     'description': f'{line["description"]}', 
-                    # 'mma': f'{mma}', 
-                    # 'cagr': f'{cagr}', 
+                    'mma': f'{mma}', 
+                    'cagr': f'{cagr}', 
                     'footer': f'{line["footer"]}', 
                 }, 
                 'data': {
                     'axis': ['Reais (RS)', 'Porcentagem (%)'], 
                     'left': [line["line"]], 
-                    # 'right': [run.cagr(line["line"], df)], 
+                    'right': [run.cagr(line["line"], df)], 
                 }, 
                 'options': {
                     'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2], },
                     'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False, }, 
                 }, 
             }
-            # sublines = [column for column in df.columns if column.startswith(line["line"].split(' - ')[0] + '.') and column.count('.') == line["line"].count('.') + 1]
-            # if sublines: 
-            #     default_entries[group][l][1] = {
-            #         'info': {
-            #             'title': f'{line["title"]}', 
-            #             'header': f'{line["header"]} - Composição Relativa', 
-            #             'description': f'{line["description"]}', 
-            #             'footer': 'Ao olhar para um gráfico normalizado, estamos vendo uma comparação de como essas linhas mudaram em relação ao seu começo. Não estamos vendo os valores reais, mas sim o quão rápido ou devagar cada linha cresceu ou diminuiu em comparação com as outras. Isso nos ajuda a entender qual linha teve maior crescimento ou queda ao longo do tempo em relação às outras linhas e ao todo, mesmo que todas pareçam ter aumentado ou diminuído. Em essência, é como comparar a proporção de diferentes populações de animais, vendo como elas variaram entre si desde o início.', 
-            #         }, 
-            #         'data': {
-            #             'axis': ['Porcentagem (%)', 'Porcentagem (%)'],
-            #             'left': sublines,
-            #         },
-            #         'options': {
-            #             'left': {'shape': 'line', 'mode': 'standalone', 'normalization': True,},
-            #         }
-            #     }
+            sublines = [column for column in df.columns if column.startswith(line["line"].split(' - ')[0] + '.') and column.count('.') == line["line"].count('.') + 1]
+            if sublines: 
+                default_entries[group][l][1] = {
+                    'info': {
+                        'title': f'{line["title"]}', 
+                        'header': f'{line["header"]} - Composição Relativa', 
+                        'description': f'{line["description"]}', 
+                        'footer': 'Ao olhar para um gráfico normalizado, estamos vendo uma comparação de como essas linhas mudaram em relação ao seu começo. Não estamos vendo os valores reais, mas sim o quão rápido ou devagar cada linha cresceu ou diminuiu em comparação com as outras. Isso nos ajuda a entender qual linha teve maior crescimento ou queda ao longo do tempo em relação às outras linhas e ao todo, mesmo que todas pareçam ter aumentado ou diminuído. Em essência, é como comparar a proporção de diferentes populações de animais, vendo como elas variaram entre si desde o início.', 
+                    }, 
+                    'data': {
+                        'axis': ['Porcentagem (%)', 'Porcentagem (%)'],
+                        'left': sublines,
+                    },
+                    'options': {
+                        'left': {'shape': 'line', 'mode': 'standalone', 'normalization': True,},
+                    }
+                }
 
 
     return default_entries
@@ -93,6 +94,12 @@ def construct_graphs(df):
     Returns:
     - default_entries: Dictionary containing the merged graph items.
     """
+    def is_hashable(obj):
+        try:
+            hash(obj)
+            return True
+        except TypeError:
+            return False
     # Get default graphs
     default_entries = get_default_entries(df)
     
@@ -115,7 +122,11 @@ def construct_graphs(df):
             for key in keys_to_check:
                 items = data_dict[key]
                 if key.startswith('left') or key.startswith('right'):
-                    filtered_items_list = [item for item in items if item in df.columns]
+                    filtered_items_list = [
+                        item for item in items 
+                        if isinstance(item, pd.Series) or (is_hashable(item) and item in df.columns)
+                    ]
+                    
                     if filtered_items_list:
                         data_dict[key] = filtered_items_list
                     else:
@@ -130,7 +141,22 @@ def construct_graphs(df):
     # Define the mapping for the replacements
     key_mapping = {
         '00': 'Ações',
-        '01': 'Ativos'
+        '01': 'Ativos', 
+        '02': 'Passivos', 
+        '03': 'Resultados', 
+        '06': 'Fluxo de Caixa', 
+        '07': 'Valor Adicionado', 
+        '11': 'Ativos e Passivos', 
+        '12': 'Caixa e Dívida', 
+        '13': 'Relações com Faturamento', 
+        '14': 'Ativos e Faturamento', 
+        '15': 'Remuneração do Capital', 
+        '16': 'Margens', 
+        '17': 'Caixa', 
+        '18': 'Relações de Valor Agregado', 
+        '50': 'Cotação', 
+        '51': 'Valores de Mercado', 
+        '52': 'Preços', 
     }
 
     # Use a dictionary comprehension to rename the main keys

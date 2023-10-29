@@ -1822,8 +1822,8 @@ def get_new_lines(md, line):
     new_lines.append(fundamentaline(line=line.copy(), title='16.02 - Margem Operacional (Receitas Operacionais por Receita Bruta)', valor=eval_formula(md, "division(md['_0304_despesas_operacionais'],md['_0301_receita_bruta'])")))
     new_lines.append(fundamentaline(line=line.copy(), title='16.02.01 - Força de Vendas (Despesas com Vendas por Despesas Operacionais)', valor=eval_formula(md, "division(md['_030401_despesas_com_vendas'],md['_0304_despesas_operacionais'])")))
     new_lines.append(fundamentaline(line=line.copy(), title='16.02.02 - Peso Administrativo (Despesas com Administração por Despesas Operacionais)', valor=eval_formula(md, "division(md['_030402_despesas_gerais_e_administrativas'],md['_0304_despesas_operacionais'])")))
-    new_lines.append(fundamentaline(line=line.copy(), title='16.03 - Margem EBITDA (EBITDA por Resultado Bruto (Receita Líquida))', valor=eval_formula(md, "division(ebitda,md['_0303_resultado_bruto_receita_liquida'])")))
-    new_lines.append(fundamentaline(line=line.copy(), title='16.03.01 - Margem EBIT (EBIT por Resultado Bruto (Receita Líquida))', valor=eval_formula(md, "division(md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'],md['_0303_resultado_bruto_receita_liquida'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.03 - Margem EBITDA (EBITDA por Resultado Bruto (Receita Líquida)))', valor=eval_formula(md, "division(ebitda,md['_0303_resultado_bruto_receita_liquida'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='16.03.01 - Margem EBIT (EBIT por Resultado Bruto (Receita Líquida)))', valor=eval_formula(md, "division(md['_0305_lajir_ebit_resultado_antes_do_resultado_financeiro_e_dos_tributos'],md['_0303_resultado_bruto_receita_liquida'])")))
     new_lines.append(fundamentaline(line=line.copy(), title='16.03.02 - Margem de Depreciação por Resultado Bruto (Receita Líquida)', valor=eval_formula(md, "division(md['_070401_depreciacao_e_amortizacao'],md['_0303_resultado_bruto_receita_liquida'])")))
     new_lines.append(fundamentaline(line=line.copy(), title='16.04 - Margem Não Operacional (Resultado Não Operacional por Resultado Bruto (Receita Líquida))', valor=eval_formula(md, "division(md['_0306_resultado_financeiro_nao_operacional'],md['_0303_resultado_bruto_receita_liquida'])")))
     new_lines.append(fundamentaline(line=line.copy(), title='16.05 - Margem Líquida (Lucro Líquido por Receita Bruta)', valor=eval_formula(md, "division(md['_0311_lucro_liquido'],md['_0301_receita_bruta'])")))
@@ -1859,8 +1859,8 @@ def get_new_lines(md, line):
     new_lines.append(fundamentaline(line=line.copy(), title='18.10.02 - Dividendos por Valor Agregado', valor=eval_formula(md, "division(md['_07080402_dividendos'],md['_0707_valor_adicionado_total_a_distribuir'])")))
     new_lines.append(fundamentaline(line=line.copy(), title='18.10.02 - Lucros Retidos por Valor Agregado', valor=eval_formula(md, "division(md['_07080403_lucros_retidos'],md['_0707_valor_adicionado_total_a_distribuir'])")))
     new_lines.append(fundamentaline(line=line.copy(), title='18.11.01 - Alíquota de Impostos (Impostos, Taxas e Contribuições por Receita Bruta)', valor=eval_formula(md, "division(md['_070802_impostos_taxas_e_contribuicoes'],md['_0301_receita_bruta'])")))
-    new_lines.append(fundamentaline(line=line.copy(), title='18.11.02 - Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta', valor=eval_formula(md, "division(md['_070803_remuneracao_de_capital_de_terceiros'],md['_0301_receita_bruta'])")))
-    new_lines.append(fundamentaline(line=line.copy(), title='18.11.03 - Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta', valor=eval_formula(md, "division(md['_070804_remuneracao_de_capital_proprio'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.11.02 - Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta)', valor=eval_formula(md, "division(md['_070803_remuneracao_de_capital_de_terceiros'],md['_0301_receita_bruta'])")))
+    new_lines.append(fundamentaline(line=line.copy(), title='18.11.03 - Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta)', valor=eval_formula(md, "division(md['_070804_remuneracao_de_capital_proprio'],md['_0301_receita_bruta'])")))
   except Exception as e:
     pass
 
@@ -4952,8 +4952,8 @@ def get_rules_fund():
         ('PFT', '18.10.02', 'Dividendos por Valor Agregado', 'div', ('07.08.04.02', '07.07')),
         ('PFT', '18.10.02', 'Lucros Retidos por Valor Agregado', 'div', ('07.08.04.03', '07.07')),
         ('PFT', '18.11.01', 'Alíquota de Impostos (Impostos, Taxas e Contribuições por Receita Bruta)', 'div', ('07.08.02', '03.01')),
-        ('PFT', '18.11.02', 'Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta', 'div', ('07.08.03', '03.01')),
-        ('PFT', '18.11.03', 'Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta', 'div', ('07.08.04', '03.01')),
+        ('PFT', '18.11.02', 'Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta)', 'div', ('07.08.03', '03.01')),
+        ('PFT', '18.11.03', 'Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta)', 'div', ('07.08.04', '03.01')),
     ]
     return rules
 
@@ -5409,9 +5409,7 @@ def integrate_yahoo_quotes(fund):
         quotes = save_pkl(quotes, f'{b3.app_folder}/quotes')
     
     # Retrieve new quotes from Yahoo Finance starting from the determined start date
-    # quotes_new = yahoo_quotes(fund, quotes)
-    quotes_new = {}
-    print('temp debug')
+    quotes_new = yahoo_quotes(fund, quotes)
     
     # Update existing quotes with the new data
     quotes = quotes_update(fund, quotes, quotes_new)
@@ -5469,7 +5467,6 @@ def merge_with_bigdata(df, bigdata):
     filtered_bigdata = bigdata[bigdata['PREGAO'].isin(companies)]
 
     # choose inner for limited time range, outer for wider time range
-    print('merge debug')
     df_merged = pd.merge(filtered_bigdata, df, left_on=['Date', 'PREGAO'], right_on=['DT_REFER', 'PREGAO'], how='inner')
 
     df_merged = df_merged.sort_values(by=['PREGAO', 'Date'])
@@ -5547,7 +5544,21 @@ def add_metrics(df):
     df.replace(0, np.nan, inplace=True)
 
     # add now df columns and metrics here
-    df['99.01 - PVPA'] = df['50.05 - Adj Close']/df['02.03 - Patrimônio Líquido']
+    df['00.03.01 - Ações Emitidas'] = df['00.01.01 - Ações ON'] + df['00.02.01 - Ações PN']
+    df['00.03.02 - Ações em Tesouraria'] = df['00.01.02 - Ações ON em Tesouraria'] + df['00.02.02 - Ações PN em Tesouraria']
+    df['00.04.01 - Ações em Circulação'] = df['00.03.01 - Ações Emitidas'] - df['00.03.02 - Ações em Tesouraria']
+
+    df['51.01.01 - Lucro por Ação'] = df['03.11 - Lucro Líquido'] / df['00.04.01 - Ações em Circulação']
+    df['51.01.02 - Valor Patrimonial por Ação'] = df['02.03 - Patrimônio Líquido'] / df['00.04.01 - Ações em Circulação']
+    df['51.01.03 - Valor de Mercado (Preço do Total de Ações)'] =  df['50.05 - Adj Close'] * df['00.04.01 - Ações em Circulação']
+    df['51.01.04 - Receita por Ação'] = df['03.01 - Receita Bruta'] / df['00.04.01 - Ações em Circulação']
+    df['51.01.05 - Valor da Firma (Enterprise Value)'] = df['51.01.03 - Valor de Mercado (Preço do Total de Ações)'] + df['12.01.02 - Dívida Bruta'] - df['01.01.01 - Caixa e Disponibilidades de Caixa']
+
+    df['52.01.01 - Preço do Lucro (P/L)'] = df['50.05 - Adj Close'] / df['51.01.01 - Lucro por Ação']
+    df['52.01.02 - Preço do Patrimônio (P/VPA)'] = df['50.05 - Adj Close'] / df['51.01.02 - Valor Patrimonial por Ação']
+    df['52.01.03 - Preço do EBIT (Resultado Operacional) (P/EBIT)'] = df['51.01.03 - Valor de Mercado (Preço do Total de Ações)'] / df['03.05 - LAJIR EBIT Resultado Antes do Resultado Financeiro e dos Tributos']
+    df['52.01.04 - Preço do FCO (Caixa Operacional) (P/FCO)'] = df['50.05 - Adj Close'] / df['06.01 - Caixa das Operações']
+    df['52.01.05 - Preço da Receita (Faturamento Bruto) (PSR)'] = df['50.05 - Adj Close'] / df['51.01.04 - Receita por Ação']
 
     return df
 

@@ -1830,14 +1830,14 @@ default = [
     'footer': 'Valores mais altos podem indicar uma estrutura administrativa mais pesada.',
 },
 {
-    'line': '16.03 - Margem EBITDA (EBITDA por Resultado Bruto (Receita Líquida))',
+    'line': '16.03 - Margem EBITDA (EBITDA por Resultado Bruto (Receita Líquida)))',
     'title': '16.03 - Margem EBITDA',
     'header': 'Rentabilidade Operacional Antes de Juros, Impostos, Depreciação e Amortização',
     'description': 'Mostra a relação do EBITDA com o resultado bruto.',
     'footer': 'Uma medida chave da rentabilidade operacional da empresa.',
 },
 {
-    'line': '16.03.01 - Margem EBIT (EBIT por Resultado Bruto (Receita Líquida))',
+    'line': '16.03.01 - Margem EBIT (EBIT por Resultado Bruto (Receita Líquida)))',
     'title': '16.03.01 - Margem EBIT',
     'header': 'Rentabilidade Operacional Antes de Juros e Impostos',
     'description': 'Indica a relação do EBIT com o resultado bruto.',
@@ -2054,14 +2054,14 @@ default = [
     'footer': 'Fornece uma visão sobre a eficiência fiscal da empresa.',
 },
 {
-    'line': '18.11.02 - Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta',
+    'line': '18.11.02 - xxxfs de Terceiros por Receita Bruta)',
     'title': '18.11.02 - Taxa de Juros Pagos',
     'header': 'Custo Relativo de Dívida',
     'description': 'Indica a proporção de juros pagos em relação à receita bruta.',
     'footer': 'Oferece uma perspectiva sobre o custo de capital da empresa.',
 },
 {
-    'line': '18.11.03 - Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta',
+    'line': '18.11.03 - Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta)',
     'title': '18.11.03 - Taxa de Proventos Gerados',
     'header': 'Retorno Relativo ao Equity',
     'description': 'Mostra a proporção da remuneração de capital próprio em relação à receita bruta.',
@@ -2072,12 +2072,12 @@ default = [
 
 report = [
 {
-    'line': '00.01.01 - Ações ON',
-    'title': '00.01.01 - Ações ON',
-    'header': 'Ações Ordinárias Nominativas',
-    'description': 'Quantidades normais de Ações ON indicam uma participação padrão na empresa. Valores ascendentes mostram confiança na governança da empresa, enquanto declínios podem refletir preocupações sobre a governança.',
-    'footer': 'Ações ON, ou Ações Ordinárias Nominativas, são uma das formas mais tradicionais de investimento no mercado acionário. Ao adquirir uma ação ON, o investidor passa a ser um dos proprietários da empresa, mesmo que de forma parcial, e tem o direito de participar das decisões da empresa através do voto em assembleias. Diferentemente das ações preferenciais (PN), que em muitos casos não concedem direito de voto ou o restringem, as ações ON garantem essa participação ativa. Se pensarmos em uma grande empresa como uma cidade, as ações ON seriam como os títulos de cidadania que permitem a participação em decisões importantes da cidade.', 
-},
+    "line": "01 - Ativo Total",
+    "title": "01 - Ativo Total",
+    "header": "O Ativo Total de uma Empresa",
+    "description": "O Ativo Total refere-se à soma de todos os bens e direitos que uma empresa possui em um determinado momento. Ele é composto por ativos circulantes (como caixa e estoques) e ativos não circulantes (como imóveis e equipamentos). É uma medida fundamental para avaliar a saúde financeira e a capacidade de uma empresa em gerar lucros no futuro. Imagine que uma empresa é como uma grande fazenda. O Ativo Total é como contar todas as vacas, galinhas, tratores e o tamanho da terra que a fazenda possui.",
+    "footer": "Valores normais do Ativo Total variam de acordo com o setor e o tamanho da empresa. Um Ativo Total em crescimento pode indicar que a empresa está expandindo seus negócios, investindo em novos projetos, ou aumentando sua capacidade operacional. Por outro lado, uma redução no Ativo Total pode sinalizar vendas de ativos, problemas financeiros, ou uma reestruturação da empresa. Se pensarmos na nossa fazenda, um aumento no Ativo Total pode significar mais animais e terras, enquanto uma diminuição pode indicar que algumas vacas foram vendidas ou terras foram alugadas."
+}, 
 {
     'line': '01 - Ativo Total',
     'title': '01 - Ativo Total',
@@ -2106,7 +2106,7 @@ manual_entries = {
                 },
                 'data': {
                     'axis': ['Reais (RS)', 'Porcentagem (%)'],
-                    'left': ['99.01 - PVPA', '99 - PVPA xxxfsxxx']
+                    'left': ['99.01 - PVPA']
                 },
                 'options': {
                     'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
