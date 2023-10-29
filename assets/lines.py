@@ -2072,6 +2072,13 @@ default = [
 
 report = [
 {
+    'line': '00.01.01 - Ações ON',
+    'title': '00.01.01 - Ações ON',
+    'header': 'Ações Ordinárias Nominativas',
+    'description': 'Quantidades normais de Ações ON indicam uma participação padrão na empresa. Valores ascendentes mostram confiança na governança da empresa, enquanto declínios podem refletir preocupações sobre a governança.',
+    'footer': 'Ações ON, ou Ações Ordinárias Nominativas, são uma das formas mais tradicionais de investimento no mercado acionário. Ao adquirir uma ação ON, o investidor passa a ser um dos proprietários da empresa, mesmo que de forma parcial, e tem o direito de participar das decisões da empresa através do voto em assembleias. Diferentemente das ações preferenciais (PN), que em muitos casos não concedem direito de voto ou o restringem, as ações ON garantem essa participação ativa. Se pensarmos em uma grande empresa como uma cidade, as ações ON seriam como os títulos de cidadania que permitem a participação em decisões importantes da cidade.', 
+},
+{
     'line': '01 - Ativo Total',
     'title': '01 - Ativo Total',
     'header': 'Totalidade dos Bens e Direitos',
@@ -2085,5 +2092,63 @@ report = [
     'description': 'Representa o valor que os proprietários ou acionistas têm na empresa após deduzir todas as obrigações. É basicamente a diferença entre ativos e passivos da organização.',
     'footer': 'Imagine que você tenha uma caixa de dinheiro e algumas dívidas. O dinheiro que sobra após pagar todas as dívidas é o seu "patrimônio líquido".', 
 },
-
 ]
+
+manual_entries = {
+    '99': {
+        0: {
+            0: {
+                'info': {
+                    'title': '99 - PVPA',
+                    'header': '99 - PVPA',
+                    'description': '99 - PVPA',
+                    'footer': '99 - PVPA'
+                },
+                'data': {
+                    'axis': ['Reais (RS)', 'Porcentagem (%)'],
+                    'left': ['99.01 - PVPA', '99 - PVPA xxxfsxxx']
+                },
+                'options': {
+                    'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
+                    'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False}
+                }
+            },
+        }
+    },
+    '50': {
+        0: {
+            0: {
+                'info': {
+                    'title': 'Adj Close',
+                    'header': '50.05 - Adj Close',
+                    'description': 'This is a sample for 98',
+                    'footer': 'Footer for 98 sample'
+                },
+                'data': {
+                    'axis': ['Reais (RS)', 'Porcentagem (%)'],
+                    'left': ['50.05 - Adj Close']
+                },
+                'options': {
+                    'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
+                    'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False}
+                }
+            },
+            1: {
+                'info': {
+                    'title': '02.03 - Patrimônio Líquido',
+                    'header': '98 - Example',
+                    'description': 'This is another example for 98',
+                    'footer': 'Footer for 98 example'
+                },
+                'data': {
+                    'axis': ['Reais (RS)', 'Porcentagem (%)'],
+                    'left': ['02.03 - Patrimônio Líquido']
+                },
+                'options': {
+                    'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
+                    'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False}
+                }
+            }
+        }
+    }
+}

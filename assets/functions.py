@@ -5577,7 +5577,7 @@ def merge_quotes(fund, quotes):
             df = df.groupby('PREGAO', group_keys=False).apply(add_metrics)
 
             df_preplot[setor] = df
-            df = save_pkl(df, 'df')
+
             print(setor, remaining_time(start_time, len(fund), i))
     except Exception as e:
         pass
