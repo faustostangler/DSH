@@ -5345,8 +5345,8 @@ def yahoo_quotes(fund, quotes, start_date='1970-01-02'):
                     # Store the retrieved data in the quotes dictionary
                     quotes[pregao] = df_quotes
                 
-                # Print progress information
-                print(remaining_time(start_time, len(fund), i), setor, remaining_time(start_time_2, len(df_tickers), j), pregao, ', '.join(ticker))
+                    # Print progress information
+                    print(remaining_time(start_time, len(fund), i), setor, remaining_time(start_time_2, len(df_tickers), j), pregao, ', '.join(ticker))
             except Exception as e:
                 pass
 
@@ -5364,8 +5364,7 @@ def quotes_update(fund, quotes, quotes_new):
     - dict: An updated dictionary of historical stock data.
     '''
     start_time = time.time()
-    
-    # Iterate over sectors and their associated DataFrames in the fund dictionary
+        # Iterate over sectors and their associated DataFrames in the fund dictionary
     for i, (setor, df) in enumerate(fund.items()):
         # Extract unique ticker information for the sector's DataFrame
         df_tickers = df[['CNPJ_CIA', 'PREGAO', 'TICKERS']].drop_duplicates()
@@ -5419,6 +5418,11 @@ def integrate_yahoo_quotes(fund):
     quotes = save_pkl(quotes, f'{b3.app_folder}quotes')
 
     return quotes  # Return the dictionary of historical stock data
+
+def merge_quotes(fund, quotes):
+    prices = fund
+
+    return prices
 
 # macro
 def get_bcb_series():

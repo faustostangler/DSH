@@ -1963,3 +1963,4 @@ rules = [
         ('descricao_contains_not', ['operações descontinuadas', 'incentivo fiscal', 'juros', 'reserva legal']),
     ]], 
 ]
+

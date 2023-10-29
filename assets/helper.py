@@ -532,4 +532,7 @@ def yahoo_quotes(value):
   quotes = run.integrate_yahoo_quotes(fund)
   quotes = run.save_pkl(quotes, f'{app_folder}quotes')
 
+  prices = run.merge_quotes(fund, quotes)
+  prices = run.save_pkl(prices, f'{app_folder}prices')
+
   return value
