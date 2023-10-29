@@ -5416,9 +5416,6 @@ def integrate_yahoo_quotes(fund):
     # Update existing quotes with the new data
     quotes = quotes_update(fund, quotes, quotes_new)
     
-    # Save the updated quotes
-    quotes = save_pkl(quotes, f'{b3.app_folder}/quotes')
-
     return quotes  # Return the dictionary of historical stock data
 
 def preprocess_data(df):
@@ -5471,8 +5468,10 @@ def merge_with_bigdata(df, bigdata):
     companies = df['PREGAO'].unique()
     filtered_bigdata = bigdata[bigdata['PREGAO'].isin(companies)]
 
-    print('change to inner to restrict time range')
-    df_merged = pd.merge(filtered_bigdata, df, left_on=['Date', 'PREGAO'], right_on=['DT_REFER', 'PREGAO'], how='outer')
+    # choose inner for limited time range, outer for wider time range
+    print('merge debug')
+    df_merged = pd.merge(filtered_bigdata, df, left_on=['Date', 'PREGAO'], right_on=['DT_REFER', 'PREGAO'], how='inner')
+
     df_merged = df_merged.sort_values(by=['PREGAO', 'Date'])
     df_merged = df_merged.groupby('PREGAO', group_keys=False).apply(lambda group: group.ffill().bfill()).fillna(0).reset_index(drop=True)
 
@@ -5484,29 +5483,51 @@ def cleanup_dataframe(df):
     try:
         # Remove unwanted index
         df = df.drop_duplicates(subset='index', keep='first')
-        
+    except Exception as e:
+        pass
+
+    try:
         # Remove the columns named 'level_0' and 'index' from the dataframe
         df = df[[col for col in df.columns if col not in ['level_0', 'index']]]
-        
+    except Exception as e:
+        pass
+
+    try:        
         # Convert the 'VERSAO' and 'CD_CVM' column values
         df['VERSAO'] = df['VERSAO'].astype(int).astype(str)
         df['CD_CVM'] = df['CD_CVM'].astype(int).astype(str)
-        
+    except Exception as e:
+        pass
+
+    try:
         # Convert the 'DT' columns values to datetime format
         datetime_cols = [col for col in df.columns if col.startswith('DT')]
         df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime)
-        
+    except Exception as e:
+        pass
+
+    try:
         # Convert the 'COLUNA_DF' column values to strings (objects)
         df['COLUNA_DF'] = df['COLUNA_DF'].astype(str)
-        
+    except Exception as e:
+        pass
+
+    try:
         # Identify all columns that start with a digit and convert them to float
         float_cols = [col for col in df.columns if col[0].isdigit()]
         df[float_cols] = df[float_cols].astype('float64')
-        
+    except Exception as e:
+        pass
+
+    try:
         # Uncommented the conversion to category as it's commented in the original code
         # category_columns = [col for col in df.select_dtypes(include=['object']).columns if "original" not in col.lower()]
         # df[category_columns] = df[category_columns].astype('category')
-        
+        pass
+    except Exception as e:
+        pass
+
+    try:
         # Convert the 'Date' column to datetime format (if it isn't already)
         df['Date'] = pd.to_datetime(df['Date'])
         df = df.set_index('Date')
@@ -5519,7 +5540,7 @@ def add_metrics(df):
     # Ensure no division by zero for all columns
     df.replace(0, np.nan, inplace=True)
 
-
+    # add now df columns and metrics here
 
     return df
 
