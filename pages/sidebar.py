@@ -117,18 +117,19 @@ def manage_segmento_on_subsetor_change(selected_subsetor):
 # Callback 5: Update 'Segmento' dropdown options based on 'Subsetor' selection
 @app.callback(
     Output('dropdown-segmento', 'options'),
-    [Input('dropdown-subsetor', 'value'),
+    [Input('dropdown-setor', 'value'),
+     Input('dropdown-subsetor', 'value'),
      Input('store-data', 'data')]
 )
-def update_segmento_options(selected_subsetor, stored_data):
+def update_segmento_options(selected_setor, selected_subsetor, stored_data):
     """
     Update the options of the 'Segmento' dropdown based on the selected 'Subsetor'.
     """
-    if selected_subsetor is None or stored_data is None:
+    if selected_setor is None or selected_subsetor is None or stored_data is None:
         raise dash.exceptions.PreventUpdate
     
     df = pd.DataFrame(stored_data)
-    filtered_df = df[df['SUBSETOR'] == selected_subsetor]
+    filtered_df = df[(df['SETOR'] == selected_setor) & (df['SUBSETOR'] == selected_subsetor)]
     
     segmento_options = [{'label': segmento, 'value': segmento} for segmento in filtered_df['SEGMENTO'].sort_values().unique()]
     
@@ -152,10 +153,12 @@ def manage_company_on_segmento_change(selected_segmento):
 # Callback 7: Update 'Company' dropdown options based on 'Segmento' selection
 @app.callback(
     Output('dropdown-company', 'options'),
-    [Input('dropdown-segmento', 'value'),
+    [Input('dropdown-setor', 'value'),
+     Input('dropdown-subsetor', 'value'),
+     Input('dropdown-segmento', 'value'),
      Input('store-data', 'data')]
 )
-def update_company_options(selected_segmento, stored_data):
+def update_company_options(selected_setor, selected_subsetor, selected_segmento, stored_data):
     """
     Update the options of the 'Company' dropdown based on the selected 'Segmento'.
     """
@@ -163,7 +166,7 @@ def update_company_options(selected_segmento, stored_data):
         raise dash.exceptions.PreventUpdate
     
     df = pd.DataFrame(stored_data)
-    filtered_df = df[df['SEGMENTO'] == selected_segmento]
+    filtered_df = df[(df['SETOR'] == selected_setor) & (df['SUBSETOR'] == selected_subsetor) & (df['SEGMENTO'] == selected_segmento)]
     
     company_options = [{'label': company, 'value': company} for company in filtered_df['PREGAO'].sort_values().unique()]
     

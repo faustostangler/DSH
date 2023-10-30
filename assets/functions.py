@@ -284,7 +284,7 @@ def load_browser_old():
     # Return a tuple containing the driver and the wait object.
     return driver, wait
 
-def load_browser(chromedriver_path, driver_wait_time):
+def load_browser(chromedriver_path="D:\\Fausto Stangler\\Documentos\\Python\\DSH\\chromedriver-win64\\chromedriver.exe", driver_wait_time=5):
     """
     Launches chromedriver and creates a wait object.
     
@@ -578,25 +578,28 @@ def nsd_range(nsd, safety_factor=1.8):
   return start-1, end
 
 def nsd_dates(nsd, safety_factor=1.8):
-  # find the gap in days from today to max 'envio' date
-  last_date = nsd['envio'].max().date()
-  today = datetime.datetime.now().date()
-  days_gap = (today - last_date).days
-  
-  # find the maximum 'nsd' gap
-  max_gap = int(((nsd['nsd'].diff().max() + safety_factor) * 0.1))
+  try:
+    # find the gap in days from today to max 'envio' date
+    last_date = nsd['envio'].max().date()
+    today = datetime.datetime.now().date()
+    days_gap = (today - last_date).days
+    
+    # find the maximum 'nsd' gap
+    max_gap = int(((nsd['nsd'].diff().max() + safety_factor) * 0.1))
 
-  # group nsd by day
-  nsd_per_day = nsd.groupby(nsd['envio'].dt.date)['nsd'].count()
+    # group nsd by day
+    nsd_per_day = nsd.groupby(nsd['envio'].dt.date)['nsd'].count()
 
-  # find the average nsd items per day group, and other things
-  avg_nsd_per_day = nsd_per_day.mean()
-  max_nsd_per_day = nsd_per_day.max()
-  max_date_nsd_per_day = nsd_per_day.idxmax()
+    # find the average nsd items per day group, and other things
+    avg_nsd_per_day = nsd_per_day.mean()
+    max_nsd_per_day = nsd_per_day.max()
+    max_date_nsd_per_day = nsd_per_day.idxmax()
 
-  # last_date and previous safe date 
-  back_days = round(max_gap / avg_nsd_per_day)
-  limit_date = datetime.datetime.now().date() - datetime.timedelta(days=back_days)
+    # last_date and previous safe date 
+    back_days = round(max_gap / avg_nsd_per_day)
+    limit_date = datetime.datetime.now().date() - datetime.timedelta(days=back_days)
+  except Exception as e:
+      last_date, limit_date, max_gap = pd.to_datetime('1970-01-02'), datetime.datetime.now().date(), 500
 
   return last_date, limit_date, max_gap
 
@@ -699,47 +702,52 @@ def clean_nsd(nsd):
   return nsd
 
 def get_nsd_content():
-    safety_factor = 1.8
+    try:
+        safety_factor = 1.8
 
-    gap = 0
+        gap = 0
 
-    filename = 'nsd_links'
-    cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
+        filename = 'nsd_links'
+        cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
 
-    nsd = read_or_create_dataframe(filename, cols_nsd)
-    nsd['envio'] = pd.to_datetime(nsd['envio'], dayfirst=True)
+        nsd = read_or_create_dataframe(filename, cols_nsd)
+        if not nsd.empty:
+            nsd['envio'] = pd.to_datetime(nsd['envio'], dayfirst=True)
+            start, end = nsd_range(nsd, safety_factor)
+        else:
+            start, end = 1, 1000
 
-    start, end = nsd_range(nsd, safety_factor)
+        start_time = time.time()
+        for i, n in enumerate(range(start, end)):
 
-    start_time = time.time()
-    for i, n in enumerate(range(start, end)):
-        progress = remaining_time(start_time, end-start, i)
+            # interrupt conditions
+            last_date, limit_date, max_gap = nsd_dates(nsd, safety_factor)
+            if last_date.date() > limit_date:
+                if gap == max_gap:
+                    break
 
-        # interrupt conditions
-        last_date, limit_date, max_gap = nsd_dates(nsd, safety_factor)
-        if last_date > limit_date:
-            if gap == max_gap:
-                break
+            progress = remaining_time(start_time, end-start, i)
+            try:
+                # add nsd row to dataframe
+                row = get_nsd(n)
+                nsd = pd.concat([nsd, pd.DataFrame([row], columns=cols_nsd)])
+                print(n, progress, row[10], row[4], row[3], row[0])
+                # reset gap
+                gap = 0
+            except Exception as e:
+                # increase gap count
+                gap += 1
+                print(n, progress)
 
-        try:
-            # add nsd row to dataframe
-            row = get_nsd(n)
-            nsd = pd.concat([nsd, pd.DataFrame([row], columns=cols_nsd)])
-            print(n, progress, row[10], row[4], row[3], row[0])
-            # reset gap
-            gap = 0
-        except Exception as e:
-            # increase gap count
-            gap += 1
-            print(n, progress)
+            # if n % b3.bin_size == 0:
+            if (end-start - i - 1) % 50 == 0:
+                nsd = save_and_pickle(nsd, filename)
+                print('partial save')
 
-        # if n % b3.bin_size == 0:
-        if (end-start - i - 1) % 50 == 0:
-            nsd = save_and_pickle(nsd, filename)
-            print('partial save')
-
-    nsd = save_and_pickle(nsd, filename)
-    print('final save')
+        nsd = save_and_pickle(nsd, filename)
+        print('final save')
+    except Exception as e:
+        pass
 
     return nsd
 
@@ -778,6 +786,8 @@ def get_composicao_acionaria():
     nsd = read_or_create_dataframe(filename, cols_nsd)
     selected_dre = ['INFORMACOES TRIMESTRAIS', 'DEMONSTRACOES FINANCEIRAS PADRONIZADAS']
     filtered_nsd = nsd[nsd['dre'].isin(selected_dre)]
+    if nsd.empty:
+        print('NEED TO CREATE NSD')
 
     filename = 'acoes'
     columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
@@ -1697,6 +1707,7 @@ def calc_fundamentalist(md, *keys):
     return 0.0
 
 def get_new_lines(md, line):
+  # legacy??
   try:
     # formulas
     formulas = [
@@ -4864,6 +4875,12 @@ def calculate_fund(rules_fund, sheet, company, quarter):
                 # vl = dividend / divisor
                 vl = dividend / divisor if divisor != 0 and not pd.isna(dividend) and not pd.isna(divisor) else np.nan
 
+            elif operation == 'pct':
+                dividend = sheet[sheet['CD_CONTA'] == items[0]]['VL_CONTA'].sum()
+                divisor = sheet[sheet['CD_CONTA'] == items[1]]['VL_CONTA'].sum()
+                # vl = dividend / divisor
+                vl = 100 * dividend / divisor if divisor != 0 and not pd.isna(dividend) and not pd.isna(divisor) else np.nan
+
             elif operation == 'mul':
                 vl = sheet[sheet['CD_CONTA'].isin(list(items))]['VL_CONTA'].prod()
 
@@ -4877,83 +4894,83 @@ def calculate_fund(rules_fund, sheet, company, quarter):
 def get_rules_fund():
     rules = [
         ('EQT', '11.01.01', 'Capital de Giro (Ativos Circulantes - Passivos Circulantes)', 'sub', ('01.01', '02.01')), 
-        ('EQT', '11.01.02', 'Liquidez (Ativos Circulantes por Passivos Circulantes)', 'div', ('01.01', '02.01')), 
-        ('EQT', '11.01.03', 'Ativos Circulantes de Curto Prazo por Ativos', 'div', ('01.01', '01')),
-        ('EQT', '11.01.04', 'Ativos Não Circulantes de Longo Prazo por Ativos', 'div', ('01.02', '01')), 
-        ('EQT', '11.02', 'Passivos por Ativos', 'div', ('02', '01')),
-        ('EQT', '11.02.01', 'Passivos Circulantes de Curto Prazo por Ativos', 'div', ('02.01', '01')),
-        ('EQT', '11.02.02', 'Passivos Não Circulantes de Longo Prazo por Ativos', 'div', ('02.02', '01')),
-        ('EQT', '11.02.03', 'Passivos Circulantes de Curto Prazo por Passivos', 'div', ('02.01', '02')),
-        ('EQT', '11.02.04', 'Passivos Não Circulantes de Longo Prazo por Passivos', 'div', ('02.02', '02')),
-        ('EQT', '11.03', 'Patrimônio Líquido por Ativos', 'div', ('02.03', '01')),
-        ('EQT', '11.03.01', 'Equity Multiplier (Ativos por Patrimônio Líquido)', 'div', ('01', '02.03')),
-        ('EQT', '11.03.02', 'Passivos por Patrimônio Líquido', 'div', ('02', '02.03')),
-        ('EQT', '11.03.02.01', 'Passivos Circulantes de Curto Prazo por Patrimônio Líquido', 'div', ('02.01', '02.03')),
-        ('EQT', '11.03.02.02', 'Passivos Não Circulantes de Longo Prazo por Patrimônio Líquido', 'div', ('02.02', '02.03')),
+        ('EQT', '11.01.02', 'Liquidez (Ativos Circulantes por Passivos Circulantes)', 'pct', ('01.01', '02.01')), 
+        ('EQT', '11.01.03', 'Ativos Circulantes de Curto Prazo por Ativos', 'pct', ('01.01', '01')),
+        ('EQT', '11.01.04', 'Ativos Não Circulantes de Longo Prazo por Ativos', 'pct', ('01.02', '01')), 
+        ('EQT', '11.02', 'Passivos por Ativos', 'pct', ('02', '01')),
+        ('EQT', '11.02.01', 'Passivos Circulantes de Curto Prazo por Ativos', 'pct', ('02.01', '01')),
+        ('EQT', '11.02.02', 'Passivos Não Circulantes de Longo Prazo por Ativos', 'pct', ('02.02', '01')),
+        ('EQT', '11.02.03', 'Passivos Circulantes de Curto Prazo por Passivos', 'pct', ('02.01', '02')),
+        ('EQT', '11.02.04', 'Passivos Não Circulantes de Longo Prazo por Passivos', 'pct', ('02.02', '02')),
+        ('EQT', '11.03', 'Patrimônio Líquido por Ativos', 'pct', ('02.03', '01')),
+        ('EQT', '11.03.01', 'Equity Multiplier (Ativos por Patrimônio Líquido)', 'pct', ('01', '02.03')),
+        ('EQT', '11.03.02', 'Passivos por Patrimônio Líquido', 'pct', ('02', '02.03')),
+        ('EQT', '11.03.02.01', 'Passivos Circulantes de Curto Prazo por Patrimônio Líquido', 'pct', ('02.01', '02.03')),
+        ('EQT', '11.03.02.02', 'Passivos Não Circulantes de Longo Prazo por Patrimônio Líquido', 'pct', ('02.02', '02.03')),
         ('EQT', '11.03.03', 'Soma das Reservas do Patrimônio Líquido', 'add', ('02.03.02', '02.03.03', '02.03.04')), 
         ('EQT', '11.03.04', 'Patrimônio Imobilizado', 'add', ('01.02.02', '01.02.03', '01.02.04')), 
         ('EQT', '11.03.05', 'Remuneração do Capital Total(Terceiros + Próprio)', 'add', ('07.08.03', '07.08.04')), 
 
-        ('EQT', '11.04', 'Capital Social por Patrimônio Líquido', 'div', ('02.03.01', '02.03')),
+        ('EQT', '11.04', 'Capital Social por Patrimônio Líquido', 'pct', ('02.03.01', '02.03')),
 
         ('EQT', '12.01.01', 'Caixa', 'add', ('01.01.01', )), 
 
-        ('PFT', '12.03.01', 'Contas a Receber Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.03', '03.01')), 
-        ('PFT', '12.03.02', 'Contas a Receber Circulantes de Longo Prazo Prazo por Faturamento', 'div', ('01.02.01.03', '03.01')), 
-        ('PFT', '13.04.01', 'Estoques Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.04', '03.01')),
-        ('PFT', '13.04.02', 'Estoques Circulantes de Longo Prazo por Faturamento', 'div', ('01.02.01.04', '03.01')),
-        ('PFT', '13.05.01', 'Ativos Biológicos Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.05', '03.01')),
-        ('PFT', '13.05.02', 'Ativos Biológicos Circulantes de Longo Prazo por Faturamento', 'div', ('01.02.01.05', '03.01')),
-        ('EQT', '13.06.01', 'Tributos Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.06', '03.01')),
-        ('EQT', '13.06.02', 'Tributos Circulantes de Longo Prazo por Faturamento', 'div', ('01.02.01.06', '03.01')),
-        ('EQT', '13.07.01', 'Despesas Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.07', '03.01')),
-        ('EQT', '13.07.02', 'Despesas Circulantes de Longo Prazo por Faturamento', 'div', ('01.02.01.07', '03.01')),
-        ('EQT', '13.09.01', 'Outros Ativos Não Circulantes de Curto Prazo por Faturamento', 'div', ('01.01.09', '03.01')),
-        ('EQT', '13.09.02', 'Outros Ativos Não Circulantes de Longo Prazo por Faturamento', 'div', ('01.02.01.09', '03.01')),
+        ('PFT', '12.03.01', 'Contas a Receber Não Circulantes de Curto Prazo por Faturamento', 'pct', ('01.01.03', '03.01')), 
+        ('PFT', '12.03.02', 'Contas a Receber Circulantes de Longo Prazo Prazo por Faturamento', 'pct', ('01.02.01.03', '03.01')), 
+        ('PFT', '13.04.01', 'Estoques Não Circulantes de Curto Prazo por Faturamento', 'pct', ('01.01.04', '03.01')),
+        ('PFT', '13.04.02', 'Estoques Circulantes de Longo Prazo por Faturamento', 'pct', ('01.02.01.04', '03.01')),
+        ('PFT', '13.05.01', 'Ativos Biológicos Não Circulantes de Curto Prazo por Faturamento', 'pct', ('01.01.05', '03.01')),
+        ('PFT', '13.05.02', 'Ativos Biológicos Circulantes de Longo Prazo por Faturamento', 'pct', ('01.02.01.05', '03.01')),
+        ('EQT', '13.06.01', 'Tributos Não Circulantes de Curto Prazo por Faturamento', 'pct', ('01.01.06', '03.01')),
+        ('EQT', '13.06.02', 'Tributos Circulantes de Longo Prazo por Faturamento', 'pct', ('01.02.01.06', '03.01')),
+        ('EQT', '13.07.01', 'Despesas Não Circulantes de Curto Prazo por Faturamento', 'pct', ('01.01.07', '03.01')),
+        ('EQT', '13.07.02', 'Despesas Circulantes de Longo Prazo por Faturamento', 'pct', ('01.02.01.07', '03.01')),
+        ('EQT', '13.09.01', 'Outros Ativos Não Circulantes de Curto Prazo por Faturamento', 'pct', ('01.01.09', '03.01')),
+        ('EQT', '13.09.02', 'Outros Ativos Não Circulantes de Longo Prazo por Faturamento', 'pct', ('01.02.01.09', '03.01')),
 
-        ('PFT', '14.01.01', 'Receita por Ativos', 'div', ('03.01', '01')),
-        ('PFT', '14.01.02', 'Receita por Patrimônio', 'div', ('03.01', '02.03')),
-        ('PFT', '14.02.01', 'Coeficiente de Retorno (Resultado por Ativos)', 'div', ('03.11', '01')),
-        ('PFT', '14.04.01', 'ROE (Resultado por Patrimônio)', 'div', ('03.11', '02.03')),
-        ('PFT', '14.05.01', 'ROAS (EBIT por Ativos)', 'div', ('03.05', '01')),
+        ('PFT', '14.01.01', 'Receita por Ativos', 'pct', ('03.01', '01')),
+        ('PFT', '14.01.02', 'Receita por Patrimônio', 'pct', ('03.01', '02.03')),
+        ('PFT', '14.02.01', 'Coeficiente de Retorno (Resultado por Ativos)', 'pct', ('03.11', '01')),
+        ('PFT', '14.04.01', 'ROE (Resultado por Patrimônio)', 'pct', ('03.11', '02.03')),
+        ('PFT', '14.05.01', 'ROAS (EBIT por Ativos)', 'pct', ('03.05', '01')),
 
-        ('EQT', '15.01.01.01', 'Juros Pagos por Remuneração de Capital de Terceiros', 'div', ('07.08.03.01', '07.08.03')),
-        ('EQT', '15.01.01.02', 'Aluguéis por Remuneração de Capital de Terceiros', 'div', ('07.08.03.02', '07.08.03')),
-        ('EQT', '15.01.02.01', 'Juros Pagos por Remuneração de Capital Próprio', 'div', ('07.08.04.01', '07.08.04')),
-        ('EQT', '15.01.02.02', 'Dividendos por Remuneração de Capital Próprio', 'div', ('07.08.04.02', '07.08.04')),
-        ('EQT', '15.01.02.03', 'Lucros Retidos por Remuneração de Capital Próprio', 'div', ('07.08.04.03', '07.08.04')),
-        ('EQT', '15.02.01', 'Impostos por EBIT', 'div', ('03.08', '03.05')),
+        ('EQT', '15.01.01.01', 'Juros Pagos por Remuneração de Capital de Terceiros', 'pct', ('07.08.03.01', '07.08.03')),
+        ('EQT', '15.01.01.02', 'Aluguéis por Remuneração de Capital de Terceiros', 'pct', ('07.08.03.02', '07.08.03')),
+        ('EQT', '15.01.02.01', 'Juros Pagos por Remuneração de Capital Próprio', 'pct', ('07.08.04.01', '07.08.04')),
+        ('EQT', '15.01.02.02', 'Dividendos por Remuneração de Capital Próprio', 'pct', ('07.08.04.02', '07.08.04')),
+        ('EQT', '15.01.02.03', 'Lucros Retidos por Remuneração de Capital Próprio', 'pct', ('07.08.04.03', '07.08.04')),
+        ('EQT', '15.02.01', 'Impostos por EBIT', 'pct', ('03.08', '03.05')),
 
-        ('PFT', '16.01', 'Margem Bruta (Resultado Bruto (Receita Líquida) por Receita Bruto)', 'div', ('03.03', '03.01')),
-        ('PFT', '16.02', 'Margem Operacional (Receitas Operacionais por Receita Bruta)', 'div', ('03.04', '03.01')),
-        ('PFT', '16.02.01', 'Força de Vendas (Despesas com Vendas por Despesas Operacionais)', 'div', ('03.04.01', '03.04')),
-        ('PFT', '16.02.02', 'Peso Administrativo (Despesas com Administração por Despesas Operacionais)', 'div', ('03.04.02', '03.04')),
-        ('PFT', '16.03.01', 'Margem EBIT (EBIT por Resultado Bruto (Receita Líquida))', 'div', ('03.05', '03.03')),
-        ('PFT', '16.03.02', 'Margem de Depreciação por Resultado Bruto (Receita Líquida)', 'div', ('07.04.01', '03.03')),
-        ('PFT', '16.04', 'Margem Não Operacional (Resultado Não Operacional por Resultado Bruto (Receita Líquida))', 'div', ('03.06', '03.03')),
-        ('PFT', '16.05', 'Margem Líquida (Lucro Líquido por Receita Bruta)', 'div', ('03.11', '03.01')),
+        ('PFT', '16.01', 'Margem Bruta (Resultado Bruto (Receita Líquida) por Receita Bruto)', 'pct', ('03.03', '03.01')),
+        ('PFT', '16.02', 'Margem Operacional (Receitas Operacionais por Receita Bruta)', 'pct', ('03.04', '03.01')),
+        ('PFT', '16.02.01', 'Força de Vendas (Despesas com Vendas por Despesas Operacionais)', 'pct', ('03.04.01', '03.04')),
+        ('PFT', '16.02.02', 'Peso Administrativo (Despesas com Administração por Despesas Operacionais)', 'pct', ('03.04.02', '03.04')),
+        ('PFT', '16.03.01', 'Margem EBIT (EBIT por Resultado Bruto (Receita Líquida))', 'pct', ('03.05', '03.03')),
+        ('PFT', '16.03.02', 'Margem de Depreciação por Resultado Bruto (Receita Líquida)', 'pct', ('07.04.01', '03.03')),
+        ('PFT', '16.04', 'Margem Não Operacional (Resultado Não Operacional por Resultado Bruto (Receita Líquida))', 'pct', ('03.06', '03.03')),
+        ('PFT', '16.05', 'Margem Líquida (Lucro Líquido por Receita Bruta)', 'pct', ('03.11', '03.01')),
 
-        ('PFT', '18.01', 'Margem de Vendas por Valor Agregado', 'div', ('07.01.01', '07.07')),
-        ('PFT', '18.02', 'Custo dos Insumos por Valor Agregado', 'div', ('07.02', '07.07')),
-        ('PFT', '18.03', 'Valor Adicionado Bruto por Valor Agregado', 'div', ('07.03', '07.07')),
-        ('PFT', '18.04', 'Retenções por Valor Agregado', 'div', ('07.04', '07.07')),
-        ('PFT', '18.05', 'Valor Adicionado Líquido por Valor Agregado', 'div', ('07.05', '07.07')),
-        ('PFT', '18.06', 'Valor Adicionado em Transferência por Valor Agregado', 'div', ('07.06', '07.07')),
-        ('PFT', '18.07', 'Recursos Humanos por Valor Agregado', 'div', ('07.08.01', '07.07')),
-        ('PFT', '18.07.01', 'Remuneração Direta (Recursos Humanos) por Valor Agregado', 'div', ('07.08.01.01', '07.07')),
-        ('PFT', '18.07.02', 'Benefícios (Recursos Humanos) por Valor Agregado', 'div', ('07.08.01.02', '07.07')),
-        ('PFT', '18.07.03', 'FGTS (Recursos Humanos) por Valor Agregado', 'div', ('07.08.01.03', '07.07')),
-        ('PFT', '18.08', 'Impostos por Valor Agregado', 'div', ('07.08.02', '07.07')),
-        ('PFT', '18.09', 'Remuneração de Capital de Terceiros por Valor Agregado', 'div', ('07.08.03', '07.07')),
-        ('PFT', '18.09.01', 'Juros Pagos a Terceiros por Valor Agregado', 'div', ('07.08.03.01', '07.07')),
-        ('PFT', '18.09.02', 'Aluguéis Pagos a Terceiros por Valor Agregado', 'div', ('07.08.03.02', '07.07')),
-        ('PFT', '18.10', 'Remuneração de Capital Próprio por Valor Agregado', 'div', ('07.08.04', '07.07')),
-        ('PFT', '18.10.01', 'Juros Sobre Capital Próprio por Valor Agregado', 'div', ('07.08.04.01', '07.07')),
-        ('PFT', '18.10.02', 'Dividendos por Valor Agregado', 'div', ('07.08.04.02', '07.07')),
-        ('PFT', '18.10.02', 'Lucros Retidos por Valor Agregado', 'div', ('07.08.04.03', '07.07')),
-        ('PFT', '18.11.01', 'Alíquota de Impostos (Impostos, Taxas e Contribuições por Receita Bruta)', 'div', ('07.08.02', '03.01')),
-        ('PFT', '18.11.02', 'Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta)', 'div', ('07.08.03', '03.01')),
-        ('PFT', '18.11.03', 'Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta)', 'div', ('07.08.04', '03.01')),
+        ('PFT', '18.01', 'Margem de Vendas por Valor Agregado', 'pct', ('07.01.01', '07.07')),
+        ('PFT', '18.02', 'Custo dos Insumos por Valor Agregado', 'pct', ('07.02', '07.07')),
+        ('PFT', '18.03', 'Valor Adicionado Bruto por Valor Agregado', 'pct', ('07.03', '07.07')),
+        ('PFT', '18.04', 'Retenções por Valor Agregado', 'pct', ('07.04', '07.07')),
+        ('PFT', '18.05', 'Valor Adicionado Líquido por Valor Agregado', 'pct', ('07.05', '07.07')),
+        ('PFT', '18.06', 'Valor Adicionado em Transferência por Valor Agregado', 'pct', ('07.06', '07.07')),
+        ('PFT', '18.07', 'Recursos Humanos por Valor Agregado', 'pct', ('07.08.01', '07.07')),
+        ('PFT', '18.07.01', 'Remuneração Direta (Recursos Humanos) por Valor Agregado', 'pct', ('07.08.01.01', '07.07')),
+        ('PFT', '18.07.02', 'Benefícios (Recursos Humanos) por Valor Agregado', 'pct', ('07.08.01.02', '07.07')),
+        ('PFT', '18.07.03', 'FGTS (Recursos Humanos) por Valor Agregado', 'pct', ('07.08.01.03', '07.07')),
+        ('PFT', '18.08', 'Impostos por Valor Agregado', 'pct', ('07.08.02', '07.07')),
+        ('PFT', '18.09', 'Remuneração de Capital de Terceiros por Valor Agregado', 'pct', ('07.08.03', '07.07')),
+        ('PFT', '18.09.01', 'Juros Pagos a Terceiros por Valor Agregado', 'pct', ('07.08.03.01', '07.07')),
+        ('PFT', '18.09.02', 'Aluguéis Pagos a Terceiros por Valor Agregado', 'pct', ('07.08.03.02', '07.07')),
+        ('PFT', '18.10', 'Remuneração de Capital Próprio por Valor Agregado', 'pct', ('07.08.04', '07.07')),
+        ('PFT', '18.10.01', 'Juros Sobre Capital Próprio por Valor Agregado', 'pct', ('07.08.04.01', '07.07')),
+        ('PFT', '18.10.02', 'Dividendos por Valor Agregado', 'pct', ('07.08.04.02', '07.07')),
+        ('PFT', '18.10.02', 'Lucros Retidos por Valor Agregado', 'pct', ('07.08.04.03', '07.07')),
+        ('PFT', '18.11.01', 'Alíquota de Impostos (Impostos, Taxas e Contribuições por Receita Bruta)', 'pct', ('07.08.02', '03.01')),
+        ('PFT', '18.11.02', 'Taxa de Juros Pagos (Remuneração de Capital de Terceiros por Receita Bruta)', 'pct', ('07.08.03', '03.01')),
+        ('PFT', '18.11.03', 'Taxa de Proventos Gerados (Remuneração de Capital Próprio por Receita Bruta)', 'pct', ('07.08.04', '03.01')),
     ]
     return rules
 

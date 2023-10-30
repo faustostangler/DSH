@@ -313,9 +313,9 @@ def yahoo_cotahist(value):
     return value
 
 def get_nsd_links(value):
-    acoes = run.get_composicao_acionaria()
-
     nsd = run.get_nsd_content()
+
+    acoes = run.get_composicao_acionaria()
 
     return value
 
