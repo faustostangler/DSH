@@ -2072,83 +2072,85 @@ default = [
 
 report = [
 {
-    "line": "01 - Ativo Total",
-    "title": "01 - Ativo Total",
-    "header": "O Ativo Total de uma Empresa",
-    "description": "O Ativo Total refere-se à soma de todos os bens e direitos que uma empresa possui em um determinado momento. Ele é composto por ativos circulantes (como caixa e estoques) e ativos não circulantes (como imóveis e equipamentos). É uma medida fundamental para avaliar a saúde financeira e a capacidade de uma empresa em gerar lucros no futuro. Imagine que uma empresa é como uma grande fazenda. O Ativo Total é como contar todas as vacas, galinhas, tratores e o tamanho da terra que a fazenda possui.",
-    "footer": "Valores normais do Ativo Total variam de acordo com o setor e o tamanho da empresa. Um Ativo Total em crescimento pode indicar que a empresa está expandindo seus negócios, investindo em novos projetos, ou aumentando sua capacidade operacional. Por outro lado, uma redução no Ativo Total pode sinalizar vendas de ativos, problemas financeiros, ou uma reestruturação da empresa. Se pensarmos na nossa fazenda, um aumento no Ativo Total pode significar mais animais e terras, enquanto uma diminuição pode indicar que algumas vacas foram vendidas ou terras foram alugadas."
+    'line': '03.11 - Lucro Líquido',
+    'title': '03.11 - Lucro Líquido',
+    'header': 'Lucro Líquido da Empresa',
+    'description': 'O lucro líquido é o resultado final dos rendimentos de uma empresa após deduzir todos os custos e despesas. Ele é calculado a partir do lucro bruto (renda total menos custos de bens vendidos ou serviços prestados) e, depois, subtraindo-se as despesas operacionais, juros, impostos e quaisquer outros custos. Imagine uma fazenda: o lucro líquido seria como o total de frutas colhidas após descontar os custos de plantio, adubo, água e mão de obra.',
+    'footer': 'Valores normais de lucro líquido dependem do setor e tamanho da empresa. Um lucro líquido positivo geralmente indica que a empresa está gerando mais do que está gastando. Se o valor estiver aumentando, pode significar que a empresa está colhendo mais frutas do que nas safras anteriores. No entanto, um lucro líquido decrescente pode ser como uma colheita ruim, indicando que algo não está indo bem na fazenda.'
 }, 
 {
-    'line': '01 - Ativo Total',
-    'title': '01 - Ativo Total',
-    'header': 'Totalidade dos Bens e Direitos',
-    'description': 'O Ativo Total representa a soma de todos os bens e direitos que uma empresa possui em um determinado momento. Valores ascendentes podem indicar crescimento e expansão da empresa, enquanto declínios podem sinalizar venda de ativos ou redução das operações.',
-    'footer': 'O Ativo Total é a consolidação de todos os recursos controlados por uma entidade, resultantes de eventos passados e dos quais se espera que a entidade obtenha benefícios econômicos futuros. É a combinação dos ativos circulantes (aqueles que serão convertidos em dinheiro ou consumidos no ciclo operacional) e dos ativos não circulantes (bens e direitos que não serão convertidos em dinheiro no curto prazo). Pense no Ativo Total como uma grande caixa onde uma empresa armazena tudo o que possui, desde dinheiro em caixa até prédios e maquinários.', 
+    'line': '14.04.01 - ROE (Resultado por Patrimônio)',
+    'title': '14.04.01 - ROE (Resultado por Patrimônio)',
+    'header': 'ROE - Retorno sobre o Patrimônio Líquido',
+    'description': 'ROE, ou Retorno sobre o Patrimônio Líquido, é uma métrica financeira que mede a capacidade de uma empresa em gerar lucro a partir de seu patrimônio líquido. Ele é calculado dividindo-se o lucro líquido pelo patrimônio líquido da empresa. Fazendo uma analogia com uma fazenda: imagine que o patrimônio líquido seja o total de terras que a fazenda possui. O ROE, então, nos diria quanta fruta (lucro) essa fazenda é capaz de produzir por hectare de terra que possui.',
+    'footer': 'Valores de ROE variam de acordo com o setor e com a gestão da empresa. Um ROE alto pode indicar que a empresa é eficiente em utilizar seu patrimônio para gerar lucros, assim como uma fazenda que consegue uma grande colheita mesmo com poucas terras. Se o ROE estiver crescendo, indica que a eficiência da empresa em utilizar seu patrimônio está melhorando. Contudo, um ROE em declínio pode sinalizar problemas na gestão ou na capacidade de geração de lucros da empresa, semelhante a uma fazenda que, ano após ano, colhe menos frutas por hectare de terra.'
 },
 {
-    'line': '02.03 - Patrimônio Líquido',
-    'title': '02.03 - Patrimônio Líquido',
-    'header': 'Valor Total dos Ativos da Empresa',
-    'description': 'Representa o valor que os proprietários ou acionistas têm na empresa após deduzir todas as obrigações. É basicamente a diferença entre ativos e passivos da organização.',
-    'footer': 'Imagine que você tenha uma caixa de dinheiro e algumas dívidas. O dinheiro que sobra após pagar todas as dívidas é o seu "patrimônio líquido".', 
+    'line': '03.01 - Receita Bruta',
+    'title': '03.01 - Receita Bruta',
+    'header': 'Receita Bruta da Empresa',
+    'description': 'A Receita Bruta refere-se ao total de dinheiro arrecadado por uma empresa antes de subtrair quaisquer despesas. É o valor acumulado das vendas de bens ou serviços, sem considerar custos, devoluções ou descontos. Pensando na analogia da fazenda: a Receita Bruta seria como o total de frutas colhidas e vendidas no mercado, sem descontar os custos associados ao cultivo, transporte ou quaisquer outras despesas relacionadas.',
+    'footer': 'Valores elevados de Receita Bruta indicam um alto volume de vendas ou serviços prestados pela empresa, como uma fazenda que teve uma colheita abundante. Se a Receita Bruta estiver crescendo ao longo do tempo, isso sugere que a empresa está expandindo suas vendas ou aumentando seus preços. Por outro lado, uma Receita Bruta em declínio pode indicar desafios nas vendas ou na demanda pelo produto ou serviço da empresa, assim como uma fazenda que produz menos a cada safra.'
 },
+
 ]
 
-manual_entries = {
-    '99': {
-        0: {
-            0: {
-                'info': {
-                    'title': '99 - PVPA',
-                    'header': '99 - PVPA',
-                    'description': '99 - PVPA',
-                    'footer': '99 - PVPA'
-                },
-                'data': {
-                    'axis': ['Reais (RS)', 'Porcentagem (%)'],
-                    'left': ['99.01 - PVPA']
-                },
-                'options': {
-                    'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
-                    'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False}
-                }
-            },
-        }
-    },
-    '50': {
-        0: {
-            0: {
-                'info': {
-                    'title': 'Adj Close',
-                    'header': '50.05 - Adj Close',
-                    'description': 'This is a sample for 98',
-                    'footer': 'Footer for 98 sample'
-                },
-                'data': {
-                    'axis': ['Reais (RS)', 'Porcentagem (%)'],
-                    'left': ['50.05 - Adj Close']
-                },
-                'options': {
-                    'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
-                    'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False}
-                }
-            },
-            1: {
-                'info': {
-                    'title': '02.03 - Patrimônio Líquido',
-                    'header': '98 - Example',
-                    'description': 'This is another example for 98',
-                    'footer': 'Footer for 98 example'
-                },
-                'data': {
-                    'axis': ['Reais (RS)', 'Porcentagem (%)'],
-                    'left': ['02.03 - Patrimônio Líquido']
-                },
-                'options': {
-                    'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
-                    'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False}
-                }
-            }
-        }
-    }
-}
+# manual_entries = {
+#     '99': {
+#         0: {
+#             0: {
+#                 'info': {
+#                     'title': '99 - PVPA',
+#                     'header': '99 - PVPA',
+#                     'description': '99 - PVPA',
+#                     'footer': '99 - PVPA'
+#                 },
+#                 'data': {
+#                     'axis': ['Reais (RS)', 'Porcentagem (%)'],
+#                     'left': ['99.01 - PVPA']
+#                 },
+#                 'options': {
+#                     'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
+#                     'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False}
+#                 }
+#             },
+#         }
+#     },
+#     '50': {
+#         0: {
+#             0: {
+#                 'info': {
+#                     'title': 'Adj Close',
+#                     'header': '50.05 - Adj Close',
+#                     'description': 'This is a sample for 98',
+#                     'footer': 'Footer for 98 sample'
+#                 },
+#                 'data': {
+#                     'axis': ['Reais (RS)', 'Porcentagem (%)'],
+#                     'left': ['50.05 - Adj Close']
+#                 },
+#                 'options': {
+#                     'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
+#                     'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False}
+#                 }
+#             },
+#             1: {
+#                 'info': {
+#                     'title': '02.03 - Patrimônio Líquido',
+#                     'header': '98 - Example',
+#                     'description': 'This is another example for 98',
+#                     'footer': 'Footer for 98 example'
+#                 },
+#                 'data': {
+#                     'axis': ['Reais (RS)', 'Porcentagem (%)'],
+#                     'left': ['02.03 - Patrimônio Líquido']
+#                 },
+#                 'options': {
+#                     'left': {'shape': 'area', 'mode': 'standalone', 'normalization': False, 'mma': [3, 2]},
+#                     'right': {'shape': 'line', 'mode': 'standalone', 'normalization': False, 'outliers': False}
+#                 }
+#             }
+#         }
+#     }
+# }
+manual_entries = {}

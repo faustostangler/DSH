@@ -270,16 +270,19 @@ def update_company_info(compressed_df, compressed_graphs):
     company_info = get_company_info(df)
 
     blocks = []
-    for ticker in df['TICKER'].unique():
-        df = df[df['TICKER'] == ticker]
-        if not df.empty:
-            for g, (group_key, group) in enumerate(graphs.items()):
-                status = True if g == 0 else False
-                plots = []
-                for l, (line_key, line) in enumerate(group.items()):
-                    for p, (plot_key, plot_info) in enumerate(line.items()):
+    for g, (group_key, group) in enumerate(graphs.items()):
+        status = True if g == 0 else False
+        plots = []
+        for l, (line_key, line) in enumerate(group.items()):
+            for p, (plot_key, plot_info) in enumerate(line.items()):
+
+
+                for ticker in df['TICKER'].unique():
+                    df_ticker = df[df['TICKER'] == ticker]
+                    if not df.empty:
+
                         # Create the card for this plot
-                        plot_obj = run.plot_tweak(plot_info, df)
+                        plot_obj = run.plot_tweak(plot_info, df_ticker)
                         
                         # Create the base CardBody list with the Graph and Description
                         card_body_content = [
@@ -298,7 +301,7 @@ def update_company_info(compressed_df, compressed_graphs):
 
                         # Create the Card using the content
                         card = dbc.Card([
-                            dbc.CardHeader(html.Strong(f"{plot_info['info']['title']} - {plot_info['info']['header']}")),
+                            dbc.CardHeader(html.Strong(f"{ticker} - {plot_info['info']['title']} - {plot_info['info']['header']}")),
                             dbc.CardBody(card_body_content),
                             dbc.CardFooter(html.I(f"{plot_info['info']['footer']}")), 
                         ])

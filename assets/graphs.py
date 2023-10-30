@@ -34,7 +34,7 @@ def get_default_entries(df):
     cagr = 'O CAGR, ou Taxa de Crescimento Anual Composta, avalia o crescimento médio anual do indicador ao longo do intervalo, ignorando as flutuações, e mostra o ritmo médio de crescimento anual no período.'
 
     # Extract unique groups (first two digits) from the lines
-    groups = set(entry['line'][:2] for entry in lines)
+    groups = set(entry['title'][:2] for entry in lines)
     groups = sorted(groups)
     
     default_entries = {}
