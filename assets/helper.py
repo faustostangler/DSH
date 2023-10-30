@@ -530,6 +530,7 @@ def dre_cvm(value):
 
 def yahoo_quotes(value):
   fund = run.load_database()
+  fund = run.save_sss(fund)
 
   quotes = run.integrate_yahoo_quotes(fund)
   quotes = run.save_pkl(quotes, f'{app_folder}/quotes')

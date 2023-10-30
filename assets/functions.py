@@ -5241,6 +5241,19 @@ def load_database():
 
     return fund
 
+def save_sss(df_fund):
+    setores = []
+    for setor, df in df_fund.items():
+        columns=['SETOR', 'SUBSETOR', 'SEGMENTO', 'PREGAO']
+        setores.append(df[columns].drop_duplicates())
+        print(setor)
+    sss = pd.concat(setores)
+    sss = sss.applymap(clean_text)
+
+    sss = save_pkl(sss, f'{b3.app_folder}/sss')
+
+    return df_fund
+
 def date_to_unix(date_string, date_format='%Y-%m-%d'):
     """
     Convert a date string to UNIX timestamp.

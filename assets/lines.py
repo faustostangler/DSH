@@ -2079,6 +2079,13 @@ report = [
     'footer': 'Valores normais de lucro líquido dependem do setor e tamanho da empresa. Um lucro líquido positivo geralmente indica que a empresa está gerando mais do que está gastando. Se o valor estiver aumentando, pode significar que a empresa está colhendo mais frutas do que nas safras anteriores. No entanto, um lucro líquido decrescente pode ser como uma colheita ruim, indicando que algo não está indo bem na fazenda.'
 }, 
 {
+    'line': '03.01 - Receita Bruta',
+    'title': '03.01 - Receita Bruta',
+    'header': 'Receita Bruta da Empresa',
+    'description': 'A Receita Bruta refere-se ao total de dinheiro arrecadado por uma empresa antes de subtrair quaisquer despesas. É o valor acumulado das vendas de bens ou serviços, sem considerar custos, devoluções ou descontos. Pensando na analogia da fazenda: a Receita Bruta seria como o total de frutas colhidas e vendidas no mercado, sem descontar os custos associados ao cultivo, transporte ou quaisquer outras despesas relacionadas.',
+    'footer': 'Valores elevados de Receita Bruta indicam um alto volume de vendas ou serviços prestados pela empresa, como uma fazenda que teve uma colheita abundante. Se a Receita Bruta estiver crescendo ao longo do tempo, isso sugere que a empresa está expandindo suas vendas ou aumentando seus preços. Por outro lado, uma Receita Bruta em declínio pode indicar desafios nas vendas ou na demanda pelo produto ou serviço da empresa, assim como uma fazenda que produz menos a cada safra.'
+},
+{
     'line': '14.04.01 - ROE (Resultado por Patrimônio)',
     'title': '14.04.01 - ROE (Resultado por Patrimônio)',
     'header': 'ROE - Retorno sobre o Patrimônio Líquido',
@@ -2086,11 +2093,11 @@ report = [
     'footer': 'Valores de ROE variam de acordo com o setor e com a gestão da empresa. Um ROE alto pode indicar que a empresa é eficiente em utilizar seu patrimônio para gerar lucros, assim como uma fazenda que consegue uma grande colheita mesmo com poucas terras. Se o ROE estiver crescendo, indica que a eficiência da empresa em utilizar seu patrimônio está melhorando. Contudo, um ROE em declínio pode sinalizar problemas na gestão ou na capacidade de geração de lucros da empresa, semelhante a uma fazenda que, ano após ano, colhe menos frutas por hectare de terra.'
 },
 {
-    'line': '03.01 - Receita Bruta',
-    'title': '03.01 - Receita Bruta',
-    'header': 'Receita Bruta da Empresa',
-    'description': 'A Receita Bruta refere-se ao total de dinheiro arrecadado por uma empresa antes de subtrair quaisquer despesas. É o valor acumulado das vendas de bens ou serviços, sem considerar custos, devoluções ou descontos. Pensando na analogia da fazenda: a Receita Bruta seria como o total de frutas colhidas e vendidas no mercado, sem descontar os custos associados ao cultivo, transporte ou quaisquer outras despesas relacionadas.',
-    'footer': 'Valores elevados de Receita Bruta indicam um alto volume de vendas ou serviços prestados pela empresa, como uma fazenda que teve uma colheita abundante. Se a Receita Bruta estiver crescendo ao longo do tempo, isso sugere que a empresa está expandindo suas vendas ou aumentando seus preços. Por outro lado, uma Receita Bruta em declínio pode indicar desafios nas vendas ou na demanda pelo produto ou serviço da empresa, assim como uma fazenda que produz menos a cada safra.'
+    'line': '06.01 - Caixa das Operações',
+    'title': '06.01 - Caixa das Operações',
+    'header': 'Fluxo de Caixa Operacional da Empresa',
+    'description': 'O Caixa das Operações, também conhecido como Fluxo de Caixa Operacional, refere-se ao montante de dinheiro que uma empresa gera exclusivamente a partir de suas atividades operacionais, sem considerar investimentos ou financiamentos. Esse valor é crucial porque indica a capacidade da empresa de gerar dinheiro suficiente para manter e expandir suas operações. Se pensarmos na analogia da fazenda: o Caixa das Operações seria o dinheiro que a fazenda recebe ao vender suas frutas, descontando os gastos com o cultivo, colheita e venda dessas frutas.',
+    'footer': 'Um Fluxo de Caixa Operacional positivo indica que a empresa está gerando mais dinheiro do que está gastando em suas operações diárias, assim como uma fazenda que lucra com a venda de suas frutas após cobrir todos os seus gastos. Se esse valor estiver crescendo ao longo do tempo, isso sugere que a empresa está melhorando sua eficiência ou vendendo mais. Contudo, um valor negativo ou em declínio pode ser um sinal de alerta, indicando que a empresa pode estar gastando mais do que está arrecadando, tal qual uma fazenda que gasta mais para cultivar e vender suas frutas do que recebe com as vendas.'
 },
 
 ]

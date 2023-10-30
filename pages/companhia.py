@@ -112,17 +112,17 @@ def get_company_info(df):
     # Return the constructed layout
     return company_info
 
-def generate_button_and_content(ticker, g, group_key, content_list, status):
+def generate_button_and_content(group_index, group_key, content_list, status):
     button =  [
         dbc.Button(
             f"Ver {group_key}", 
-            id={'type': 'toggle-button', 'index': g}, 
+            id={'type': 'toggle-button', 'index': group_index}, 
             className="mb-2"
         ),
         html.Br(), 
         dbc.Collapse(
             content_list, 
-            id={'type': 'collapse-content', 'index': g},
+            id={'type': 'collapse-content', 'index': group_index},
             is_open=status
         )
     ]
@@ -219,13 +219,6 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
         # Check if the file exists and load the data
         if os.path.exists(file+'.pkl'):
             df = run.load_pkl(file)
-            # remove un-wanted index     #  this debug related to the merge formation and repetition of uncorrect values in index.max(). Shortcut drop index.max and remove wrong values
-            try:
-                size = len(df)
-                df = df.drop_duplicates(subset='index', keep='first')
-                print(f'{size} to {len(df)}, drop index duplicates, cheat debug in action, fix it later')
-            except Exception as e:
-                pass
         else:
             print(f"No data file found for company: {companhia}")
 
@@ -275,43 +268,36 @@ def update_company_info(compressed_df, compressed_graphs):
         plots = []
         for l, (line_key, line) in enumerate(group.items()):
             for p, (plot_key, plot_info) in enumerate(line.items()):
+                plot_obj = run.plot_tweak(plot_info, df)
+                # Create the card for this plot
+                plot_obj = run.plot_tweak(plot_info, df)
+                
+                # Create the base CardBody list with the Graph and Description
+                card_body_content = [
+                    dcc.Graph(figure=plot_obj), 
+                    html.P(f"{plot_info['info']['description']}")
+                ]
 
+                # Check if 'mma' exists in plot_info['info'] and add it to the list
+                if 'mma' in plot_info['info']:
+                    card_body_content.append(html.P(f"{plot_info['info']['mma']}"))
 
-                for ticker in df['TICKER'].unique():
-                    df_ticker = df[df['TICKER'] == ticker]
-                    if not df.empty:
+                # Check if 'cagr' exists in plot_info['info'] and add it to the list
+                if 'cagr' in plot_info['info']:
+                    card_body_content.append(html.P(f"{plot_info['info']['cagr']}"))
 
-                        # Create the card for this plot
-                        plot_obj = run.plot_tweak(plot_info, df_ticker)
-                        
-                        # Create the base CardBody list with the Graph and Description
-                        card_body_content = [
-                            # html.P(f"{ticker}"), 
-                            dcc.Graph(figure=plot_obj), 
-                            html.P(f"{plot_info['info']['description']}"), 
-                        ]
+                # Create the Card using the content
+                card = dbc.Card([
+                    dbc.CardHeader(html.Strong(f"{plot_info['info']['title']} - {plot_info['info']['header']}")),
+                    dbc.CardBody(card_body_content),
+                    dbc.CardFooter(html.I(f"{plot_info['info']['footer']}")), 
+                ])
 
-                        # Check if 'mma' exists in plot_info['info'] and add it to the list
-                        if 'mma' in plot_info['info']:
-                            card_body_content.append(html.P(f"{plot_info['info']['mma']}"))
+                plots.append(card)
 
-                        # Check if 'cagr' exists in plot_info['info'] and add it to the list
-                        if 'cagr' in plot_info['info']:
-                            card_body_content.append(html.P(f"{plot_info['info']['cagr']}"))
-
-                        # Create the Card using the content
-                        card = dbc.Card([
-                            dbc.CardHeader(html.Strong(f"{ticker} - {plot_info['info']['title']} - {plot_info['info']['header']}")),
-                            dbc.CardBody(card_body_content),
-                            dbc.CardFooter(html.I(f"{plot_info['info']['footer']}")), 
-                        ])
-
-                        plots.append(card)
-
-                        # Adding a break after each card for better visual separation
-                        plots.append(html.Br())
-                blocks.extend(generate_button_and_content(ticker, g, group_key, plots, status))
+                # Adding a break after each card for better visual separation
+                plots.append(html.Br())
+        blocks.extend(generate_button_and_content(g, group_key, plots, status))
 
     return company_info, blocks
-
 
