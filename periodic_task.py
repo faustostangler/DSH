@@ -9,8 +9,8 @@ def my_periodic_task():
     # value = b3.update_world_markets(value)
 
     ## B3 COMPANIES BALANCE SHEETS
-    value = 'nsd'
-    value = b3.get_nsd_links(value)
+    # value = 'nsd'
+    # value = b3.get_nsd_links(value)
 
     # value = 'dre_raw'
     # value = b3.get_dre(value)

@@ -295,6 +295,7 @@ def load_browser(chromedriver_path="D:\\Fausto Stangler\\Documentos\\Python\\DSH
     Returns:
     tuple: A tuple containing a WebDriver instance and a WebDriverWait instance.
     """
+    driver_wait_time = b3.driver_wait_time
     try:
         # Define the options for the ChromeDriver.
         options = webdriver.ChromeOptions()
@@ -348,21 +349,14 @@ def get_company(i, driver, wait):
   """
   # listagem
   try:
-    list_dict = dict(zip(b3.l1, b3.l2))
     xpath = f'//*[@id="nav-bloco"]/div/div[{i}]/div/div/p[3]'
     listagem = wText(xpath, wait)
+    list_dict = dict(zip(b3.listagem_siglas, b3.listagem_extenso))
     for word, replacement in list_dict.items():
       listagem = clean_text(listagem.replace(word, replacement))
   except Exception as e:
     listagem = ''
 
-  # pregao
-  try:
-    xpath = f'//*[@id="nav-bloco"]/div/div[{i}]/div/div/p[2]'
-    pregao = clean_text(wText(xpath, wait))
-  except Exception as e:
-    pregao = ''
-  
   # company name
   try:
     xpath = f'//*[@id="nav-bloco"]/div/div[{i}]/div/div/p[1]'
@@ -370,6 +364,13 @@ def get_company(i, driver, wait):
   except Exception as e:
     company_name = ''
 
+  # pregao
+  try:
+    xpath = f'//*[@id="nav-bloco"]/div/div[{i}]/div/div/p[2]'
+    pregao = clean_text(wText(xpath, wait))
+  except Exception as e:
+    pregao = company_name
+  
   # get more details
   item = wClick(f'//*[@id="nav-bloco"]/div/div[{i}]/div', wait)
   click = wClick(f'//*[@id="accordionHeading2"]/div/div/a', wait)
@@ -392,9 +393,9 @@ def get_company(i, driver, wait):
   # setor, subsetor e segmento
   try:
     setor = div1[div1.index('Classificação Setorial')+1]
-    segmento = setor.split(' / ')[2].strip()
-    subsetor = setor.split(' / ')[1].strip()
-    setor = setor.split(' / ')[0].strip()
+    segmento = clean_text(setor.split(' / ')[2].strip())
+    subsetor = clean_text(setor.split(' / ')[1].strip())
+    setor = clean_text(setor.split(' / ')[0].strip())
   except Exception as e:
     setor = ''
     subsetor = ''
@@ -449,8 +450,6 @@ def get_company(i, driver, wait):
   return company
 
 def get_ticker_keywords(raw_code):
-  from bs4 import BeautifulSoup
-
   # Initialize a list to hold the keyword information
   keywords = []
 
@@ -474,7 +473,7 @@ def get_ticker_keywords(raw_code):
         # Append the ticker and company name to the keyword list
         keyword = [ticker, company_name]
         keywords.append(keyword)
-        print(keyword)
+        # print(keyword)
       except Exception as e:
         # print(e)
         pass
@@ -536,8 +535,9 @@ def read_or_create_dataframe(filename, cols):
 
 def save_and_pickle(df, filename):
   try:
-      df.to_pickle(b3.data_path + f'{filename}.zip')
-      df = upload_to_gcs(df, filename)
+      df.to_pickle(f'{b3.data_path}/{filename}.zip')
+      print('google upload fast debug')
+    #   df = upload_to_gcs(df, filename)
   except Exception as e:
       pass
   return df
@@ -546,7 +546,7 @@ def save_and_pickle(df, filename):
 def nsd_range(nsd, safety_factor=1.8):
   # start
   try:
-    start = int(max(nsd['nsd'])) + 1
+    start = int(max(nsd['nsd'].astype(int))) + 1
   except:
     start = 1
 
@@ -564,7 +564,7 @@ def nsd_range(nsd, safety_factor=1.8):
   max_date_nsd_per_day = nsd_per_day.idxmax()
 
   # calculate the expected items up to today
-  expected_nsd = int(avg_nsd_per_day * (days_gap + safety_factor) * safety_factor)
+  expected_nsd = int(avg_nsd_per_day * (days_gap + 1) * safety_factor)
 
   # end
   end = start + expected_nsd
@@ -575,9 +575,10 @@ def nsd_range(nsd, safety_factor=1.8):
 
   print(f'from {start} to {end}')
 
-  return start-1, end
+  return start, end
 
 def nsd_dates(nsd, safety_factor=1.8):
+  safety_factor = b3.safety_factor
   try:
     # find the gap in days from today to max 'envio' date
     last_date = nsd['envio'].max().date()
@@ -585,7 +586,10 @@ def nsd_dates(nsd, safety_factor=1.8):
     days_gap = (today - last_date).days
     
     # find the maximum 'nsd' gap
-    max_gap = int(((nsd['nsd'].diff().max() + safety_factor) * 0.1))
+    try:
+        max_gap = int(((nsd['nsd'].astype(int).diff().max() + safety_factor) * 0.1))
+    except Exception as e:
+        max_gap = int(((1 + safety_factor) * 0.1))
 
     # group nsd by day
     nsd_per_day = nsd.groupby(nsd['envio'].dt.date)['nsd'].count()
@@ -598,8 +602,9 @@ def nsd_dates(nsd, safety_factor=1.8):
     # last_date and previous safe date 
     back_days = round(max_gap / avg_nsd_per_day)
     limit_date = datetime.datetime.now().date() - datetime.timedelta(days=back_days)
+
   except Exception as e:
-      last_date, limit_date, max_gap = pd.to_datetime('1970-01-02'), datetime.datetime.now().date(), 500
+    last_date, limit_date, max_gap = pd.to_datetime('1970-01-02').date(), datetime.datetime.now().date(), b3.max_gap
 
   return last_date, limit_date, max_gap
 
@@ -616,6 +621,10 @@ def get_nsd(nsd):
   nomeCompanhia_tag = soup.find('span', {'id': 'lblNomeCompanhia'})
   company = nomeCompanhia_tag.text.strip()
   company = unidecode.unidecode(company).upper()
+  company = clean_text(company)
+  remove_list = [' EM RECUPERACAO JUDICIAL', ' EM LIQUIDACAO EXTRAJUDICIAL', ' EM LIQUIDACAO']
+  pattern = '|'.join(map(re.escape, remove_list))
+  company = re.sub(pattern, '', company)
 
   # Extracting dri and dri2
   nomeDRI_tag = soup.find('span', {'id': 'lblNomeDRI'})
@@ -663,8 +672,10 @@ def get_nsd(nsd):
   url = nsd_url
 
   # company
-  data = [company, dri, dri2, dre, data, versao, auditor, auditor_rt, cancelamento, protocolo, envio, url, nsd]
 
+  data = [company, dri, dri2, dre, data, versao, auditor, auditor_rt, cancelamento, protocolo, envio, url, nsd]
+  data = [clean_text(item) if item not in [company, envio, url] else item for item in data]
+      
   return data
 
 def clean_nsd(nsd):
@@ -703,8 +714,7 @@ def clean_nsd(nsd):
 
 def get_nsd_content():
     try:
-        safety_factor = 1.8
-
+        safety_factor = b3.safety_factor
         gap = 0
 
         filename = 'nsd_links'
@@ -715,14 +725,13 @@ def get_nsd_content():
             nsd['envio'] = pd.to_datetime(nsd['envio'], dayfirst=True)
             start, end = nsd_range(nsd, safety_factor)
         else:
-            start, end = 1, 1000
+            start, end = 1, 100
 
         start_time = time.time()
         for i, n in enumerate(range(start, end)):
-
             # interrupt conditions
             last_date, limit_date, max_gap = nsd_dates(nsd, safety_factor)
-            if last_date.date() > limit_date:
+            if last_date > limit_date:
                 if gap == max_gap:
                     break
 
@@ -739,13 +748,13 @@ def get_nsd_content():
                 gap += 1
                 print(n, progress)
 
-            # if n % b3.bin_size == 0:
-            if (end-start - i - 1) % 50 == 0:
+            # if n% b3.bin_size == 0:
+            if (end-start - i - 1)% b3.bin_size == 0:
                 nsd = save_and_pickle(nsd, filename)
                 print('partial save')
 
         nsd = save_and_pickle(nsd, filename)
-        print('final save')
+        # print('final save')
     except Exception as e:
         pass
 
@@ -783,11 +792,9 @@ def get_composicao_acionaria():
     driver, wait = load_browser()
     filename = 'nsd_links'
     cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
-    nsd = read_or_create_dataframe(filename, cols_nsd)
+    nsd = get_nsd_content()
     selected_dre = ['INFORMACOES TRIMESTRAIS', 'DEMONSTRACOES FINANCEIRAS PADRONIZADAS']
     filtered_nsd = nsd[nsd['dre'].isin(selected_dre)]
-    if nsd.empty:
-        print('NEED TO CREATE NSD')
 
     filename = 'acoes'
     columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
@@ -799,8 +806,8 @@ def get_composicao_acionaria():
 
     start_time = time.time()
     for j, (i, row) in enumerate(filtered_nsd.iterrows()):
-        if j < last:
-            continue
+        if j <= last:
+            continue # debug
         
         company = row['company']
         data = row['data']
@@ -811,7 +818,7 @@ def get_composicao_acionaria():
         data = [company, data] + get_acoes(driver, wait, url)
         acoes = pd.concat([acoes, pd.DataFrame([data], columns=columns)], ignore_index=True)
     
-        if (len(filtered_nsd) - j - 1) % 50 == 0:
+        if (len(filtered_nsd) - j - 1)% b3.bin_size == 0:
             acoes = save_and_pickle(acoes, filename)
             print('partial save')
 
@@ -1226,7 +1233,7 @@ def math_magic(key, df, size, cias, l):
   progress = (l/size)
   if key in cias:
       status = True
-      if l % (b3.bin_size*10) == 0:
+      if l% (b3.bin_size*10) == 0:
           print(f'{l} {(size-l)} {progress:.4%}')
       # print(key, 'done')
       pass
@@ -3884,7 +3891,7 @@ def get_companies_from_b3_cards(driver, wait):
     """
     max_retries = 5
     sleep_time = 0.1
-    company_list_new = []
+    company_list_web = []
 
     # Attempt to scrape company details from the current page
     for attempt in range(max_retries):
@@ -3898,7 +3905,7 @@ def get_companies_from_b3_cards(driver, wait):
 
             # Create and append dictionaries with the company details
             for i in range(len(company_names)):
-                company_list_new.append({
+                company_list_web.append({
                     'COMPANHIA': clean_text(company_names[i]),
                     'PREGAO': trading_names[i],
                     'TICK': trading_codes[i],
@@ -3909,11 +3916,11 @@ def get_companies_from_b3_cards(driver, wait):
             print('th' + 'i' * (attempt + 1) + 'nking...')
             time.sleep(sleep_time)
 
-    return company_list_new
+    return company_list_web
 
 def get_b3_companies_from_site(driver, wait, url):
     # Initialize the list to store new companies' details
-    company_list_new = []
+    company_list_web = []
     max_retries = 5
     sleep_time = 0.1
     driver.get(url)
@@ -3930,7 +3937,7 @@ def get_b3_companies_from_site(driver, wait, url):
                 # Calculate the total number of pages required to display all companies
                 total_companies_element = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="divContainerIframeB3"]/form/div[1]/div/div/div[1]/p/span[1]')))
                 total_companies = int(total_companies_element.text.replace('.', '').strip())
-                total_pages = (total_companies // companies_per_page) + (1 if total_companies % companies_per_page > 0 else 0)
+                total_pages = (total_companies // companies_per_page) + (1 if total_companies% companies_per_page > 0 else 0)
                 break
             except Exception as e:
                 print('th' + 'i' * (attempt + 1) + 'nking...')
@@ -3946,7 +3953,7 @@ def get_b3_companies_from_site(driver, wait, url):
                 try:
                     # Use the get_companies() function to extract the details
                     companies_in_page = get_companies_from_b3_cards(driver, wait)
-                    company_list_new.extend(companies_in_page)
+                    company_list_web.extend(companies_in_page)
                     break
                 except Exception as e:
                     print('th' + 'i' * (attempt + 1) + 'nking...')
@@ -3960,31 +3967,123 @@ def get_b3_companies_from_site(driver, wait, url):
     except Exception as e:
         pass
 
-    return company_list_new
+    return company_list_web
 
-def check_for_new_companies_in_b3():
+def update_b3_companies(driver, wait, url):
+    """
+    Update missing companies from the provided dataframe by searching the web using the provided driver and wait object.
+
+    Args:
+    - value: Any, initial value
+    - driver: WebDriver, instance of the web driver
+    - wait: Any, instance of the wait object
+
+    Returns:
+    - str: status message
+    """
+    b3_companies_from_file = read_or_create_dataframe('b3_companies', b3.cols_b3_companies)
+
+    try:
+        # Get the total number of companies and pages
+        driver.get(b3.search_url)
+        batch = wSelect(f'//*[@id="selectPage"]', driver, wait)
+        companies = wText(f'//*[@id="divContainerIframeB3"]/form/div[1]/div/div/div[1]/p/span[1]', wait)
+        companies = int(companies.replace('.',''))
+        pages = int(companies/batch)
+
+        value = f'found {companies} companies in {pages+1} pages'
+        print(value)
+
+        # Get all available companies directly from the web
+        # driver.get(search_url)
+        # time.sleep(1)
+        wSelect(f'//*[@id="selectPage"]', driver, wait)
+        raw_code = []
+        start_time = time.time()
+        for i, page in enumerate(range(0, pages+1)):
+            xpath = '//*[@id="nav-bloco"]/div'
+            inner_html = wRaw(xpath, wait)
+            raw_code.append(inner_html)
+            wClick(f'//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a', wait)
+            time.sleep(0.5)
+            value = f'page {page+1}'
+            print(remaining_time(start_time, pages+1, i), value)
+        b3_companies_from_web = get_ticker_keywords(raw_code)
+
+        # Update the missing companies from the database
+        b3_companies_keywords = []
+        # Create a list of all current companies in the b3_companies dataframe
+        for index, row in b3_companies_from_file.iterrows():
+            try:
+                b3_companies_keywords.append(' '.join([str(row['ticker']), str(row['company_name'])]))
+            except Exception as e:
+                print(row)
+                pass
+
+        counter = 0
+        size = len(b3_companies_from_web)
+
+        # Loop through each company in the b3_companies_from_web dataframe
+        start_time = time.time()
+        for i, (index, row) in enumerate(b3_companies_from_web.iterrows()):
+            counter +=1
+            new_keyword = str(row['ticker']) + ' ' + str(row['company_name'])
+            if new_keyword not in b3_companies_keywords:
+                driver.get(b3.url)
+
+                kw = wSendKeys(f'//*[@id="keyword"]', new_keyword, wait)
+                kw = wClick(f'//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button', wait)
+
+                company = get_company(1, driver, wait)
+                b3_companies_from_file = pd.concat([b3_companies_from_file, pd.DataFrame([company], columns=b3.cols_b3_companies)])
+            else:
+                pass
+            print(remaining_time(start_time, len(b3_companies_from_web), i), counter, size-counter, new_keyword)
+            if (len(b3_companies_from_web) - i - 1) % b3.bin_size == 0:
+                b3_companies_from_file = save_and_pickle(b3_companies_from_file, 'b3_companies')
+                print('partial save')
+        b3_companies_from_file.fillna('', inplace=True)
+        b3_companies_from_file.reset_index(drop=True, inplace=True)
+        b3_companies_from_file.drop_duplicates(inplace=True)
+        
+        b3_companies_from_file = save_and_pickle(b3_companies_from_file, 'b3_companies')
+        # b3_companies.to_pickle(data_path + f'{df_name}.zip')
+
+        # Close the driver and exit the script
+        driver.close()
+        driver.quit()
+
+        value = f'{len(b3_companies_from_file)} companies updated'
+        print(value)
+
+    except Exception as e:
+        pass
+    return b3_companies_from_file
+  
+
+def get_new_companies_from_b3(driver, wait, url):
     cols = ['COMPANHIA', 'PREGAO', 'TICK', 'LISTAGEM']
 
-    # company_list_new = get_b3_companies_from_site(driver, wait, url)
-    print('debug 1')
-    company_list_new = []
+    # print('debug 1')
+    print('GET COMPANIES THE NEW WAY!!!!')
+    company_list_web = update_b3_companies(driver, wait, url) # new way
+    # company_list_web = get_b3_companies_from_site(driver, wait, url)
 
     # Load the current company list from the local database
     try:
-        company_list_now = load_pkl(f'{b3.app_folder}/company_list')
+        # company_list_file = load_pkl(f'{b3.app_folder}/company_list')
+        company_list_file = read_or_create_dataframe('company_list', cols)
+
     except Exception as e:
-        company_list_now = pd.DataFrame(columns=cols)
+        company_list_file = pd.DataFrame(columns=cols)
 
     # Merge the newly scraped companies with the current list and remove duplicates
-    company_list_new = pd.DataFrame(company_list_new, columns=cols)
-    company_list = pd.concat([company_list_now, company_list_new], ignore_index=True).drop_duplicates().reset_index(drop=True)
-    company_list = save_pkl(company_list, f'{b3.app_folder}/company_list')
-
+    # company_list_web = pd.DataFrame(company_list_web, columns=cols)
+    company_list = pd.concat([company_list_file, company_list_web], ignore_index=True).drop_duplicates().reset_index(drop=True)
+    # company_list = save_pkl(company_list, f'{b3.app_folder}/company_list')
+    company_list = save_and_pickle(company_list, 'company_list')
     # Load the detailed company data from the local database
-    try:
-        company = load_pkl(f'{b3.app_folder}/company')
-    except Exception as e:
-        company = pd.DataFrame(columns=cols)
+    company = read_or_create_dataframe('company', cols)
 
     # Determine which companies are new and need their detailed data scraped
     new_companies = company_list[~company_list['COMPANHIA'].apply(clean_text).isin(company['COMPANHIA'])]
@@ -4130,7 +4229,7 @@ def b3_grab(url):
     driver, wait = load_browser()
     # time.sleep(1)
 
-    new_companies, company = check_for_new_companies_in_b3()
+    new_companies, company = get_new_companies_from_b3(driver, wait, url)
 
     # If there are no new companies, return the current company details
     if len(new_companies) == 0:
@@ -4169,7 +4268,7 @@ def b3_grab(url):
             # time.sleep(1)
 
             # Save the current progress intermittently
-            if (len(new_companies) - i - 1) % 50 == 0:
+            if (len(new_companies) - i - 1)% b3.bin_size == 0:
                 company = save_pkl(company, f'{b3.app_folder}/company')
                 print('Partial save completed')
 
@@ -5155,7 +5254,7 @@ def compose_fund(intelacoes):
                 sheet = pd.concat([sheet, rows]).ffill().drop_duplicates()
                 df_list.append(sheet)
 
-                if j % 100 == 0:
+                if j% (b3.bin_size * 2) == 0:
                     print(setor, company, remaining_time(start_time_2, len(sheets), j))
 
             # Concatenate all dataframes in the list
@@ -5202,11 +5301,11 @@ def load_database():
         fund (dict): The final loaded or generated database.
     """
     # Step 1: Load or prepare 'acoes'
-    try:
-        acoes = load_pkl(f'{b3.app_folder}/acoes')
-    except Exception:
-        acoes = get_composicao_acionaria()
-        acoes = save_pkl(acoes, f'{b3.app_folder}/acoes')
+    filename = 'acoes'
+    columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
+    acoes = read_or_create_dataframe(filename, columns)
+    print('fast debug acoes')
+    # acoes = get_composicao_acionaria()
 
     # Step 2: Load or prepare 'fund'
     try:

@@ -26,8 +26,11 @@ chunksize = 10**6  # Adjust this value based on your available memory
 app_folder = 'datasets'
 company_folder = 'company'
 
+listagem_siglas = ['NM', 'N1', 'N2', 'MA', 'M2', 'MB', 'DR1', 'DR2', 'DR3', 'DRE', 'DRN']
+listagem_extenso = ['Novo Mercado', 'Nível 1 de Governança Corporativa', 'Nível 2 de Governança Corporativa', 'Bovespa Mais', 'Bovespa Mais Nível 2', 'Organização Tradicional OTC', 'BDR Nível 1', 'BDR Nível 2', 'BDR Nível 3', 'BDR ETF', 'BDR Não Patrocinado']
+
 cols_b3_companies = ['pregao', 'company_name', 'cvm', 'listagem', 'ticker', 'tickers', 'asin', 'cnpj', 'site', 'setor', 'subsetor', 'segmento', 'atividade', 'escriturador', 'url']
-cols_b3_tickers = ['ticker', 'company_name']
+cols_b3_companies_from_web = ['ticker', 'company_name']
 cols_world_markets = ['symbol', 'shortName', 'longName', 'exchange', 'market', 'quoteType']
 cols_yahoo = {'symbol': 'str', 'shortName': 'str', 'longName': 'str', 'exchange': 'category', 'market': 'category', 'quoteType': 'category', 'ticker': 'str', 'exchange_y': 'category', 'tick_y': 'str', 'tick': 'str'}
 cols_info = ['symbol', 'shortName', 'longName', 'longBusinessSummary', 'exchange', 'quoteType', 'market', 'sector', 'industry', 'website', 'logo_url', 'country', 'state', 'city', 'address1', 'phone', 'returnOnEquity', 'beta3Year', 'beta', 'recommendationKey', 'recommendationMean']
@@ -52,7 +55,7 @@ columns = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'V
 columns = ['Companhia', 'Trimestre', 'Demonstrativo', 'Conta', 'Descrição', 'Valor', 'Url', 'nsd']
 
 # variables 2
-driver_wait_time = 5
+driver_wait_time = 2 # 5
 driver = wait = None
 def set_driver_and_wait(new_driver, new_wait):
     global driver, wait
@@ -70,6 +73,10 @@ data_path = run.check_or_create_folder(data_path)
 json_key_file = 'credentials\storage admin.json'
 bucket_name = 'b3_bovespa_bucket'
 
+# nsd
+safety_factor = 1.8
+max_gap = 50
+
 # dre_cvm variables
 base_cvm = "https://dados.cvm.gov.br/dados/CIA_ABERTA/"
 xpath_cvm = '/html/body/div[1]/pre'
@@ -81,7 +88,6 @@ start_year = 2010
 session = run.requests.Session() # Inicializar uma sessão
 filelist = [] # Lista para armazenar links de arquivos CSV e ZIP
 visited_subfolders = set() # Conjunto para armazenar subpastas já visitadas
-
 
 # system stages
 def update_b3_companies(value: str) -> str:
@@ -111,23 +117,24 @@ def update_b3_companies(value: str) -> str:
         print(value)
 
         # Get all available companies directly from the web
-        driver.get(search_url)
-        time.sleep(1)
+        # driver.get(search_url)
+        # time.sleep(1)
         run.wSelect(f'//*[@id="selectPage"]', driver, wait)
         raw_code = []
-        for page in range(0, pages+1):
+        start_time = time.time()
+        for i, page in enumerate(range(0, pages+1)):
             xpath = '//*[@id="nav-bloco"]/div'
             inner_html = run.wRaw(xpath, wait)
             raw_code.append(inner_html)
             run.wClick(f'//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a', wait)
             time.sleep(0.5)
             value = f'page {page+1}'
-            print(value)
-        b3_tickers = run.get_ticker_keywords(raw_code)
+            print(run.remaining_time(start_time, pages+1, i), value)
+        b3_companies_from_web = run.get_ticker_keywords(raw_code)
 
         # Update the missing companies from the database
-        df_name = 'b3_companies'
-        b3_companies = run.read_or_create_dataframe(df_name, cols_b3_companies)
+        # df_name = 'b3_companies'
+        b3_companies = run.read_or_create_dataframe('b3_companies', cols_b3_companies)
         b3_keywords = []
 
         # Create a list of all current companies in the b3_companies dataframe
@@ -139,29 +146,32 @@ def update_b3_companies(value: str) -> str:
                 pass
 
         counter = 0
-        size = len(b3_tickers)
+        size = len(b3_companies_from_web)
 
-        # Loop through each company in the b3_tickers dataframe
+        # Loop through each company in the b3_companies_from_web dataframe
         start_time = time.time()
-        for i, (index, row) in enumerate(b3_tickers.iterrows()):
+        for i, (index, row) in enumerate(b3_companies_from_web.iterrows()):
             counter +=1
             keyword = str(row['ticker']) + ' ' + str(row['company_name'])
             if keyword not in b3_keywords:
                 driver.get(url)
 
-                keyword = run.wSendKeys(f'//*[@id="keyword"]', keyword, wait)
-                keyword = run.wClick(f'//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button', wait)
+                kw = run.wSendKeys(f'//*[@id="keyword"]', keyword, wait)
+                kw = run.wClick(f'//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button', wait)
 
                 company = run.get_company(1, driver, wait)
                 b3_companies = pd.concat([b3_companies, pd.DataFrame([company], columns=cols_b3_companies)])
             else:
                 pass
-            print(run.remaining_time(start_time, len(b3_keywords), i), counter, size-counter, keyword)
+            print(run.remaining_time(start_time, len(b3_companies_from_web), i), counter, size-counter, keyword)
+            if (len(b3_companies_from_web) - i - 1) % bin_size == 0:
+                b3_companies = run.save_and_pickle(b3_companies, 'b3_companies')
+                print('partial save')
         b3_companies.fillna('', inplace=True)
         b3_companies.reset_index(drop=True, inplace=True)
         b3_companies.drop_duplicates(inplace=True)
         
-        b3_companies = run.save_and_pickle(b3_companies, df_name)
+        b3_companies = run.save_and_pickle(b3_companies, 'b3_companies')
         # b3_companies.to_pickle(data_path + f'{df_name}.zip')
 
         # Close the driver and exit the script
@@ -170,8 +180,6 @@ def update_b3_companies(value: str) -> str:
 
         value = f'{len(b3_companies)} companies updated'
         print(value)
-
-
 
     except Exception as e:
         value = str(e) + value
@@ -313,8 +321,6 @@ def yahoo_cotahist(value):
     return value
 
 def get_nsd_links(value):
-    nsd = run.get_nsd_content()
-
     acoes = run.get_composicao_acionaria()
 
     return value
