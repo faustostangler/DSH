@@ -197,6 +197,8 @@ def clean_text(text):
             print(text, 'is not convertible')
         # Remove accents, punctuation, and convert to uppercase
         text = unidecode.unidecode(text).translate(str.maketrans('', '', string.punctuation)).upper().strip()
+        # Replace multiple spaces with a single space
+        text = re.sub(r'\s+', ' ', text)
     except Exception as e:
         print(e)
     return text
@@ -3891,7 +3893,7 @@ def get_companies_from_b3_cards(driver, wait):
     """
     max_retries = 5
     sleep_time = 0.1
-    company_list_web = []
+    company_list_from_web = []
 
     # Attempt to scrape company details from the current page
     for attempt in range(max_retries):
@@ -3905,7 +3907,7 @@ def get_companies_from_b3_cards(driver, wait):
 
             # Create and append dictionaries with the company details
             for i in range(len(company_names)):
-                company_list_web.append({
+                company_list_from_web.append({
                     'COMPANHIA': clean_text(company_names[i]),
                     'PREGAO': trading_names[i],
                     'TICK': trading_codes[i],
@@ -3916,11 +3918,11 @@ def get_companies_from_b3_cards(driver, wait):
             print('th' + 'i' * (attempt + 1) + 'nking...')
             time.sleep(sleep_time)
 
-    return company_list_web
+    return company_list_from_web
 
 def get_b3_companies_from_site(driver, wait, url):
     # Initialize the list to store new companies' details
-    company_list_web = []
+    company_list_from_web = []
     max_retries = 5
     sleep_time = 0.1
     driver.get(url)
@@ -3953,7 +3955,7 @@ def get_b3_companies_from_site(driver, wait, url):
                 try:
                     # Use the get_companies() function to extract the details
                     companies_in_page = get_companies_from_b3_cards(driver, wait)
-                    company_list_web.extend(companies_in_page)
+                    company_list_from_web.extend(companies_in_page)
                     break
                 except Exception as e:
                     print('th' + 'i' * (attempt + 1) + 'nking...')
@@ -3967,9 +3969,9 @@ def get_b3_companies_from_site(driver, wait, url):
     except Exception as e:
         pass
 
-    return company_list_web
+    return company_list_from_web
 
-def update_b3_companies(driver, wait, url):
+def b3_grab_from_web(driver, wait, url):
     """
     Update missing companies from the provided dataframe by searching the web using the provided driver and wait object.
 
@@ -4008,27 +4010,27 @@ def update_b3_companies(driver, wait, url):
             time.sleep(0.5)
             value = f'page {page+1}'
             print(remaining_time(start_time, pages+1, i), value)
-        b3_companies_from_web = get_ticker_keywords(raw_code)
+        b3_companies_tickers = get_ticker_keywords(raw_code)
 
         # Update the missing companies from the database
-        b3_companies_keywords = []
+        b3_companies_from_file_keywords = []
         # Create a list of all current companies in the b3_companies dataframe
         for index, row in b3_companies_from_file.iterrows():
             try:
-                b3_companies_keywords.append(' '.join([str(row['ticker']), str(row['company_name'])]))
+                b3_companies_from_file_keywords.append(' '.join([str(row['ticker']), str(row['company_name'])]))
             except Exception as e:
                 print(row)
                 pass
 
         counter = 0
-        size = len(b3_companies_from_web)
+        size = len(b3_companies_tickers)
 
-        # Loop through each company in the b3_companies_from_web dataframe
+        # Loop through each company in the b3_companies_tickers dataframe
         start_time = time.time()
-        for i, (index, row) in enumerate(b3_companies_from_web.iterrows()):
+        for i, (index, row) in enumerate(b3_companies_tickers.iterrows()):
             counter +=1
             new_keyword = str(row['ticker']) + ' ' + str(row['company_name'])
-            if new_keyword not in b3_companies_keywords:
+            if new_keyword not in b3_companies_from_file_keywords:
                 driver.get(b3.url)
 
                 kw = wSendKeys(f'//*[@id="keyword"]', new_keyword, wait)
@@ -4038,13 +4040,13 @@ def update_b3_companies(driver, wait, url):
                 b3_companies_from_file = pd.concat([b3_companies_from_file, pd.DataFrame([company], columns=b3.cols_b3_companies)])
             else:
                 pass
-            print(remaining_time(start_time, len(b3_companies_from_web), i), counter, size-counter, new_keyword)
-            if (len(b3_companies_from_web) - i - 1) % b3.bin_size == 0:
+            print(remaining_time(start_time, len(b3_companies_tickers), i), counter, size-counter, new_keyword)
+            if (len(b3_companies_tickers) - i - 1) % b3.bin_size == 0:
                 b3_companies_from_file = save_and_pickle(b3_companies_from_file, 'b3_companies')
                 print('partial save')
         b3_companies_from_file.fillna('', inplace=True)
         b3_companies_from_file.reset_index(drop=True, inplace=True)
-        b3_companies_from_file.drop_duplicates(inplace=True)
+        b3_companies_from_file.drop_duplicates(subset='url', inplace=True)
         
         b3_companies_from_file = save_and_pickle(b3_companies_from_file, 'b3_companies')
         # b3_companies.to_pickle(data_path + f'{df_name}.zip')
@@ -4059,56 +4061,31 @@ def update_b3_companies(driver, wait, url):
     except Exception as e:
         pass
     return b3_companies_from_file
-  
 
 def get_new_companies_from_b3(driver, wait, url):
     cols = ['COMPANHIA', 'PREGAO', 'TICK', 'LISTAGEM']
 
     # print('debug 1')
-    print('GET COMPANIES THE NEW WAY!!!!')
-    company_list_web = update_b3_companies(driver, wait, url) # new way
-    # company_list_web = get_b3_companies_from_site(driver, wait, url)
+    company_list_from_web = b3_grab_from_web(driver, wait, url) # new way
 
-    # Load the current company list from the local database
-    try:
-        # company_list_file = load_pkl(f'{b3.app_folder}/company_list')
-        company_list_file = read_or_create_dataframe('company_list', cols)
+    return company_list_from_web
 
-    except Exception as e:
-        company_list_file = pd.DataFrame(columns=cols)
-
-    # Merge the newly scraped companies with the current list and remove duplicates
-    # company_list_web = pd.DataFrame(company_list_web, columns=cols)
-    company_list = pd.concat([company_list_file, company_list_web], ignore_index=True).drop_duplicates().reset_index(drop=True)
-    # company_list = save_pkl(company_list, f'{b3.app_folder}/company_list')
-    company_list = save_and_pickle(company_list, 'company_list')
-    # Load the detailed company data from the local database
-    company = read_or_create_dataframe('company', cols)
-
-    # Determine which companies are new and need their detailed data scraped
-    new_companies = company_list[~company_list['COMPANHIA'].apply(clean_text).isin(company['COMPANHIA'])]
-
-    return new_companies, company
-
-def get_full_company_info(row, size, i, start_time, driver, wait):
+def get_full_company_info(row, driver, wait):
     # Define columns and constants
     max_retries = 5
     sleep_time = 0.1
 
     full_company_info = {}
 
-    full_company_info['company_name'] = clean_text(row['COMPANHIA'])
-    full_company_info['trading_name'] = row['PREGAO']
-    full_company_info['trading_code'] = row['TICK']
-    full_company_info['listagem_values'] = row['LISTAGEM']
+    full_company_info['ticker'] = row['ticker']
+    full_company_info['company_name'] = clean_text(row['company_name'])
 
     # 1 Searching for the company using its name
     for attempt in range(max_retries):
         try:
-            print(remaining_time(start_time, size, i), full_company_info['trading_name'])
             search_box = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="keyword"]')))
             search_box.clear()
-            search_box.send_keys(full_company_info['company_name'])
+            search_box.send_keys(full_company_info['ticker'])
 
             search_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button')))
             search_button.click()
@@ -4120,21 +4097,27 @@ def get_full_company_info(row, size, i, start_time, driver, wait):
     # 2 Selecting the company's card from the results
     for attempt in range(max_retries):
         try:
-            company_card_xpath = '//*[@id="nav-tabContent"]//div[contains(@class, "card h-100 clickable")]'
-            company_card = wait.until(EC.element_to_be_clickable((By.XPATH, company_card_xpath)))
-            company_card.click()
-            break
-        except Exception:
-            try:
-                # Try a more specific XPATH if specific one fails
-                company_card_xpath = f'''//*[@id="nav-bloco"]//div[contains(@class, "card h-100 clickable") and .//p[1][text()="{row['COMPANHIA']}"] and .//p[2][text()="{row['PREGAO']}"] and .//h5[text()="{row['TICK']}"]]'''
-                company_card = wait.until(EC.element_to_be_clickable((By.XPATH, company_card_xpath)))
-                company_card.click()
-                break
-            except Exception as e:
-                print('o' * (attempt + 1) + 'ps..')
-                time.sleep(sleep_time)
+            # Wait for the cards container to be present
+            cards_container = wait.until(EC.presence_of_element_located((By.ID, "nav-bloco")))
 
+            # Find all the cards within the container
+            cards = cards_container.find_elements(By.XPATH, ".//div[contains(@class, 'card h-100 clickable')]")
+
+            # Iterate through the cards to find the one that matches the company information
+            for card in cards:
+                ticker = clean_text(card.find_element(By.XPATH, ".//h5[@class='card-title2']").text)
+                company_name = clean_text(card.find_element(By.XPATH, ".//p[@class='card-title']").text)
+
+                # If the card's pregao and company_name match the company information, click the card
+                if ticker == full_company_info['ticker'] and company_name == full_company_info['company_name']:
+                    card.click()  # Click the matching card
+                    break  # Exit the loop after clicking the correct card
+
+        except Exception as e:
+            print('o' * (attempt + 1) + 'ps..')
+            time.sleep(sleep_time)
+
+        break
     # 3 Extracting the CVM code from the company's URL
     for attempt in range(max_retries):
         try:
@@ -4203,6 +4186,38 @@ def get_full_company_info(row, size, i, start_time, driver, wait):
             time.sleep(sleep_time)
     return full_company_info
 
+def get_b3_tickers(driver, wait, url):
+    try:
+        # Get the total number of companies and pages
+        driver.get(url)
+        batch = wSelect(f'//*[@id="selectPage"]', driver, wait)
+        companies = wText(f'//*[@id="divContainerIframeB3"]/form/div[1]/div/div/div[1]/p/span[1]', wait)
+        companies = int(companies.replace('.',''))
+        pages = int(companies/batch)
+
+        value = f'found {companies} companies in {pages+1} pages'
+        print(value)
+
+        # Get all available companies directly from the web
+        # driver.get(search_url)
+        # time.sleep(1)
+        wSelect(f'//*[@id="selectPage"]', driver, wait)
+        raw_code = []
+        start_time = time.time()
+        for i, page in enumerate(range(0, pages+1)):
+            xpath = '//*[@id="nav-bloco"]/div'
+            inner_html = wRaw(xpath, wait)
+            raw_code.append(inner_html)
+            wClick(f'//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a', wait)
+            time.sleep(0.5)
+            value = f'page {page+1}'
+            print(remaining_time(start_time, pages+1, i), value)
+        b3_companies_tickers = get_ticker_keywords(raw_code)
+    except Exception as e:
+        pass
+
+    return b3_companies_tickers
+
 def b3_grab(url):
     """
     Scrape company details from the B3 website and update a local database of companies.
@@ -4229,48 +4244,37 @@ def b3_grab(url):
     driver, wait = load_browser()
     # time.sleep(1)
 
-    new_companies, company = get_new_companies_from_b3(driver, wait, url)
-
-    # If there are no new companies, return the current company details
-    if len(new_companies) == 0:
-        return company
+    # company = b3_grab_from_web(driver, wait, url) # new way
+    companies_from_file = read_or_create_dataframe('b3_companies', b3.cols_b3_companies)
+    companies_from_file = read_or_create_dataframe('company', b3.cols_b3_companies)
 
     # Scrape detailed data for each new company
+    b3_companies_tickers = get_b3_tickers(driver, wait, url)
+
+    # filter out only new companies to update
+    new_companies_tickers = pd.merge(b3_companies_tickers, companies_from_file, on=['company_name', 'ticker'], how='left', indicator=True)
+    new_companies_tickers = new_companies_tickers[new_companies_tickers['_merge'] == 'left_only']
+    new_companies_tickers = new_companies_tickers.fillna('').drop(columns=['_merge']).reset_index(drop=True)
+
     try:
         driver.get(b3.url)
         # time.sleep(1)
 
-        size = len(new_companies)
+        size = len(new_companies_tickers)
         # Iterate through the new companies to extract detailed information
+        new_companies = []
         start_time = time.time()
-        for i, row in new_companies.iterrows():
-            full_company_info = get_full_company_info(row, size, i, start_time, driver, wait)
-
-            # Update the dataframe with the extracted company details
-            company.at[i, 'COMPANHIA'] = full_company_info['company_name']
-            company.at[i, 'PREGAO'] = full_company_info['trading_name']
-            company.at[i, 'TICK'] = full_company_info['trading_code']
-            company.at[i, 'LISTAGEM'] = full_company_info['listagem_values']
-            company.at[i, 'CVM'] = full_company_info['cvm_code']
-            company.at[i, 'TICKERS'] = full_company_info['tickers']
-            company.at[i, 'ISIN'] = full_company_info['isins']
-            company.at[i, 'CNPJ'] = full_company_info['cnpj']
-            company.at[i, 'ATIVIDADE'] = full_company_info['atividade']
-            company.at[i, 'SETOR'] = full_company_info['setor']
-            company.at[i, 'SUBSETOR'] = full_company_info['subsetor']
-            company.at[i, 'SEGMENTO'] = full_company_info['segmento']
-            company.at[i, 'SITE'] = full_company_info['site']
-            company.at[i, 'ESCRITURADOR'] = full_company_info['escriturador']
-            company.at[i, 'ACIONISTAS'] = full_company_info['stock_holders']
+        for i, row in new_companies_tickers.iterrows():
+            new_company = get_full_company_info(row, driver, wait)
+            new_company = pd.DataFrame([new_company], columns=companies_from_file.columns)
+            new_companies.append(new_company)
 
             # Return to the main B3 page to continue with the next company
             driver.get(b3.url)
             # time.sleep(1)
-
-            # Save the current progress intermittently
-            if (len(new_companies) - i - 1)% b3.bin_size == 0:
-                company = save_pkl(company, f'{b3.app_folder}/company')
-                print('Partial save completed')
+            
+            print(remaining_time(start_time, size, i), row['ticker'])
+        new_companies = pd.concat(new_companies)
 
     # Handle any exceptions that might have occurred during scraping
     except Exception as e:
@@ -4280,9 +4284,39 @@ def b3_grab(url):
     finally:
         driver.quit()
 
-    # Save the final scraped data
-    company = save_pkl(company, f'{b3.app_folder}/company')
-    print('Final save completed')
+    try:
+        def find_columns_with_dfs(df):
+            columns_with_dfs = []
+            for column in df.columns:
+                # Check if any cell in this column is a DataFrame
+                if any(isinstance(cell, pd.DataFrame) for cell in df[column]):
+                    columns_with_dfs.append(column)
+            return columns_with_dfs
+
+        # Usage
+        columns_with_dfs = find_columns_with_dfs(new_companies)
+        new_companies[columns_with_dfs] = ''
+        companies_from_file[columns_with_dfs] = ''
+
+        key_columns = ['company_name', 'ticker']
+
+        # Concatenate the DataFrames
+        company = pd.concat([companies_from_file, new_companies])
+
+        # Drop duplicates: keep the first occurrence (which comes from new_companies)
+        company = company.drop_duplicates(subset=key_columns, keep='last')
+
+        # # If you want to sort by 'cvm_code' after the merge (convert to int if necessary)
+        # company['cvm'] = company['cvm'].astype(int)
+        # company = company.sort_values('cvm')
+        # company['cvm'] = company['cvm'].astype(str)
+
+        # Reset the index if needed
+        company = company.reset_index(drop=True).fillna('')
+
+        company = save_and_pickle(company, 'company')
+    except Exception as e:
+        pass
 
     return company
 
@@ -5325,11 +5359,11 @@ def load_database():
                 except Exception:
                     # Further nested step: Load or prepare 'company'
                     try:
-                        company = load_pkl(f'{b3.app_folder}/company')
-                    except Exception:
                         company = b3_grab(b3.search_url)
-                        company = save_pkl(company, f'{b3.app_folder}/company')
-                    
+                        company = save_and_pickle(company, 'company')
+                    except Exception as e:
+                        pass
+
                     # Further nested step: Load or prepare 'math'
                     try:
                         math = load_pkl(f'{b3.app_folder}/math')
