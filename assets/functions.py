@@ -4447,7 +4447,7 @@ def b3_grab(url):
                     extra = pd.DataFrame([], columns=b3_cols)
 
             except Exception as e:
-                pass
+                extra = pd.DataFrame([], columns=b3_cols)
             extra = extra.reset_index(drop=True)
             new_company = pd.merge(new_company[b3.cols_b3_companies], extra[b3.col_b3_companies_extra_columns], left_on='cnpj', right_on='CNPJ', how='outer').fillna('').reset_index(drop=True)
             new_companies.append(new_company)
@@ -5498,8 +5498,6 @@ def load_database():
     # Step 1: Load or prepare 'acoes'
     filename = 'acoes'
     columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
-    acoes = read_or_create_dataframe(filename, columns)
-    # print('fast debug acoes')
     acoes = get_composicao_acionaria()
 
     # Step 2: Load or prepare 'fund'
