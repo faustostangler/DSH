@@ -2528,7 +2528,7 @@ def pdf_download():
       #     "token": token,
       #     "versaoCaptcha": versaoCaptcha, 
       # }
-      # response = requests.post(url, headers=headers, data=json.dumps(data))
+      # response = requests.post(url, headers={'User-Agent': random.choice(b3.USER_AGENTS), 'Referer': random.choice(b3.REFERERS), 'Accept-Language': random.choice(b3.LANGUAGES),}, data=json.dumps(data))
       # # Get the base64-encoded PDF data from the response
       # pdf_data = response.json()['d']
 
@@ -2541,7 +2541,7 @@ def pdf_download():
 
       
       url = f"https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&numSequencia=567876&numVersao=1&numProtocolo={numeroProtocolo}&descTipo=IPE&CodigoInstituicao=1"
-      response = requests.get(url)
+      response = requests.get(url, headers={'User-Agent': random.choice(b3.USER_AGENTS), 'Referer': random.choice(b3.REFERERS), 'Accept-Language': random.choice(b3.LANGUAGES),})
 
       # Save PDF file to Google Cloud Service
       # GCS configuration
@@ -2793,8 +2793,7 @@ def get_filelink_df(base_cvm):
     start_time = time.time()
     # Loop through folder URLs and extract file information
     for i, url in enumerate(folders):
-        print(remaining_time(start_time, len(folders), i))
-        response = requests.get(url)
+        response = requests.get(url, headers={'User-Agent': random.choice(b3.USER_AGENTS), 'Referer': random.choice(b3.REFERERS), 'Accept-Language': random.choice(b3.LANGUAGES),})
         response.raise_for_status()
         tree = html.fromstring(response.content)
         contents = tree.xpath(b3.xpath_cvm) 
@@ -2809,6 +2808,7 @@ def get_filelink_df(base_cvm):
                     date = pd.to_datetime(f'{parts[1]}', format='%d-%b-%Y')
                     fileinfo_df.append([filename, date])
 
+        print(remaining_time(start_time, len(folders), i))
     # Create and filter DataFrame for the current year
     fileinfo_df = pd.DataFrame(fileinfo_df, columns=['filename', 'date'])
 
@@ -2816,84 +2816,91 @@ def get_filelink_df(base_cvm):
 
 def download_database(filelist_df, types=['itr', 'dfp']):
     """
-    Downloads and processes database files based on specified DEMONSTRATIVO values.
+    Downloads and processes CSV files from zipped sources based on specified types.
 
-    This function takes a list of DEMONSTRATIVO values and a DataFrame containing file information.
-    It downloads and processes database files associated with the specified DEMONSTRATIVO values.
-    The downloaded CSV files are extracted, metadata is extracted from filenames, and data is loaded
-    into pandas DataFrames with added metadata columns.
+    It filters files from the provided DataFrame, downloads zipped files, extracts and reads CSV files,
+    enriches them with metadata extracted from filenames, and compiles them into a list of DataFrames.
 
     Args:
-        cvm_news (list): A list of DEMONSTRATIVO values to filter files.
-        filelist_df (pandas.DataFrame): A DataFrame containing file names and dates.
+        filelist_df (pandas.DataFrame): A DataFrame with 'filename' column containing file URLs.
+        types (list): A list of strings representing types of reports to filter and process.
 
     Returns:
-        list: A list of pandas DataFrames containing processed database files.
+        list of pandas.DataFrame: A list containing processed DataFrames for each downloaded CSV.
     """
+    
+    # Convert the 'filename' column into a list for iteration
     filelist = filelist_df['filename'].to_list()
-    total_size = 0  
+    dataframes = []  # Initialize a list to store the processed DataFrames
+
+    # Initialize counters for statistics
+    total_size = 0
     total_size_csv = 0
     total_rows = 0
-    dataframes = []
+
+    # Record the start time for the entire process
     start_time = time.time()
 
-    # Iterate through DEMONSTRATIVO values
-    for i, demonstrativo in enumerate(types):
-        print(remaining_time(start_time, len(types), i))
-        # Retrieve the list of files based on the specified 'DEMONSTRATIVO'
-        download_files = [filelink for filelink in filelist if 'meta' not in filelink and demonstrativo in filelink]
+    # Iterate over the provided DEMONSTRATIVO types
+    for demonstrativo in types:
+        # Filter the list of files for the current 'DEMONSTRATIVO'
+        download_files = [
+            filelink for filelink in filelist if 'meta' not in filelink and demonstrativo in filelink
+        ]
 
-        # Iterate through the list of URLs
+        # Record the start time for downloading this 'DEMONSTRATIVO'
         start_time_2 = time.time()
-        for j, zip_url in enumerate(download_files):
-            print('  ' + remaining_time(start_time_2, len(download_files), j))
-            response = requests.get(zip_url)
 
-            # Check if the download was successful
+        for zip_url in download_files:
+            # Download the file with a random user-agent and referer from the predefined lists
+            response = requests.get(
+                zip_url,
+                headers={
+                    'User-Agent': random.choice(b3.USER_AGENTS),
+                    'Referer': random.choice(b3.REFERERS),
+                    'Accept-Language': random.choice(b3.LANGUAGES),
+                }
+            )
+
+            # Proceed only if the download was successful
             if response.status_code == 200:
-                # Get the size of the downloaded file
-                filesize = len(response.content) / (1024 ** 2)
+                filesize = len(response.content) / (1024 ** 2)  # Size in megabytes
                 total_size += filesize
 
-                # Extract the zip file in memory
+                # Extract the zip file into memory
                 with zipfile.ZipFile(io.BytesIO(response.content)) as zip_ref:
-                    # Iterate through the files in the zip
+                    # Record the start time for processing files within this zip
                     start_time_3 = time.time()
-                    for k, fileinfo in enumerate(zip_ref.infolist()):
-                        print('  ' + '  ' + remaining_time(start_time_3, len(zip_ref.infolist()), k))
-                        # Check if the file is a CSV
+
+                    for fileinfo in zip_ref.infolist():
+                        # Process only CSV files
                         if fileinfo.filename.lower().endswith('.csv'):
-                            # Extract the CSV file
+                            # Extract the CSV file content
                             csv_content = zip_ref.read(fileinfo.filename)
                             csv_filename = os.path.basename(fileinfo.filename)
 
-                            # Extract metadata from the CSV filename
-                            meta_csv = csv_filename.replace('cia_aberta_', '').replace('.csv', '').split('_')
-                            ano = meta_csv[-1]
-                            demonstrativo = meta_csv[0]
-                            meta_csv = meta_csv[1:-1]
-                            if len(meta_csv) > 0:
-                                agrupamento = meta_csv[-1]
-                                meta_csv = meta_csv[:-1]
-                            else:
-                                agrupamento = ''
-                            balance_sheet = '_'.join(meta_csv)
+                            # Parse metadata from the filename
+                            meta_csv = parse_metadata_from_filename(csv_filename)
 
-                            # Read CSV content into a pandas DataFrame
-                            csv_data = pd.read_csv(io.BytesIO(csv_content), encoding='iso-8859-1', sep=';')
+                            # Load the CSV content into a pandas DataFrame
+                            csv_data = pd.read_csv(
+                                io.BytesIO(csv_content),
+                                encoding='iso-8859-1',
+                                sep=';'
+                            )
 
-                            # Add metadata columns to the DataFrame
-                            csv_data.insert(0, 'FILENAME', csv_filename)
-                            csv_data.insert(1, 'DEMONSTRATIVO', demonstrativo)
-                            csv_data.insert(2, 'BALANCE_SHEET', balance_sheet)
-                            csv_data.insert(3, 'ANO', ano)
-                            csv_data.insert(4, 'AGRUPAMENTO', agrupamento)
+                            # Insert metadata columns into the DataFrame
+                            insert_metadata_columns(csv_data, meta_csv)
 
-                            # Append the DataFrame to the list
+                            # Append the DataFrame to our list
                             dataframes.append(csv_data)
                             total_rows += len(csv_data)
 
-    print(f'Total {len(dataframes)} databases found and {total_rows} lines downloaded')
+            # Optional: Function to calculate and display remaining time for this part
+            # print('  ' + remaining_time(start_time_2, len(download_files), download_files.index(zip_url)))
+
+    # Optional: Display total statistics about the process
+    # print(f'Total {len(dataframes)} databases found and {total_rows} lines downloaded')
     return dataframes
 
 def clean_cell(cell):
@@ -2916,10 +2923,12 @@ def clean_cell(cell):
     return cell
 
 def adjust_vl_conta(row):
-    if row['ESCALA_MOEDA'] == 'MIL':
-        row['VL_CONTA'] = row['VL_CONTA'] * 1000
-        row['ESCALA_MOEDA'] = 'UNIDADE'
-
+    try:
+        if row['ESCALA_MOEDA'] == 'MIL':
+            row['VL_CONTA'] = row['VL_CONTA'] * 1000
+            row['ESCALA_MOEDA'] = 'UNIDADE'
+    except Exception as e:
+        pass
     return row
 
 def yearly(df_list):
@@ -2942,7 +2951,6 @@ def yearly(df_list):
     for i, df in enumerate(df_list):
         # Get the year from the 'DT_REFER' column
         year = pd.to_datetime(df['DT_REFER']).dt.year.iloc[0]
-        print(year, remaining_time(start_time, len(df_list), i))
 
         # Check if the year is already a key in the dictionary, if not, create a list for it
         if year not in df_y:
@@ -2951,13 +2959,14 @@ def yearly(df_list):
         # Append the DataFrame to the list for the respective year
         df_y[year].append(df)
 
+        print(year, remaining_time(start_time, len(df_list), i))
     print('... concatenating')
     start_time = time.time()
 
     # Concatenate DataFrames within each year's list
     for i, (year, df_list) in enumerate(df_y.items()):
-        print(year, remaining_time(start_time, len(df_y), i))
         df_y[year] = pd.concat(df_list, ignore_index=True)
+        print(year, remaining_time(start_time, len(df_y), i))
 
     return df_y
 
@@ -2983,7 +2992,7 @@ def clean_dataframe(dict_of_df):
     print('... cleaning database')
     start_time = time.time()
     for i, (year, df) in enumerate(dict_of_df.items()):
-        print(year, remaining_time(start_time, len(dict_of_df), i))
+        print(f'pass {i+1}')
         
         # Remove extra rows based on specific conditions
         try:
@@ -3001,7 +3010,6 @@ def clean_dataframe(dict_of_df):
         #     df = df.drop(columns=['DT_INI_EXERC'])
         # except Exception as e:
         #     pass
-        print('pass 1')
 
         # Clean up text in 'DENOM_CIA' column
         try:
@@ -3036,6 +3044,7 @@ def clean_dataframe(dict_of_df):
         # print('pass 3')
 
         dict_of_df[year] = df
+        print(year, remaining_time(start_time, len(dict_of_df), i))
 
     return dict_of_df
 
@@ -3053,52 +3062,58 @@ def group_by_year(dataframes):
 
     return cvm_new, links
 
+
 def get_filelist(url):
     """
-    Update the cvm_new files based on new data from filelist_df.
+    Retrieves and filters a list of new file entries from a given URL based on their date.
 
-    This function updates the cvm_new files by downloading new data based on filelist_df.
-    It follows several steps to achieve this and also extracts metadata and categories.
+    This function pulls a DataFrame of file links and dates from a specified URL, checks against a local record
+    to determine which files are new since the last update, and returns a filtered list of these new files along
+    with the date of the most recent file in the list.
 
     Args:
-    None
+        url (str): The URL from which to retrieve the file list.
 
     Returns:
-    dict: Updated cvm_new data.
-    dict: Metadata information.
-    list: List of demonstrativos_cvm.
-
+        pandas.DataFrame: DataFrame of new files to be downloaded with their associated dates.
+        str: A string representation of the date of the most recent file in the format 'YYYY-MM-DD'.
     """
     # Retrieve DataFrame containing file links from base_cvm URL
     filelist_df = get_filelink_df(url)
     
-    # Find the maximum date in the filelist_df
+    # Find the maximum date in the filelist_df for reporting the latest file date
     last_update2 = filelist_df['date'].max().strftime('%Y-%m-%d')
 
+    # Attempt to read the last update date from a local file or use a default if not available
     try:
-        # Read last update date from 'last_update.txt' if available, else set to '1970-01-01'
         with open(f'{b3.app_folder}/last_update.txt', 'r') as f:
             last_update = f.read().strip()
-        if not last_update:
-            last_update = '1970-01-01'
-    except Exception as e:
+        last_update = last_update if last_update else '1970-01-01'
+    except FileNotFoundError:
         last_update = '1970-01-01'
 
-    # Filter filelist_df to include only files with dates greater than last_update
-    filelist_df = filelist_df[filelist_df['date'] > (pd.to_datetime(last_update) + pd.DateOffset(days=0))]
+    # Filter filelist_df to include only files with dates greater than the last update
+    filelist_df = filelist_df[filelist_df['date'] > pd.to_datetime(last_update)]
+    
+    # Notify the number of new files identified for download
     print(f'{len(filelist_df)} new files to download')
 
     return filelist_df, last_update2
 
 def create_cvm(base_cvm):
+    # Retrieves and filters a list of new file entries from a given URL based on their date.
     filelist_df, last_update = get_filelist(base_cvm)
+
+    # Downloads and processes CSV files from zipped sources based on specified types.
     dataframes = download_database(filelist_df)
     cvm_new, links = group_by_year(dataframes)
     cvm_new = clean_dataframe(cvm_new)
-    
-    # Save last_update
     if len(cvm_new) > 0:
         cvm_new = save_pkl(cvm_new, f'{b3.app_folder}/cvm_new')
+
+    # debug
+    print('fast cvm debug')
+    cvm_new = load_pkl(f'{b3.app_folder}/cvm_new')
 
     # Get metadata and categories from filelist
     try:
@@ -3112,8 +3127,8 @@ def create_cvm(base_cvm):
     except Exception as e:
         pass
 
+    # Write the maximum date from filtered filelist_df to 'last_update.txt'
     try:
-        # Write the maximum date from filtered filelist_df to 'last_update.txt'
         print('last update', last_update)
         with open(f'{b3.app_folder}/last_update.txt', 'w') as f:
             f.write(last_update)
@@ -3719,7 +3734,7 @@ def get_classificacao_setorial(setorial=''):
     download_link_element = driver.find_element(By.XPATH, '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/div[2]/div[3]/div[2]/p/a')
     url = download_link_element.get_attribute('href')
     time.sleep(3)
-    response = requests.get(url)
+    response = requests.get(url, headers={'User-Agent': random.choice(b3.USER_AGENTS), 'Referer': random.choice(b3.REFERERS), 'Accept-Language': random.choice(b3.LANGUAGES),})
     filename = url.split("/")[-1]
 
     with open(filename, 'wb') as f:
@@ -4411,8 +4426,6 @@ def b3_grab(url):
         if col not in b3_companies_tickers.columns:
             b3_companies_tickers[col] = ''
     b3_companies_tickers = b3_companies_tickers[b3_cols]
-    print('fast save debuf')
-    b3_companies_tickers = save_pkl(b3_companies_tickers, 'b3_companies_tickers')
 
     merged = pd.merge(companies_from_file, b3_companies_tickers, how='outer', on=key_columns, indicator=True)
     update_strict = merged[merged['_merge'] == 'right_only'][key_columns] # only companies new in web
@@ -4439,7 +4452,7 @@ def b3_grab(url):
                 if not new_company.empty:
                     cnpj = new_company['cnpj'][0]
                     url = f'https://cnpj.biz/{cnpj}'
-                    response = requests.get(url, headers={"User-Agent": random.choice(b3.USER_AGENTS)})
+                    response = requests.get(url, headers={'User-Agent': random.choice(b3.USER_AGENTS), 'Referer': random.choice(b3.REFERERS), 'Accept-Language': random.choice(b3.LANGUAGES),})
                     extra = get_cnpj_info(response)
                     extra = pd.DataFrame([extra], columns=b3_cols).fillna('')
                     extra = extra.astype(col_types)
@@ -4477,7 +4490,7 @@ def b3_grab(url):
         company = pd.merge(companies_from_file, company, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
 
     except Exception as e:
-        pass
+        company = companies_from_file
 
     return company
 
@@ -5495,6 +5508,14 @@ def load_database():
     Returns:
         fund (dict): The final loaded or generated database.
     """
+    # debug fase
+    cvm = create_cvm(b3.base_cvm)
+    cvm = save_pkl(cvm, f'{b3.app_folder}/cvm')
+
+    math = get_math()
+
+    
+    
     # Step 1: Load or prepare 'acoes'
     filename = 'acoes'
     columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
