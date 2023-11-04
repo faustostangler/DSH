@@ -4460,7 +4460,7 @@ def b3_grab(url):
                 temp['Capital Social'] = temp['Capital Social'].replace(np.nan, 0.0)
                 temp = pd.merge(companies_from_file, temp, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
                 temp = save_and_pickle(temp, 'company')
-                break
+
     # Handle any exceptions that might have occurred during scraping
     except Exception as e:
         print(f"Error encountered: {str(e)}")
@@ -5499,8 +5499,8 @@ def load_database():
     filename = 'acoes'
     columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
     acoes = read_or_create_dataframe(filename, columns)
-    print('fast debug acoes')
-    # acoes = get_composicao_acionaria()
+    # print('fast debug acoes')
+    acoes = get_composicao_acionaria()
 
     # Step 2: Load or prepare 'fund'
     try:
