@@ -11,6 +11,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.alert import Alert
+from webdriver_manager.chrome import ChromeDriverManager
 
 import unidecode
 import string
@@ -48,6 +49,8 @@ from lxml import html
 
 from tqdm import tqdm
 import shutil
+
+import random
 
 # general functions
 def wText(xpath: str, wait: WebDriverWait) -> str:
@@ -308,6 +311,7 @@ def load_browser(chromedriver_path="D:\\Fausto Stangler\\Documentos\\Python\\DSH
         options.add_argument('start-maximized')  # Maximize the window on startup.
 
         # Initialize the ChromeDriver.
+        # driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
         driver = webdriver.Chrome(executable_path=chromedriver_path, options=options)
         
         # Define the exceptions to ignore during WebDriverWait.
@@ -4085,7 +4089,7 @@ def get_full_company_info(row, driver, wait):
         try:
             search_box = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="keyword"]')))
             search_box.clear()
-            search_box.send_keys(full_company_info['ticker'])
+            search_box.send_keys(f"{full_company_info['ticker']} {full_company_info['company_name']}")
 
             search_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button')))
             search_button.click()
@@ -4116,8 +4120,8 @@ def get_full_company_info(row, driver, wait):
         except Exception as e:
             print('o' * (attempt + 1) + 'ps..')
             time.sleep(sleep_time)
-
         break
+
     # 3 Extracting the CVM code from the company's URL
     for attempt in range(max_retries):
         try:
@@ -4140,9 +4144,9 @@ def get_full_company_info(row, driver, wait):
             full_company_info['companhia'] = ''
             full_company_info['cnpj'] = ''
             full_company_info['atividade'] = ''
-            full_company_info['setor'] = 'Nenhum'
-            full_company_info['subsetor'] = 'Nenhum'
-            full_company_info['segmento'] = 'Nenhum'
+            full_company_info['setor'] = 'NENHUM'
+            full_company_info['subsetor'] = 'NENHUM'
+            full_company_info['segmento'] = 'NENHUM'
             full_company_info['site'] = ''
             full_company_info['escriturador'] = ''
             full_company_info['stock_holders'] = ''
@@ -4174,16 +4178,18 @@ def get_full_company_info(row, driver, wait):
             tables = pd.read_html(table_html)
             stock_holders = tables[0].copy().iloc[:-1, :]
             stock_holders.iloc[:, 1:] = stock_holders.iloc[:, 1:] / 100
-            stock_holders['companhia0'] = full_company_info['company_name']
+            stock_holders['companhia'] = full_company_info['company_name']
+            stock_holders['cnpj'] = full_company_info['cnpj']
             stock_holders['setor'] = full_company_info['setor']
             stock_holders['subsetor'] = full_company_info['subsetor']
             stock_holders['segmento'] = full_company_info['segmento']
-            full_company_info['stock_holders'] = stock_holders
+            full_company_info['stock_holders'] = stock_holders.to_dict(orient='records')
             break
         except Exception:
             stock_holders = pd.DataFrame()
-            full_company_info[''] = stock_holders
+            full_company_info[''] = stock_holders.to_dict(orient='records')
             time.sleep(sleep_time)
+            break
     return full_company_info
 
 def get_b3_tickers(driver, wait, url):
@@ -4218,6 +4224,153 @@ def get_b3_tickers(driver, wait, url):
 
     return b3_companies_tickers
 
+def get_cnpj_info(response):
+    # Parse the HTML snippet
+    tree = html.fromstring(response.text)
+    
+    # Dictionary to store the extracted information
+    info = {
+        "CNPJ": "",
+        "Razão Social": "",
+        "Nome Fantasia": "",
+        "Data da Abertura": "",
+        "Porte": "",
+        "Natureza Jurídica": "",
+        "Opção pelo MEI": "",
+        "Opção pelo Simples": "",
+        "Capital Social": "",
+        "Tipo": "",
+        "Situação": "",
+        "Logradouro": "",
+        "Bairro": "",
+        "CEP": "",
+        "Município": "",
+        "Estado": ""
+    }
+    
+    # Extract information from <p> elements
+    p_elements = tree.xpath('//p')
+    for p in p_elements:
+        text_content = p.text_content()
+        
+        # Example to extract "CNPJ"
+        if 'CNPJ:' in text_content:
+            cnpj = re.search(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', text_content)
+            if cnpj:
+                info['CNPJ'] = cnpj.group(0)
+        
+        # Similarly, you can add conditions to extract other pieces of information
+        # Example to extract "Razão Social"
+        if 'Razão Social:' in text_content:
+            razao_social = p.xpath('.//b[@class="copy"]/text()')
+            if razao_social:
+                info['Razão Social'] = clean_text(razao_social[0])
+        
+        if 'Nome Fantasia:' in text_content:
+            nome_fantasia = p.xpath('.//b[@class="copy"]/text()')
+            if nome_fantasia:
+                info['Nome Fantasia'] = clean_text(nome_fantasia[0])
+        
+        # Extract "Data da Abertura"
+        if 'Data da Abertura:' in text_content:
+            data_abertura = re.search(r'\d{2}/\d{2}/\d{4}', text_content)
+            if data_abertura:
+                info['Data da Abertura'] = data_abertura.group(0)
+        
+        # Extract "Porte"
+        if 'Porte:' in text_content:
+            porte = text_content.split(':')[-1].strip()
+            info['Porte'] = porte
+        
+        # Extract "Natureza Jurídica"
+        if 'Natureza Jurídica:' in text_content:
+            natureza_juridica = p.xpath('.//b[@class="copy"]/text()')
+            if natureza_juridica:
+                info['Natureza Jurídica'] = natureza_juridica[0]
+        
+        # Extract "Opção pelo MEI"
+        if 'Opção pelo MEI:' in text_content:
+            opcao_mei = text_content.split(':')[-1].strip()
+            info['Opção pelo MEI'] = opcao_mei
+        
+        # Extract "Opção pelo Simples"
+        if 'Opção pelo Simples:' in text_content:
+            opcao_simples = text_content.split(':')[-1].strip()
+            info['Opção pelo Simples'] = opcao_simples
+        
+        # Extract "Capital Social"
+        if 'Capital Social:' in text_content:
+            capital_social_str = p.xpath('.//b[@class="copy"]/text()')
+            if capital_social_str:
+                # Extract numbers, ignore R$ and commas, replace decimal separator
+                capital_social_num = re.sub(r'[^\d,]', '', capital_social_str[0]).replace(',', '.')
+                info['Capital Social'] = float(capital_social_num)
+    
+            # Extract "Tipo"
+        if 'Tipo:' in text_content:
+            tipo = p.xpath('.//b[@class="copy"]/text()')
+            if tipo:
+                info['Tipo'] = tipo[0]
+        
+        # Extract "Situação"
+        if 'Situação:' in text_content:
+            situacao = p.xpath('.//b[@class="copy"]/text()')
+            if situacao:
+                info['Situação'] = situacao[0]
+
+        # Extract "Logradouro"
+        if 'Logradouro:' in text_content:
+            logradouro = p.xpath('.//b[@class="copy"]/text()')
+            if logradouro:
+                info['Logradouro'] = logradouro[0]
+
+        # Extract "Bairro"
+        if 'Bairro:' in text_content:
+            bairro = p.xpath('.//b[@class="copy"]/text()')
+            if bairro:
+                info['Bairro'] = bairro[0]
+
+        # Extract "CEP"
+        if 'CEP:' in text_content:
+            cep = re.search(r'\d{5}-\d{3}', text_content)
+            if cep:
+                info['CEP'] = cep.group(0)
+        
+        # Extract "Município"
+        if 'Município:' in text_content:
+            municipio = text_content.split(':')[-1].strip()
+            info['Município'] = municipio
+        
+        # Extract "Estado"
+        if 'Estado:' in text_content:
+            estado = text_content.split(':')[-1].strip()
+            info['Estado'] = estado
+
+    # Return the extracted information
+    return info
+
+def change_col_type(df, str_cols, float_cols):
+    """
+    Modifica os tipos de colunas de um dataframe.
+
+    Parâmetros:
+    df (pandas.DataFrame): O dataframe para modificar.
+    str_cols (list): Lista de nomes de colunas para converter para string.
+    float_cols (list): Lista de nomes de colunas para converter para float.
+
+    Retorna:
+    pandas.DataFrame: O dataframe com os tipos de colunas alterados.
+    """
+    # Convertendo as colunas para float se estiverem presentes no dataframe
+    float_cols_present = [col for col in float_cols if col in df.columns]
+    df[float_cols_present] = df[float_cols_present].apply(lambda col: col.astype(float))
+
+    # Convertendo as colunas para str se estiverem presentes no dataframe
+    str_cols_present = [col for col in str_cols if col in df.columns]
+    df[str_cols_present] = df[str_cols_present].apply(lambda col: col.astype(str))
+
+    return df
+
 def b3_grab(url):
     """
     Scrape company details from the B3 website and update a local database of companies.
@@ -4239,43 +4392,75 @@ def b3_grab(url):
     # Define columns and constants
     max_retries = 5
     sleep_time = 0.1
+    key_columns = ['company_name', 'ticker']
+    b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
+    b3_cols_float = ['Capital Social']
+    b3_str_cols = [col for col in b3_cols if col not in  b3_cols_float]
+    col_types = {col: 'float' if col in b3_cols_float else 'str' for col in b3_cols}
 
     # Initialize the browser and load the URL
     driver, wait = load_browser()
     # time.sleep(1)
 
     # company = b3_grab_from_web(driver, wait, url) # new way
-    companies_from_file = read_or_create_dataframe('b3_companies', b3.cols_b3_companies)
-    companies_from_file = read_or_create_dataframe('company', b3.cols_b3_companies)
+    companies_from_file = read_or_create_dataframe('company', b3_cols).fillna('')
 
     # Scrape detailed data for each new company
     b3_companies_tickers = get_b3_tickers(driver, wait, url)
+    for col in b3_cols:
+        if col not in b3_companies_tickers.columns:
+            b3_companies_tickers[col] = ''
+    b3_companies_tickers = b3_companies_tickers[b3_cols]
+    print('fast save debuf')
+    b3_companies_tickers = save_pkl(b3_companies_tickers, 'b3_companies_tickers')
 
-    # filter out only new companies to update
-    new_companies_tickers = pd.merge(b3_companies_tickers, companies_from_file, on=['company_name', 'ticker'], how='left', indicator=True)
-    new_companies_tickers = new_companies_tickers[new_companies_tickers['_merge'] == 'left_only']
-    new_companies_tickers = new_companies_tickers.fillna('').drop(columns=['_merge']).reset_index(drop=True)
+    merged = pd.merge(companies_from_file, b3_companies_tickers, how='outer', on=key_columns, indicator=True)
+    update_strict = merged[merged['_merge'] == 'right_only'][key_columns] # only companies new in web
+    update_broad = merged[merged['_merge'] != 'left_only'][key_columns] # all companies from web
+    updated = update_strict
 
     try:
         driver.get(b3.url)
         # time.sleep(1)
 
-        size = len(new_companies_tickers)
+        size = len(updated)
         # Iterate through the new companies to extract detailed information
         new_companies = []
         start_time = time.time()
-        for i, row in new_companies_tickers.iterrows():
-            new_company = get_full_company_info(row, driver, wait)
-            new_company = pd.DataFrame([new_company], columns=companies_from_file.columns)
-            new_companies.append(new_company)
-
-            # Return to the main B3 page to continue with the next company
+        for i, (index, row) in enumerate(updated.iterrows()):
             driver.get(b3.url)
-            # time.sleep(1)
-            
-            print(remaining_time(start_time, size, i), row['ticker'])
-        new_companies = pd.concat(new_companies)
+            new_company = get_full_company_info(row, driver, wait)
+            new_company = pd.DataFrame([new_company], columns=b3_cols).astype(col_types)
+            new_company['Capital Social'] = new_company['Capital Social'].replace(np.nan, 0.0)
+            new_company = new_company.replace('nan', '')
+            new_company['Capital Social'] = pd.to_numeric(new_company['Capital Social'], errors='coerce').astype('float')
 
+            try:
+                if not new_company.empty:
+                    cnpj = new_company['cnpj'][0]
+                    url = f'https://cnpj.biz/{cnpj}'
+                    response = requests.get(url, headers={"User-Agent": random.choice(b3.USER_AGENTS)})
+                    extra = get_cnpj_info(response)
+                    extra = pd.DataFrame([extra], columns=b3_cols).fillna('')
+                    extra = extra.astype(col_types)
+                else:
+                    extra = pd.DataFrame([], columns=b3_cols)
+
+            except Exception as e:
+                pass
+            extra = extra.reset_index(drop=True)
+            new_company = pd.merge(new_company[b3.cols_b3_companies], extra[b3.col_b3_companies_extra_columns], left_on='cnpj', right_on='CNPJ', how='outer').fillna('').reset_index(drop=True)
+            new_companies.append(new_company)
+            
+            print(remaining_time(start_time, size, i), row['ticker'], row['company_name'])
+
+            if (size-i-1) % (b3.bin_size/10) == 0:
+                temp = pd.concat(new_companies).reset_index(drop=True)
+                temp['Capital Social'] = pd.to_numeric(temp['Capital Social'], errors='coerce').astype('float')
+                temp['Capital Social'] = temp['Capital Social'].replace(np.nan, 0.0)
+                temp = pd.merge(companies_from_file, temp, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
+                temp = save_and_pickle(temp, 'company')
+                break
     # Handle any exceptions that might have occurred during scraping
     except Exception as e:
         print(f"Error encountered: {str(e)}")
@@ -4284,37 +4469,13 @@ def b3_grab(url):
     finally:
         driver.quit()
 
+    # Merge existing and updated companies back again
     try:
-        def find_columns_with_dfs(df):
-            columns_with_dfs = []
-            for column in df.columns:
-                # Check if any cell in this column is a DataFrame
-                if any(isinstance(cell, pd.DataFrame) for cell in df[column]):
-                    columns_with_dfs.append(column)
-            return columns_with_dfs
+        company = pd.concat(new_companies).reset_index(drop=True)
+        company['Capital Social'] = pd.to_numeric(company['Capital Social'], errors='coerce').astype('float')
+        company['Capital Social'] = company['Capital Social'].replace(np.nan, 0.0)
+        company = pd.merge(companies_from_file, company, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
 
-        # Usage
-        columns_with_dfs = find_columns_with_dfs(new_companies)
-        new_companies[columns_with_dfs] = ''
-        companies_from_file[columns_with_dfs] = ''
-
-        key_columns = ['company_name', 'ticker']
-
-        # Concatenate the DataFrames
-        company = pd.concat([companies_from_file, new_companies])
-
-        # Drop duplicates: keep the first occurrence (which comes from new_companies)
-        company = company.drop_duplicates(subset=key_columns, keep='last')
-
-        # # If you want to sort by 'cvm_code' after the merge (convert to int if necessary)
-        # company['cvm'] = company['cvm'].astype(int)
-        # company = company.sort_values('cvm')
-        # company['cvm'] = company['cvm'].astype(str)
-
-        # Reset the index if needed
-        company = company.reset_index(drop=True).fillna('')
-
-        company = save_and_pickle(company, 'company')
     except Exception as e:
         pass
 
