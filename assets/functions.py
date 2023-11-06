@@ -250,6 +250,19 @@ def sys_remaining_time(start_time, size, i):
 
   return progress
 
+def sys_header_random():
+    user_agent = random.choice(b3.USER_AGENTS)
+    referer = random.choice(b3.REFERERS)
+    language = random.choice(b3.LANGUAGES)
+
+    headers = {
+        'User-Agent': user_agent,
+        'Referer': referer,
+        'Accept-Language': language
+    }
+
+    return headers
+
 # selenium functions
 def load_browser_old():
     """
@@ -617,7 +630,7 @@ def nsd_nsd_dates(nsd, safety_factor=1.8):
 def sys_get_nsd(nsd):
   nsd_url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={nsd}&CodigoTipoInstituicao=1'
   # Getting the HTML content from the URL
-  response = requests.get(nsd_url)
+  response = requests.get(nsd_url, headers=sys_header_random())
   html_content = response.text
 
   # Parsing the HTML content with BeautifulSoup
@@ -812,6 +825,7 @@ def stk_get_composicao_acionaria():
         filtered_nsd['data'] = pd.to_datetime(filtered_nsd['data'], errors='ignore', dayfirst=True)
         # filtered_nsd = filtered_nsd.sort_values(by=['company', 'data'])
 
+        # left anti-join operation        
         if len(acoes) > 0:
             acoes['Trimestre'] = pd.to_datetime(acoes['Trimestre'], errors='ignore', dayfirst=True)
             # Perform a left merge to find the common rows
@@ -2548,7 +2562,7 @@ def pdf_download():
 
       
       url = f"https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&numSequencia=567876&numVersao=1&numProtocolo={numeroProtocolo}&descTipo=IPE&CodigoInstituicao=1"
-      response = requests.get(url)
+      response = requests.get(url, headers=sys_header_random())
 
       # Save PDF file to Google Cloud Service
       # GCS configuration
@@ -2568,7 +2582,7 @@ def pdf_download():
 
 # dre_cvm
 
-def save_pkl(data, filename):
+def sys_save_pkl(data, filename):
     """Saves data to a pickle file.
 
     Args:
@@ -2587,7 +2601,7 @@ def save_pkl(data, filename):
 
     return data
 
-def load_pkl(filename):
+def sys_load_pkl(filename):
     """Loads data from a pickle file.
 
     Args:
@@ -2620,7 +2634,7 @@ def create_demo_file():
 
         for i, year in enumerate(years):
             print(sys_remaining_time(start_time, len(years), i))
-            dataframe = load_pkl(f'{b3.app_folder}/dataframe_{year}')
+            dataframe = sys_load_pkl(f'{b3.app_folder}/dataframe_{year}')
             cvm_new[year] = dataframe
     except Exception as e:
         # print(e)
@@ -2801,7 +2815,7 @@ def get_filelink_df(base_cvm):
     # Loop through folder URLs and extract file information
     for i, url in enumerate(folders):
         print(sys_remaining_time(start_time, len(folders), i))
-        response = requests.get(url)
+        response = requests.get(url, headers=sys_header_random())
         response.raise_for_status()
         tree = html.fromstring(response.content)
         contents = tree.xpath(b3.xpath_cvm) 
@@ -2854,7 +2868,7 @@ def download_database(filelist_df, types=['itr', 'dfp']):
         start_time_2 = time.time()
         for j, zip_url in enumerate(download_files):
             print('  ' + sys_remaining_time(start_time_2, len(download_files), j))
-            response = requests.get(zip_url)
+            response = requests.get(zip_url, headers=sys_header_random())
 
             # Check if the download was successful
             if response.status_code == 200:
@@ -3103,7 +3117,7 @@ def create_cvm(base_cvm):
     
     # Save last_update
     if len(cvm_new) > 0:
-        cvm_new = save_pkl(cvm_new, f'{b3.app_folder}/cvm_new')
+        cvm_new = sys_save_pkl(cvm_new, f'{b3.app_folder}/cvm_new')
 
     # Get metadata and categories from filelist
     try:
@@ -3411,8 +3425,8 @@ def get_calculated_math(math):
         
         # Store the adjusted dataframe in the result dictionary
         math_new[year] = adjusted_df
-        math_new = save_pkl(math_new, f'{b3.app_folder}/math_now')
-        math_new[year] = save_pkl(math_new[year], f'{b3.app_folder}/math_new_{year}')
+        math_new = sys_save_pkl(math_new, f'{b3.app_folder}/math_now')
+        math_new[year] = sys_save_pkl(math_new[year], f'{b3.app_folder}/math_new_{year}')
     return math_new
 
 def year_to_company(cvm_new):
@@ -3439,7 +3453,7 @@ def year_to_company(cvm_new):
         pass    
         # Concatenate the data for the company across all years
 
-    companies = save_pkl(companies, f'{b3.app_folder}/database')
+    companies = sys_save_pkl(companies, f'{b3.app_folder}/database')
     return companies
 
 def get_diff(df1, df2):
@@ -3592,7 +3606,7 @@ def math_from_cvm(cvm_now):
     df_columns = cvm_now[min(years)].columns
     for year in years:
         try:
-            math_now[year] = load_pkl(f'{b3.app_folder}/math_new_{year}')
+            math_now[year] = sys_load_pkl(f'{b3.app_folder}/math_new_{year}')
         except Exception as e:
             math_now[year] = pd.DataFrame(columns=df_columns)
 
@@ -3654,7 +3668,7 @@ def get_math(math='', cvm_now='', cvm_new='', math_now='', math_new=''):
         # prepare CVM
         if not cvm_now:
             try:
-                cvm_now = load_pkl(f'{b3.app_folder}/cvm_now')
+                cvm_now = sys_load_pkl(f'{b3.app_folder}/cvm_now')
             except Exception as e:
                 cvm_now = {}
         if not cvm_new:
@@ -3663,21 +3677,21 @@ def get_math(math='', cvm_now='', cvm_new='', math_now='', math_new=''):
         # prepare MATH
         # math_now
         try:
-            math_now = load_pkl(f'{b3.app_folder}/math_now')
+            math_now = sys_load_pkl(f'{b3.app_folder}/math_now')
         except Exception as e:
             try:
                 math_now = math_from_cvm(cvm_now)
             except Exception as e:
                 try:
                     math_now = get_calculated_math(cvm_now)
-                    math_now = save_pkl(math_now, f'{b3.app_folder}/math_now')
+                    math_now = sys_save_pkl(math_now, f'{b3.app_folder}/math_now')
                 except Exception as e:
                     math_now = {}
 
         # math_new
         if not math_new:
             try:
-                math_new = load_pkl(f'{b3.app_folder}/math_new')
+                math_new = sys_load_pkl(f'{b3.app_folder}/math_new')
             except Exception as e:
                 cvm_now, math_new = get_math_new_from_cvm(cvm_now, cvm_new)
         math = math_merge(math_now, math_new)
@@ -3688,7 +3702,7 @@ def get_math(math='', cvm_now='', cvm_new='', math_now='', math_new=''):
     return math
 
 def get_math_from_b3_cvm():
-    b3_cvm = load_pkl(f'{b3.app_folder}/b3_cvm')
+    b3_cvm = sys_load_pkl(f'{b3.app_folder}/b3_cvm')
 
     # Initialize a new dictionary to hold the results
     math = {}
@@ -3724,7 +3738,7 @@ def get_classificacao_setorial(setorial=''):
     download_link_element = driver.find_element(By.XPATH, '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/div[2]/div[3]/div[2]/p/a')
     url = download_link_element.get_attribute('href')
     time.sleep(3)
-    response = requests.get(url)
+    response = requests.get(url, headers=sys_header_random())
     filename = url.split("/")[-1]
 
     with open(filename, 'wb') as f:
@@ -3832,11 +3846,11 @@ def get_companies(math, company):
         print(sector)
         b3_cvm[sector] = pd.concat(df_list, ignore_index=True)
 
-    b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
+    b3_cvm = sys_save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
 
     return b3_cvm
 
-def extract_company_info(data, full_company_info):
+def b3_get_company_full_info(data, full_company_info):
     # Name (assuming it's always the first item in the list)
     full_company_info["name"] = data[0].strip()
     data = data[1:]  # Removing the name as it's already processed
@@ -4079,7 +4093,7 @@ def get_new_companies_from_b3(driver, wait, url):
 
     return company_list_from_web
 
-def get_full_company_info(row, driver, wait):
+def b3_get_company_info(row, driver, wait):
     # Define columns and constants
     max_retries = 5
     sleep_time = 0.1
@@ -4136,7 +4150,7 @@ def get_full_company_info(row, driver, wait):
             int(cvm_code)  # Validates if the code is numeric
             full_company_info['cvm_code'] = cvm_code
             break
-        except Exception:
+        except Exception as e:
             full_company_info['url'] = ''
             full_company_info['cvm_code'] = ''
             
@@ -4158,7 +4172,7 @@ def get_full_company_info(row, driver, wait):
 
             elements = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//p[@class="card-linha"]')))
             data = [element.text.strip() for element in elements]
-            full_company_info = extract_company_info(data, full_company_info)
+            full_company_info = b3_get_company_full_info(data, full_company_info)
             break
         except Exception as e:
             print('o' * (attempt + 1) + 'ps..')
@@ -4172,7 +4186,7 @@ def get_full_company_info(row, driver, wait):
             full_company_info['tickers'] = ', '.join(table_df.iloc[:, 0].tolist())
             full_company_info['isins'] = ', '.join(table_df.iloc[:, 1].tolist())
             break
-        except Exception:
+        except Exception as e:
             full_company_info['tickers'], full_company_info['isins'] = None, None
             time.sleep(sleep_time)
 
@@ -4190,7 +4204,7 @@ def get_full_company_info(row, driver, wait):
             stock_holders['segmento'] = full_company_info['segmento']
             full_company_info['stock_holders'] = stock_holders.to_dict(orient='records')
             break
-        except Exception:
+        except Exception as e:
             stock_holders = pd.DataFrame()
             full_company_info[''] = stock_holders.to_dict(orient='records')
             time.sleep(sleep_time)
@@ -4229,7 +4243,7 @@ def get_b3_tickers(driver, wait, url):
 
     return b3_companies_tickers
 
-def get_cnpj_info(response):
+def b3_get_company_extra_cnpj_info(response):
     # Parse the HTML snippet
     tree = html.fromstring(response.text)
     
@@ -4376,7 +4390,7 @@ def change_col_type(df, str_cols, float_cols):
 
     return df
 
-def b3_grab(url):
+def b3_get_companies(url):
     """
     Scrape company details from the B3 website and update a local database of companies.
 
@@ -4410,15 +4424,18 @@ def b3_grab(url):
     # company = b3_grab_from_web(driver, wait, url) # new way
     companies_from_file = sys_read_or_create_dataframe('company', b3_cols).fillna('')
 
-    # Scrape detailed data for each new company
-    b3_companies_tickers = get_b3_tickers(driver, wait, url)
-    for col in b3_cols:
-        if col not in b3_companies_tickers.columns:
-            b3_companies_tickers[col] = ''
-    b3_companies_tickers = b3_companies_tickers[b3_cols]
-    print('fast save debuf')
-    b3_companies_tickers = save_pkl(b3_companies_tickers, 'b3_companies_tickers')
+    # # Scrape detailed data for each new company
+    # b3_companies_tickers = get_b3_tickers(driver, wait, url)
+    
+    # for col in b3_cols:
+    #     if col not in b3_companies_tickers.columns:
+    #         b3_companies_tickers[col] = ''
+    # b3_companies_tickers = b3_companies_tickers[b3_cols]
+    # b3_companies_tickers = sys_save_pkl(b3_companies_tickers, 'temp_b3_companies_tickers')
+    print('fast temp b3_companies')
+    b3_companies_tickers = sys_load_pkl('temp_b3_companies_tickers')
 
+    # anti-join operation
     merged = pd.merge(companies_from_file, b3_companies_tickers, how='outer', on=key_columns, indicator=True)
     update_strict = merged[merged['_merge'] == 'right_only'][key_columns] # only companies new in web
     update_broad = merged[merged['_merge'] != 'left_only'][key_columns] # all companies from web
@@ -4434,22 +4451,22 @@ def b3_grab(url):
         start_time = time.time()
         for i, (index, row) in enumerate(updated.iterrows()):
             driver.get(b3.url)
-            new_company = get_full_company_info(row, driver, wait)
-            new_company = pd.DataFrame([new_company], columns=b3_cols).astype(col_types)
+            new_company = b3_get_company_info(row, driver, wait)
+            new_company = pd.DataFrame([new_company], columns=b3_cols).astype(col_types).fillna('')
             new_company['Capital Social'] = new_company['Capital Social'].replace(np.nan, 0.0)
             new_company = new_company.replace('nan', '')
-            new_company['Capital Social'] = pd.to_numeric(new_company['Capital Social'], errors='coerce').astype('float')
+            # new_company['Capital Social'] = pd.to_numeric(new_company['Capital Social'], errors='coerce').astype('float')
 
             try:
                 if not new_company.empty:
                     cnpj = new_company['cnpj'][0]
-                    url = f'https://cnpj.biz/{cnpj}'
-                    response = requests.get(url, headers={"User-Agent": random.choice(b3.USER_AGENTS)})
-                    extra = get_cnpj_info(response)
-                    extra = pd.DataFrame([extra], columns=b3_cols).fillna('')
-                    extra = extra.astype(col_types)
-                else:
-                    extra = pd.DataFrame([], columns=b3_cols)
+                    if cnpj:
+                        url = f'https://cnpj.biz/{cnpj}'
+                        response = requests.get(url, headers=sys_header_random())
+                        extra = b3_get_company_extra_cnpj_info(response)
+                        extra = pd.DataFrame([extra], columns=b3_cols).astype(col_types).fillna('')
+                    else:
+                        extra = pd.DataFrame([], columns=b3_cols)
 
             except Exception as e:
                 extra = pd.DataFrame([], columns=b3_cols)
@@ -4459,7 +4476,7 @@ def b3_grab(url):
             
             print(sys_remaining_time(start_time, size, i), row['ticker'], row['company_name'])
 
-            if (size-i-1) % (b3.bin_size/10) == 0:
+            if (size-i-1) % (b3.bin_size) == 0:
                 temp = pd.concat(new_companies).reset_index(drop=True)
                 temp['Capital Social'] = pd.to_numeric(temp['Capital Social'], errors='coerce').astype('float')
                 temp['Capital Social'] = temp['Capital Social'].replace(np.nan, 0.0)
@@ -4480,6 +4497,7 @@ def b3_grab(url):
         company['Capital Social'] = pd.to_numeric(company['Capital Social'], errors='coerce').astype('float')
         company['Capital Social'] = company['Capital Social'].replace(np.nan, 0.0)
         company = pd.merge(companies_from_file, company, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
+        company = sys_save_and_pickle(company, 'company')
 
     except Exception as e:
         pass
@@ -5488,7 +5506,7 @@ def load_database():
         - Loaded directly or generated using get_companies()
 
     5. 'company'
-        - Directly loaded or generated using b3_grab(b3.search_url)
+        - Directly loaded or generated using b3_get_companies(b3.search_url)
 
     6. 'math'
         - Directly loaded or generated using get_math_from_b3_cvm()
@@ -5501,7 +5519,8 @@ def load_database():
         fund (dict): The final loaded or generated database.
     """
     # Step 1: Load or prepare 'acoes'
-    # acoes = stk_get_composicao_acionaria()
+    # print('pretty fast debug')
+    # # acoes = stk_get_composicao_acionaria()
     print('fast debug acoes')
     filename = 'acoes'
     columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
@@ -5509,49 +5528,53 @@ def load_database():
 
     # Step 2: Load or prepare 'fund'
     try:
-        fund = load_pkl(f'{b3.app_folder}/fund')
-    except Exception:
+        fund = sys_load_pkl(f'{b3.app_folder}/fund')
+    except Exception as e:
         # Nested step: Load or prepare 'intelacoes'
         try:
-            intelacoes = load_pkl(f'{b3.app_folder}/intelacoes')
-        except Exception:
+            intelacoes = sys_load_pkl(f'{b3.app_folder}/intelacoes')
+        except Exception as e:
             # Nested step: Load or prepare 'intel_b3'
             try:
-                intel_b3 = load_pkl(f'{b3.app_folder}/intel_b3')
-            except Exception:
+                intel_b3 = sys_load_pkl(f'{b3.app_folder}/intel_b3')
+            except Exception as e:
                 # Further nested step: Load or prepare 'b3_cvm'
                 try:
-                    b3_cvm = load_pkl(f'{b3.app_folder}/b3_cvm')
-                except Exception:
+                    b3_cvm = sys_load_pkl(f'{b3.app_folder}/b3_cvm')
+                except Exception as e:
                     # Further nested step: Load or prepare 'company'
                     try:
-                        company = b3_grab(b3.search_url)
-                        company = sys_save_and_pickle(company, 'company')
+                        # company = b3_get_companies(b3.search_url)
+                        print('fast debug b3_company')
+                        filename = 'company'
+                        b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
+                        company = sys_read_or_create_dataframe('company', b3_cols).fillna('')
+
                     except Exception as e:
                         pass
 
                     # Further nested step: Load or prepare 'math'
                     try:
-                        math = load_pkl(f'{b3.app_folder}/math')
-                    except Exception:
+                        math = sys_load_pkl(f'{b3.app_folder}/math')
+                    except Exception as e:
                         math = get_math_from_b3_cvm()
-                        math = save_pkl(math, f'{b3.app_folder}/math')
+                        math = sys_save_pkl(math, f'{b3.app_folder}/math')
                     
                     # Use 'math' and 'company' to prepare 'b3_cvm'
                     b3_cvm = get_companies(math, company)
-                    b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
+                    b3_cvm = sys_save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
                 
                 # Use 'b3_cvm' to prepare 'intel_b3'
                 intel_b3 = prepare_b3_cvm(b3_cvm)
-                intel_b3 = save_pkl(intel_b3, f'{b3.app_folder}/intel_b3')
+                intel_b3 = sys_save_pkl(intel_b3, f'{b3.app_folder}/intel_b3')
 
             # Use 'intel_b3' to prepare 'intelacoes'
             intelacoes = compose_intel(acoes, intel_b3)
-            intelacoes = save_pkl(intelacoes, f'{b3.app_folder}/intelacoes')
+            intelacoes = sys_save_pkl(intelacoes, f'{b3.app_folder}/intelacoes')
         
         # Use 'intelacoes' to prepare 'fund'
         fund = compose_fund(intelacoes)
-        fund = save_pkl(fund, f'{b3.app_folder}/fund')
+        fund = sys_save_pkl(fund, f'{b3.app_folder}/fund')
 
 
 
@@ -5566,7 +5589,7 @@ def save_sss(df_fund):
     sss = pd.concat(setores)
     sss = sss.applymap(clean_text)
 
-    sss = save_pkl(sss, f'{b3.app_folder}/sss')
+    sss = sys_save_pkl(sss, f'{b3.app_folder}/sss')
 
     return df_fund
 
@@ -5730,12 +5753,12 @@ def integrate_yahoo_quotes(fund):
     '''
     try:
         # Attempt to load existing quotes from a pickle file
-        quotes = load_pkl(f'{b3.app_folder}/quotes')
-    except Exception:
+        quotes = sys_load_pkl(f'{b3.app_folder}/quotes')
+    except Exception as e:
         # If loading fails, retrieve initial quotes using Yahoo Finance and save them
         no_quotes = {}
         quotes = yahoo_quotes(fund, no_quotes)
-        quotes = save_pkl(quotes, f'{b3.app_folder}/quotes')
+        quotes = sys_save_pkl(quotes, f'{b3.app_folder}/quotes')
     
     # Retrieve new quotes from Yahoo Finance starting from the determined start date
     quotes_new = yahoo_quotes(fund, quotes)
@@ -5940,7 +5963,7 @@ def merge_quotes(fund, quotes):
                 mask = df['PREGAO'] == company
                 df_temp = df[mask]
                 try:
-                    df_temp = save_pkl(df_temp, f'{b3.app_folder}/{b3.company_folder}/{company}')
+                    df_temp = sys_save_pkl(df_temp, f'{b3.app_folder}/{b3.company_folder}/{company}')
                 except Exception as e:
                     pass
             print(setor, sys_remaining_time(start_time, len(df_preplot), i))

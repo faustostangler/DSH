@@ -284,7 +284,7 @@ def update_world_markets(value):
         try:
             df = pd.DataFrame(ss.get_symbol_list(market=abbrv))
             world_companies = pd.concat([world_companies, df], ignore_index=True)
-        except Exception:
+        except Exception as e:
             df = pd.DataFrame()
         print(run.sys_remaining_time(start_time, len(abbreviation), index), f' {abbrv}, {len(df)} new {len(world_companies)} total companies')
 
@@ -598,9 +598,9 @@ def yahoo_quotes(value):
   fund = run.save_sss(fund)
 
   quotes = run.integrate_yahoo_quotes(fund)
-  quotes = run.save_pkl(quotes, f'{app_folder}/quotes')
+  quotes = run.sys_save_pkl(quotes, f'{app_folder}/quotes')
 
   df_preplot = run.merge_quotes(fund, quotes)
-  df_preplot = run.save_pkl(df_preplot, f'{app_folder}/df_preplot')
+  df_preplot = run.sys_save_pkl(df_preplot, f'{app_folder}/df_preplot')
 
   return value

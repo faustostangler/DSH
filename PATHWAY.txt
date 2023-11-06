@@ -2,7 +2,23 @@ PATHWAY
 
 * LOAD DATABASE
 
-1. stk_get_composicao_acionaria
+1. OK stk_get_composicao_acionaria
+    nsd_get_nsd_content
+
+2. OK b3
+    b3_get_companies
+    b3_get_company_info
+    b3_get_company_full_info
+    b3_get_company_extra_cnpj_info
+
+
+
+3. FUND
+    Need intelacoes
+        need intel_b3
+            need b3_cvm
+                need b3_grab (company)
+                companies_from_file
 
 
 
@@ -19,6 +35,8 @@ sys_clean_text
 
 sys_read_or_create_dataframe
 sys_save_and_pickle
+sys_load_pkl
+sys_save_pkl
 
 sys_download_from_gcs
 sys_upload_to_gcs

@@ -218,7 +218,7 @@ def update_company(stored_company, stored_setor, stored_subsetor, stored_segment
 
         # Check if the file exists and load the data
         if os.path.exists(file+'.pkl'):
-            df = run.load_pkl(file)
+            df = run.sys_load_pkl(file)
         else:
             print(f"No data file found for company: {companhia}")
 

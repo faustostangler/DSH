@@ -52,7 +52,7 @@ def load_data(_):
     Triggered by the interval-component, it fetches and processes the data once.
     """
     # Load data
-    df = run.load_pkl(f'{b3.app_folder}/sss')
+    df = run.sys_load_pkl(f'{b3.app_folder}/sss')
 
     # Store data in a format suitable for dcc.Store
     stored_data = df.to_dict(orient='records')
