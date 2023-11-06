@@ -11,14 +11,18 @@ PATHWAY
     b3_get_company_full_info
     b3_get_company_extra_cnpj_info
 
+3. cvm
+    cvm_get_databases_from_cvm
+    cvm_get_database
+    cvm_get_filelist
+    
 
-
-3. FUND
+N. FUND
     Need intelacoes
         need intel_b3
             need b3_cvm
                 need b3_grab (company)
-                companies_from_file
+                companies__local
 
 
 

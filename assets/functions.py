@@ -2482,7 +2482,7 @@ def sys_upload_to_gcs(df, df_name):
 
       # Upload the buffer to GCS
       blob = bucket.blob(destination_blob_name)
-      blob.upload_from_file(buffer, content_type='application/zip')
+      blob.upload__local(buffer, content_type='application/zip')
     except Exception as e:
       # print(e)
       pass
@@ -2596,8 +2596,8 @@ def sys_save_pkl(data, filename):
         pickle.dump(data, f)
     # with zipfile.ZipFile(f'{filename}.zip', 'w', compression=zipfile.ZIP_DEFLATED) as zipf:
     #     # Save the data as a Pickle file within the zip archive
-    #     with zipf.open(f'{filename}.pkl', 'w') as data_file:
-    #         pickle.dump(data, data_file)
+    #     with zipf.open(f'{filename}.pkl', 'w') as datafile:
+    #         pickle.dump(data, datafile)
 
     return data
 
@@ -2613,12 +2613,12 @@ def sys_load_pkl(filename):
     with open(f'{filename}.pkl', 'rb') as f:
         data = pickle.load(f)
     # with zipfile.ZipFile(f'{filename}.zip', 'r') as zipf:
-    #     with zipf.open(f'{filename}.pkl', 'r') as data_file:
-    #         data = pickle.load(data_file)
+    #     with zipf.open(f'{filename}.pkl', 'r') as datafile:
+    #         data = pickle.load(datafile)
 
     return data
 
-def create_demo_file():
+def create_demofile():
     """Creates a demo dictionary by loading pickled dataframes for each year.
 
     Args:
@@ -2628,18 +2628,18 @@ def create_demo_file():
         dict: A dictionary containing loaded demo dataframes for each year.
     """
     try:
-        cvm_new = {}
+        cvm_web = {}
         years = range(b3.start_year, datetime.datetime.now().year + 1)
         start_time = time.time()
 
         for i, year in enumerate(years):
             print(sys_remaining_time(start_time, len(years), i))
             dataframe = sys_load_pkl(f'{b3.app_folder}/dataframe_{year}')
-            cvm_new[year] = dataframe
+            cvm_web[year] = dataframe
     except Exception as e:
         # print(e)
         pass
-    return cvm_new
+    return cvm_web
 
 def gather_links(url):
   """
@@ -2735,18 +2735,18 @@ def get_metadados(filelist):
         requests.exceptions.HTTPError: If there is an HTTP error while fetching file content.
     """
     meta_dict = {}
-    meta_files = [filelink for filelink in filelist if "meta" in filelink]
+    metafiles = [filelink for filelink in filelist if "meta" in filelink]
 
-    for file in meta_files:
+    for file in metafiles:
         response = b3.session.get(file)
         response.raise_for_status()
 
         if file.endswith('.zip'):
-            zip_file = zipfile.ZipFile(io.BytesIO(response.content))
+            zipfile = zipfile.ZipFile(io.BytesIO(response.content))
 
-            for filein_zip in zip_file.namelist():
-                with zip_file.open(filein_zip) as zip_filecontent:
-                    filecontent = zip_filecontent.read().decode('utf-8', errors='ignore')
+            for filein_zip in zipfile.namelist():
+                with zipfile.open(filein_zip) as zipfilecontent:
+                    filecontent = zipfilecontent.read().decode('utf-8', errors='ignore')
                     d = extract_meta(filecontent)
                     meta_dict[filein_zip.split('.')[0]] = d
         elif file.endswith('.txt'):
@@ -2776,7 +2776,7 @@ def get_categories(filelist):
         The function would return: ['category1', 'category2']
     """
     categories = set()
-    # meta_files = [filelink for filelink in filelist if "meta" in filelink]
+    # metafiles = [filelink for filelink in filelist if "meta" in filelink]
     # files = [filelink for filelink in filelist if "meta" not in filelink]
 
     for filelink in filelist:
@@ -2786,7 +2786,7 @@ def get_categories(filelist):
 
     return categories
 
-def get_filelink_df(base_cvm):
+def get_filelink_df():
     """
     Retrieves file links and associated dates from a list of URLs.
 
@@ -2800,9 +2800,10 @@ def get_filelink_df(base_cvm):
     Returns:
         pandas.DataFrame: A DataFrame containing file names and dates for the current year.
     """
-    print(f'... connecting to web "{base_cvm}"')
+    url = b3.base_cvm
+    print(f'... connecting to web "{url}"')
     print(f'    to get list of available files for download')
-    filelist = gather_links(base_cvm)
+    filelist = gather_links(url)
     folders = set()
 
     # Extract folder URLs from file links
@@ -2835,7 +2836,7 @@ def get_filelink_df(base_cvm):
 
     return fileinfo_df
 
-def download_database(filelist_df, types=['itr', 'dfp']):
+def cvm_download_database(filelist_df, types=['itr', 'dfp']):
     """
     Downloads and processes database files based on specified DEMONSTRATIVO values.
 
@@ -2845,7 +2846,7 @@ def download_database(filelist_df, types=['itr', 'dfp']):
     into pandas DataFrames with added metadata columns.
 
     Args:
-        cvm_news (list): A list of DEMONSTRATIVO values to filter files.
+        cvm_webs (list): A list of DEMONSTRATIVO values to filter files.
         filelist_df (pandas.DataFrame): A DataFrame containing file names and dates.
 
     Returns:
@@ -3059,37 +3060,37 @@ def clean_dataframe(dict_of_df):
     return dict_of_df
 
 def group_by_year(dataframes):
-    cvm_new = [df for df in dataframes if len(df) > 0 and ('con' in df['FILENAME'][0] or 'ind' in df['FILENAME'][0])]
+    cvm_web = [df for df in dataframes if len(df) > 0 and ('con' in df['FILENAME'][0] or 'ind' in df['FILENAME'][0])]
     links = [df for df in dataframes if len(df) > 0 and ('con' not in df['FILENAME'][0] and 'ind' not in df['FILENAME'][0])]
 
     print('... split by year')
-    cvm_new = yearly(cvm_new)
+    cvm_web = yearly(cvm_web)
     links = yearly(links)
 
     # Rename column for consistency
     for year in links.keys():
         links[year].rename(columns={'VERSAO': 'VERSAO_LINK'}, inplace=True)
 
-    return cvm_new, links
+    return cvm_web, links
 
-def get_filelist(url):
+def cvm_get_filelist():
     """
-    Update the cvm_new files based on new data from filelist_df.
+    Update the cvm_web files based on new data from filelist_df.
 
-    This function updates the cvm_new files by downloading new data based on filelist_df.
+    This function updates the cvm_web files by downloading new data based on filelist_df.
     It follows several steps to achieve this and also extracts metadata and categories.
 
     Args:
     None
 
     Returns:
-    dict: Updated cvm_new data.
+    dict: Updated cvm_web data.
     dict: Metadata information.
     list: List of demonstrativos_cvm.
 
     """
     # Retrieve DataFrame containing file links from base_cvm URL
-    filelist_df = get_filelink_df(url)
+    filelist_df = get_filelink_df()
     
     # Find the maximum date in the filelist_df
     last_update2 = filelist_df['date'].max().strftime('%Y-%m-%d')
@@ -3109,15 +3110,15 @@ def get_filelist(url):
 
     return filelist_df, last_update2
 
-def create_cvm(base_cvm):
-    filelist_df, last_update = get_filelist(base_cvm)
-    dataframes = download_database(filelist_df)
-    cvm_new, links = group_by_year(dataframes)
-    cvm_new = clean_dataframe(cvm_new)
+def cvm_get_database():
+    filelist_df, last_update = cvm_get_filelist()
+    dataframes = cvm_download_database(filelist_df)
+    cvm_web, links = group_by_year(dataframes)
+    cvm_web = clean_dataframe(cvm_web)
     
     # Save last_update
-    if len(cvm_new) > 0:
-        cvm_new = sys_save_pkl(cvm_new, f'{b3.app_folder}/cvm_new')
+    if len(cvm_web) > 0:
+        cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/cvm_web')
 
     # Get metadata and categories from filelist
     try:
@@ -3149,7 +3150,7 @@ def create_cvm(base_cvm):
     except Exception as e:
         pass
 
-    return cvm_new
+    return cvm_web
 
 def adjust_quarters(group_df):
     """
@@ -3264,26 +3265,26 @@ def apply_adjustments(group):
     else:
         return group
 
-def get_math_new_from_cvm(cvm_now, cvm_new):
+def get_math_web_from_cvm(cvm_local, cvm_web):
     """
     Merge two dictionaries of dataframes and extract updated rows.
 
-    The function performs an outer merge on two dictionaries of dataframes, `cvm_now` (existing data) 
-    and `cvm_new` (new data). The purpose is to update old financial data with new financial data and 
+    The function performs an outer merge on two dictionaries of dataframes, `cvm_local` (existing data) 
+    and `cvm_web` (new data). The purpose is to update old financial data with new financial data and 
     to identify rows which have been updated for future mathematical transformations.
 
     Parameters:
-    - cvm_now (dict): Dictionary with years as keys and existing financial data as values (pandas DataFrames).
-    - cvm_new (dict): Dictionary with years as keys and new financial data as values (pandas DataFrames).
+    - cvm_local (dict): Dictionary with years as keys and existing financial data as values (pandas DataFrames).
+    - cvm_web (dict): Dictionary with years as keys and new financial data as values (pandas DataFrames).
 
     Returns:
     - tuple: Two dictionaries of dataframes - the first contains the merged data, and the second contains the updated rows.
 
     """
     
-    years = sorted(set(cvm_now.keys()).union(cvm_new.keys()))
+    years = sorted(set(cvm_local.keys()).union(cvm_web.keys()))
 
-    df_columns = cvm_now.get(min(years), pd.DataFrame()).columns if min(years) in cvm_now else cvm_new[min(years)].columns
+    df_columns = cvm_local.get(min(years), pd.DataFrame()).columns if min(years) in cvm_local else cvm_web[min(years)].columns
 
     value_column = 'VL_CONTA'
     key_columns = [col for col in df_columns if col != value_column]
@@ -3293,8 +3294,8 @@ def get_math_new_from_cvm(cvm_now, cvm_new):
 
     try:
         for year in years:
-            df1 = cvm_now.get(year, pd.DataFrame(columns=df_columns))
-            df2 = cvm_new.get(year, pd.DataFrame(columns=df_columns))
+            df1 = cvm_local.get(year, pd.DataFrame(columns=df_columns))
+            df2 = cvm_web.get(year, pd.DataFrame(columns=df_columns))
 
             if df1.empty and not df2.empty:
                 df_merged = df2
@@ -3411,7 +3412,7 @@ def get_calculated_math(math):
     - dict: Dictionary with years as keys and adjusted dataframes as values.
     """
     # Initialize a dictionary to store the adjusted dataframes for each year
-    math_new = {}
+    math_web = {}
 
     # Loop through each year in the data dictionary
     for year, df_merged in math.items():
@@ -3424,15 +3425,15 @@ def get_calculated_math(math):
             adjusted_df = grouped.apply(lambda group: wrapper_apply(group, pbar)).reset_index(drop=True)
         
         # Store the adjusted dataframe in the result dictionary
-        math_new[year] = adjusted_df
-        math_new = sys_save_pkl(math_new, f'{b3.app_folder}/math_now')
-        math_new[year] = sys_save_pkl(math_new[year], f'{b3.app_folder}/math_new_{year}')
-    return math_new
+        math_web[year] = adjusted_df
+        math_web = sys_save_pkl(math_web, f'{b3.app_folder}/math_local')
+        math_web[year] = sys_save_pkl(math_web[year], f'{b3.app_folder}/math_web_{year}')
+    return math_web
 
-def year_to_company(cvm_new):
+def year_to_company(cvm_web):
 # Get all unique companies across all years
     all_companies = set()
-    for i, (year, df) in enumerate(cvm_new.items()):
+    for i, (year, df) in enumerate(cvm_web.items()):
         all_companies.update(df['DENOM_CIA'].unique())
 
     # Initialize the final dictionary with companies as keys
@@ -3445,7 +3446,7 @@ def year_to_company(cvm_new):
         #   if company == 'ALPARGATAS SA':
             print(sys_remaining_time(start_time, len(all_companies), i))
             company_df = []  # This will hold dataframes for each year for the company
-            for j, (year, df) in enumerate(cvm_new.items()):
+            for j, (year, df) in enumerate(cvm_web.items()):
                 company_data = df[df['DENOM_CIA'] == company]
                 company_df.append(company_data)
             companies[company] = pd.concat(company_df, ignore_index=True)
@@ -3547,15 +3548,15 @@ def create_df_math(df_old, df_new):
 
     return df_math.copy()
 
-def merge_cvm_math(cvm_new, df_math):
-    for year in cvm_new.keys():
+def merge_cvm_math(cvm_web, df_math):
+    for year in cvm_web.keys():
         # Update df_cvm['VL_CONTA'] using the values from df_math['VL_CONTA']
-        cvm_new[year].loc[df_math[year].index, 'VL_CONTA'] = df_math[year]['VL_CONTA']
-    return cvm_new
+        cvm_web[year].loc[df_math[year].index, 'VL_CONTA'] = df_math[year]['VL_CONTA']
+    return cvm_web
 
-def merge_math(math_existing, math_new):
+def merge_math(math_existing, math_web):
     df1 = math_existing
-    df2 = math_new
+    df2 = math_web
 
     # The key columns used to determine unique rows
     key_columns = ['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DT_REFER']
@@ -3600,31 +3601,31 @@ def merge_math(math_existing, math_new):
        pass
     return df_merged
 
-def math_from_cvm(cvm_now):
-    math_now = {}
-    years = sorted(cvm_now.keys())
-    df_columns = cvm_now[min(years)].columns
+def math_from_cvm(cvm_local):
+    math_local = {}
+    years = sorted(cvm_local.keys())
+    df_columns = cvm_local[min(years)].columns
     for year in years:
         try:
-            math_now[year] = sys_load_pkl(f'{b3.app_folder}/math_new_{year}')
+            math_local[year] = sys_load_pkl(f'{b3.app_folder}/math_web_{year}')
         except Exception as e:
-            math_now[year] = pd.DataFrame(columns=df_columns)
+            math_local[year] = pd.DataFrame(columns=df_columns)
 
-    return math_now
+    return math_local
 
-def math_merge(math_now, math_new):
+def math_merge(math_local, math_web):
     print('... math merge')
     math = {}
-    years = sorted(set(math_now.keys()).union(math_new.keys()))
-    df_columns = math_now[min(years)].columns
+    years = sorted(set(math_local.keys()).union(math_web.keys()))
+    df_columns = math_local[min(years)].columns
     value_column = 'VL_CONTA'
     key_columns = [col for col in df_columns if col != value_column]
 
     try:
         for year in years:
             print(year)
-            df_now = math_now.get(year, pd.DataFrame(columns=df_columns))
-            df_new = math_new.get(year, pd.DataFrame(columns=df_columns))
+            df_now = math_local.get(year, pd.DataFrame(columns=df_columns))
+            df_new = math_web.get(year, pd.DataFrame(columns=df_columns))
 
             # Merge dataframes based on key columns
             df_merged = pd.merge(df_now, df_new, on=key_columns, how='outer', suffixes=('_now', '_new'))
@@ -3663,38 +3664,38 @@ def companies_from_math(math):
 
     return dict(sorted(company.items()))
 
-def get_math(math='', cvm_now='', cvm_new='', math_now='', math_new=''):
+def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='', math_web=''):
     try:
         # prepare CVM
-        if not cvm_now:
+        if not cvm_local:
             try:
-                cvm_now = sys_load_pkl(f'{b3.app_folder}/cvm_now')
+                cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm_local')
             except Exception as e:
-                cvm_now = {}
-        if not cvm_new:
-            cvm_new = create_cvm(b3.base_cvm)
+                cvm_local = {}
+        if not cvm_web:
+            cvm_web = cvm_get_database()
 
         # prepare MATH
-        # math_now
+        # math_local
         try:
-            math_now = sys_load_pkl(f'{b3.app_folder}/math_now')
+            math_local = sys_load_pkl(f'{b3.app_folder}/math_local')
         except Exception as e:
             try:
-                math_now = math_from_cvm(cvm_now)
+                math_local = math_from_cvm(cvm_local)
             except Exception as e:
                 try:
-                    math_now = get_calculated_math(cvm_now)
-                    math_now = sys_save_pkl(math_now, f'{b3.app_folder}/math_now')
+                    math_local = get_calculated_math(cvm_local)
+                    math_local = sys_save_pkl(math_local, f'{b3.app_folder}/math_local')
                 except Exception as e:
-                    math_now = {}
+                    math_local = {}
 
-        # math_new
-        if not math_new:
+        # math_web
+        if not math_web:
             try:
-                math_new = sys_load_pkl(f'{b3.app_folder}/math_new')
+                math_web = sys_load_pkl(f'{b3.app_folder}/math_web')
             except Exception as e:
-                cvm_now, math_new = get_math_new_from_cvm(cvm_now, cvm_new)
-        math = math_merge(math_now, math_new)
+                cvm_local, math_web = get_math_web_from_cvm(cvm_local, cvm_web)
+        math = math_merge(math_local, math_web)
 
     except Exception as e:
         pass
@@ -4006,7 +4007,7 @@ def b3_grab_from_web(driver, wait, url):
     Returns:
     - str: status message
     """
-    b3_companies_from_file = sys_read_or_create_dataframe('b3_companies', b3.cols_b3_companies)
+    b3_companies__local = sys_read_or_create_dataframe('b3_companies', b3.cols_b3_companies)
 
     try:
         # Get the total number of companies and pages
@@ -4036,11 +4037,11 @@ def b3_grab_from_web(driver, wait, url):
         b3_companies_tickers = get_ticker_keywords(raw_code)
 
         # Update the missing companies from the database
-        b3_companies_from_file_keywords = []
+        b3_companies__local_keywords = []
         # Create a list of all current companies in the b3_companies dataframe
-        for index, row in b3_companies_from_file.iterrows():
+        for index, row in b3_companies__local.iterrows():
             try:
-                b3_companies_from_file_keywords.append(' '.join([str(row['ticker']), str(row['company_name'])]))
+                b3_companies__local_keywords.append(' '.join([str(row['ticker']), str(row['company_name'])]))
             except Exception as e:
                 print(row)
                 pass
@@ -4053,37 +4054,37 @@ def b3_grab_from_web(driver, wait, url):
         for i, (index, row) in enumerate(b3_companies_tickers.iterrows()):
             counter +=1
             new_keyword = str(row['ticker']) + ' ' + str(row['company_name'])
-            if new_keyword not in b3_companies_from_file_keywords:
+            if new_keyword not in b3_companies__local_keywords:
                 driver.get(b3.url)
 
                 kw = wSendKeys(f'//*[@id="keyword"]', new_keyword, wait)
                 kw = wClick(f'//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button', wait)
 
                 company = get_company(1, driver, wait)
-                b3_companies_from_file = pd.concat([b3_companies_from_file, pd.DataFrame([company], columns=b3.cols_b3_companies)])
+                b3_companies__local = pd.concat([b3_companies__local, pd.DataFrame([company], columns=b3.cols_b3_companies)])
             else:
                 pass
             print(sys_remaining_time(start_time, len(b3_companies_tickers), i), counter, size-counter, new_keyword)
             if (len(b3_companies_tickers) - i - 1) % b3.bin_size == 0:
-                b3_companies_from_file = sys_save_and_pickle(b3_companies_from_file, 'b3_companies')
+                b3_companies__local = sys_save_and_pickle(b3_companies__local, 'b3_companies')
                 print('partial save')
-        b3_companies_from_file.fillna('', inplace=True)
-        b3_companies_from_file.reset_index(drop=True, inplace=True)
-        b3_companies_from_file.drop_duplicates(subset='url', inplace=True)
+        b3_companies__local.fillna('', inplace=True)
+        b3_companies__local.reset_index(drop=True, inplace=True)
+        b3_companies__local.drop_duplicates(subset='url', inplace=True)
         
-        b3_companies_from_file = sys_save_and_pickle(b3_companies_from_file, 'b3_companies')
+        b3_companies__local = sys_save_and_pickle(b3_companies__local, 'b3_companies')
         # b3_companies.to_pickle(data_path + f'{df_name}.zip')
 
         # Close the driver and exit the script
         driver.close()
         driver.quit()
 
-        value = f'{len(b3_companies_from_file)} companies updated'
+        value = f'{len(b3_companies__local)} companies updated'
         print(value)
 
     except Exception as e:
         pass
-    return b3_companies_from_file
+    return b3_companies__local
 
 def get_new_companies_from_b3(driver, wait, url):
     cols = ['COMPANHIA', 'PREGAO', 'TICK', 'LISTAGEM']
@@ -4422,7 +4423,7 @@ def b3_get_companies(url):
     # time.sleep(1)
 
     # company = b3_grab_from_web(driver, wait, url) # new way
-    companies_from_file = sys_read_or_create_dataframe('company', b3_cols).fillna('')
+    companies__local = sys_read_or_create_dataframe('company', b3_cols).fillna('')
 
     # # Scrape detailed data for each new company
     # b3_companies_tickers = get_b3_tickers(driver, wait, url)
@@ -4436,7 +4437,7 @@ def b3_get_companies(url):
     b3_companies_tickers = sys_load_pkl('temp_b3_companies_tickers')
 
     # anti-join operation
-    merged = pd.merge(companies_from_file, b3_companies_tickers, how='outer', on=key_columns, indicator=True)
+    merged = pd.merge(companies__local, b3_companies_tickers, how='outer', on=key_columns, indicator=True)
     update_strict = merged[merged['_merge'] == 'right_only'][key_columns] # only companies new in web
     update_broad = merged[merged['_merge'] != 'left_only'][key_columns] # all companies from web
     updated = update_strict
@@ -4480,7 +4481,7 @@ def b3_get_companies(url):
                 temp = pd.concat(new_companies).reset_index(drop=True)
                 temp['Capital Social'] = pd.to_numeric(temp['Capital Social'], errors='coerce').astype('float')
                 temp['Capital Social'] = temp['Capital Social'].replace(np.nan, 0.0)
-                temp = pd.merge(companies_from_file, temp, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
+                temp = pd.merge(companies__local, temp, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
                 temp = sys_save_and_pickle(temp, 'company')
 
     # Handle any exceptions that might have occurred during scraping
@@ -4496,7 +4497,7 @@ def b3_get_companies(url):
         company = pd.concat(new_companies).reset_index(drop=True)
         company['Capital Social'] = pd.to_numeric(company['Capital Social'], errors='coerce').astype('float')
         company['Capital Social'] = company['Capital Social'].replace(np.nan, 0.0)
-        company = pd.merge(companies_from_file, company, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
+        company = pd.merge(companies__local, company, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
         company = sys_save_and_pickle(company, 'company')
 
     except Exception as e:
@@ -5549,7 +5550,6 @@ def load_database():
                         filename = 'company'
                         b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
                         company = sys_read_or_create_dataframe('company', b3_cols).fillna('')
-
                     except Exception as e:
                         pass
 
@@ -5557,6 +5557,7 @@ def load_database():
                     try:
                         math = sys_load_pkl(f'{b3.app_folder}/math')
                     except Exception as e:
+                        cvm = cvm_get_databases_from_cvm()
                         math = get_math_from_b3_cvm()
                         math = sys_save_pkl(math, f'{b3.app_folder}/math')
                     
