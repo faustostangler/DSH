@@ -2,8 +2,7 @@ PATHWAY
 
 * LOAD DATABASE
 
-1. OK stk_get_composicao_acionaria
-1.1. OK nsd_get_nsd
+1. stk_get_composicao_acionaria
 
 
 
@@ -12,9 +11,6 @@ nsd_get_nsd_content
 nsd_nsd_range
 nsd_nsd_dates
 sys_get_nsd
-
-* stk
-stk_get_acoes
 
 * SYS
 sys_load_browser
