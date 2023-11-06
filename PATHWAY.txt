@@ -1,0 +1,28 @@
+PATHWAY
+
+* LOAD DATABASE
+
+1. OK stk_get_composicao_acionaria
+1.1. OK nsd_get_nsd
+
+
+
+* nsd
+nsd_get_nsd_content
+nsd_nsd_range
+nsd_nsd_dates
+sys_get_nsd
+
+* stk
+stk_get_acoes
+
+* SYS
+sys_load_browser
+sys_remaining_time
+sys_clean_text
+
+sys_read_or_create_dataframe
+sys_save_and_pickle
+
+sys_download_from_gcs
+sys_upload_to_gcs

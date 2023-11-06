@@ -46,6 +46,8 @@ cmbQuadro = ['Demonstração do Resultado', 'Balanço Patrimonial Ativo', 'Balan
 last_quarters = ['3', '4']
 all_quarters = ['6', '7']
 
+words_to_remove = ['  EM LIQUIDACAO', ' EM LIQUIDACAO', ' EXTRAJUDICIAL', '  EM RECUPERACAO JUDICIAL', '  EM REC JUDICIAL', ' EM RECUPERACAO JUDICIAL', ' EM LIQUIDACAO EXTRAJUDICIAL']
+
 # dre new columns
 fsdemo = 'FS_Demonstrativo'
 fsdesc = 'FS_Descrição'
@@ -161,7 +163,7 @@ def update_b3_companies(value: str) -> str:
     """
 
     # run browser
-    driver, wait = run.load_browser()
+    driver, wait = run.sys_load_browser()
     try:
         # Get the total number of companies and pages
         driver.get(search_url)
@@ -186,12 +188,12 @@ def update_b3_companies(value: str) -> str:
             run.wClick(f'//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a', wait)
             time.sleep(0.5)
             value = f'page {page+1}'
-            print(run.remaining_time(start_time, pages+1, i), value)
+            print(run.sys_remaining_time(start_time, pages+1, i), value)
         b3_companies_from_web = run.get_ticker_keywords(raw_code)
 
         # Update the missing companies from the database
         # df_name = 'b3_companies'
-        b3_companies = run.read_or_create_dataframe('b3_companies', cols_b3_companies)
+        b3_companies = run.sys_read_or_create_dataframe('b3_companies', cols_b3_companies)
         b3_keywords = []
 
         # Create a list of all current companies in the b3_companies dataframe
@@ -220,15 +222,15 @@ def update_b3_companies(value: str) -> str:
                 b3_companies = pd.concat([b3_companies, pd.DataFrame([company], columns=cols_b3_companies)])
             else:
                 pass
-            print(run.remaining_time(start_time, len(b3_companies_from_web), i), counter, size-counter, keyword)
+            print(run.sys_remaining_time(start_time, len(b3_companies_from_web), i), counter, size-counter, keyword)
             if (len(b3_companies_from_web) - i - 1) % bin_size == 0:
-                b3_companies = run.save_and_pickle(b3_companies, 'b3_companies')
+                b3_companies = run.sys_save_and_pickle(b3_companies, 'b3_companies')
                 print('partial save')
         b3_companies.fillna('', inplace=True)
         b3_companies.reset_index(drop=True, inplace=True)
         b3_companies.drop_duplicates(inplace=True)
         
-        b3_companies = run.save_and_pickle(b3_companies, 'b3_companies')
+        b3_companies = run.sys_save_and_pickle(b3_companies, 'b3_companies')
         # b3_companies.to_pickle(data_path + f'{df_name}.zip')
 
         # Close the driver and exit the script
@@ -284,7 +286,7 @@ def update_world_markets(value):
             world_companies = pd.concat([world_companies, df], ignore_index=True)
         except Exception:
             df = pd.DataFrame()
-        print(run.remaining_time(start_time, len(abbreviation), index), f' {abbrv}, {len(df)} new {len(world_companies)} total companies')
+        print(run.sys_remaining_time(start_time, len(abbreviation), index), f' {abbrv}, {len(df)} new {len(world_companies)} total companies')
 
     # Clean and organize world_companies DataFrame
     world_companies['market'] = world_companies['market'].str.replace('_market', '')
@@ -304,7 +306,7 @@ def update_world_markets(value):
     world_companies.update(brazil_tickers)
     
     # Save the DataFrame
-    world_companies = run.save_and_pickle(world_companies, 'world_companies')
+    world_companies = run.sys_save_and_pickle(world_companies, 'world_companies')
     
     return 'done ' + value
 
@@ -312,10 +314,10 @@ def yahoo_cotahist(value):
     import yfinance as yf
 
     df_name = 'world_companies'
-    world_companies = run.read_or_create_dataframe(df_name, cols_world_markets)
+    world_companies = run.sys_read_or_create_dataframe(df_name, cols_world_markets)
 
     df_name = 'company_info'
-    company_info = run.read_or_create_dataframe(df_name, cols_info)
+    company_info = run.sys_read_or_create_dataframe(df_name, cols_info)
 
     c_info = pd.DataFrame(columns=cols_info)
 
@@ -385,13 +387,13 @@ def get_nsd_links(value):
 def get_dre(value):
   # download new dre from nsd list
   filename = f'dre_raw'
-  dre = run.read_or_create_dataframe(filename, cols_dre)
+  dre = run.sys_read_or_create_dataframe(filename, cols_dre)
   df = pd.DataFrame(columns=cols_dre)
 
   # get new nsd links to download not yet downloaded in dre
   nsd = run.get_new_dre_links(dre)
 
-  driver, wait = run.load_browser()
+  driver, wait = run.sys_load_browser()
 
   size = len(nsd)
   start_time = time.time()
@@ -410,12 +412,12 @@ def get_dre(value):
     quarter = run.read_quarter(line, driver, wait)
     df = pd.concat([df, quarter], ignore_index=True)
 
-    print(f'{l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {run.clean_text(line[1])}, {line[5]}, {remaining_time_formatted}')
+    print(f'{l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {run.sys_clean_text(line[1])}, {line[5]}, {remaining_time_formatted}')
     
     if (size-l-1) % (bin_size) == 0:
       dre = pd.concat([dre, df], ignore_index=True)
 
-      dre = run.save_and_pickle(dre, filename)
+      dre = run.sys_save_and_pickle(dre, filename)
       df = pd.DataFrame(columns=cols_dre)
       print('partial save')
 
@@ -423,7 +425,7 @@ def get_dre(value):
   dre.sort_values(by=['Companhia', 'Trimestre', 'Url', 'Conta'], ascending=[True, False, True, True], inplace=True)
   dre['Trimestre'] = dre['Trimestre'].dt.strftime('%d/%m/%Y')
   dre.drop_duplicates(inplace=True, keep='last')
-  dre = run.save_and_pickle(dre, filename)
+  dre = run.sys_save_and_pickle(dre, filename)
   print('final save')
 
 
@@ -431,11 +433,11 @@ def get_dre(value):
 
 def dre_math(value):
   filename = 'dre_raw'
-  dre_raw = run.read_or_create_dataframe(filename, cols_dre_math)
+  dre_raw = run.sys_read_or_create_dataframe(filename, cols_dre_math)
   dre_raw = run.clean_dre_math(dre_raw)
 
   filename = 'dre_math'
-  dre_math = run.read_or_create_dataframe(filename, cols_dre_math)
+  dre_math = run.sys_read_or_create_dataframe(filename, cols_dre_math)
   dre_math = run.clean_dre_math(dre_math)
   # last company fix
   try:
@@ -455,7 +457,7 @@ def dre_math(value):
   avpi = []
   start_time = time.time()
   for l, key in enumerate(math):
-    progress = run.remaining_time(start_time, size, l)
+    progress = run.sys_remaining_time(start_time, size, l)
 
     df, cias, status, key_cia = run.math_magic(key[0], key[1], size, cias, l)
     df_temp = pd.concat([df_temp, df], axis=0, ignore_index=True)
@@ -469,13 +471,13 @@ def dre_math(value):
 
         dre_math.drop_duplicates(inplace=True)
         filename = 'dre_math'
-        dre_math = run.save_and_pickle(dre_math, filename)
+        dre_math = run.sys_save_and_pickle(dre_math, filename)
         print(f'partial save {l+1}, {(size-l-1)}, {((l+1) / size) * 100:.6f}%, {progress[0]:.6f}s, {progress[1]} {key_cia[0]} {key_cia[1]}')
 
   dre_math = pd.concat([dre_math, df_temp], axis=0, ignore_index=True)
   dre_math.drop_duplicates(inplace=True)
   filename = 'dre_math'
-  dre_math = run.save_and_pickle(dre_math, filename)
+  dre_math = run.sys_save_and_pickle(dre_math, filename)
 
 
   return value
@@ -483,11 +485,11 @@ def dre_math(value):
 def dre_intel(value):
     # existing dre_math (raw) to be converted by inteligence and then pivoted
     filename = 'dre_math'
-    dre_math = run.read_or_create_dataframe(filename, cols_dre_math)
+    dre_math = run.sys_read_or_create_dataframe(filename, cols_dre_math)
     dre_math = run.clean_dre_math(dre_math)
     
     filename = 'dre_intel'
-    dre_intel = run.read_or_create_dataframe(filename, cols_dre_math)
+    dre_intel = run.sys_read_or_create_dataframe(filename, cols_dre_math)
 
     # demosheet contains ['Companhia', 'Trimestre']
     ds = ['Companhia', 'Trimestre']
@@ -519,7 +521,7 @@ def dre_intel(value):
     avpi = []
     start_time = time.time()
     for item, group in enumerate(demosheet):
-        progress = run.remaining_time(start_time, size, item)
+        progress = run.sys_remaining_time(start_time, size, item)
 
         df = group[1]
         group = group[0]
@@ -538,26 +540,26 @@ def dre_intel(value):
 
             dre_intel = dre_intel.astype(str)
             dre_intel = dre_intel.reset_index(drop=True).drop_duplicates().fillna(0)
-            dre_intel = run.save_and_pickle(dre_intel, filename)
+            dre_intel = run.sys_save_and_pickle(dre_intel, filename)
             print('partial save')
 
 
     dre_intel = dre_intel.reset_index(drop=True).drop_duplicates().fillna(0)
-    dre_intel = run.save_and_pickle(dre_intel, filename)
+    dre_intel = run.sys_save_and_pickle(dre_intel, filename)
     print('final save')
 
     return value
 
 def dre_pivot(value):
     filename = 'dre_intel'
-    dre_intel = run.read_or_create_dataframe(filename, cols_dre_math)
+    dre_intel = run.sys_read_or_create_dataframe(filename, cols_dre_math)
     dre_intel = run.clean_dre_math(dre_intel)
 
     dre_intel['CDD'] = dre_intel['Conta'].astype('str') + ' - ' + dre_intel['Descrição'].astype('str') + ' - ' + dre_intel['Demonstrativo'].astype('str')
     groups = dre_intel.groupby(by='Companhia', group_keys=False)
 
     filename = 'dre_pivot'
-    dre_pivot = run.read_or_create_dataframe(filename, cols_dre_math)
+    dre_pivot = run.sys_read_or_create_dataframe(filename, cols_dre_math)
 
     avpi = []
     start_time = time.time()
@@ -565,7 +567,7 @@ def dre_pivot(value):
 
     # groupby intel to transform into pivot
     for item, group in enumerate(groups):
-        progress = run.remaining_time(start_time, size, item)
+        progress = run.sys_remaining_time(start_time, size, item)
         company = group[0]
         group = group[1]
 
@@ -583,7 +585,7 @@ def dre_pivot(value):
         print(f'{item+1} {len(groups)-item-1} {(item+1)/(len(groups)):.2%} {progress[0]:.6f}s {progress[1]} {company} {group.shape}')
 
     # save
-    dre_pivot = run.save_and_pickle(dre_pivot, filename)
+    dre_pivot = run.sys_save_and_pickle(dre_pivot, filename)
     print('saved')
 
     return value
