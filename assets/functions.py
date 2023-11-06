@@ -12,7 +12,7 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.alert import Alert
 from webdriver_manager.chrome import ChromeDriverManager
-
+ 
 import unidecode
 import string
 
