@@ -117,6 +117,34 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:55.0) Gecko/20100101 Firefox/55.0",
     "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134"
 ]
+REFERERS = [
+    'https://www.google.com/',
+    'https://www.bing.com/',
+    'https://www.yahoo.com/',
+    'https://www.facebook.com/',
+    'https://twitter.com/',
+    'https://www.reddit.com/',
+    'https://www.youtube.com/',
+    'https://www.linkedin.com/',
+    'https://www.instagram.com/',
+    'https://www.pinterest.com/',
+    'https://www.wikipedia.org/',
+    'https://www.amazon.com/',
+    'https://www.ebay.com/',
+    'https://www.craigslist.org/',
+    'https://www.github.com/',
+    'https://stackoverflow.com/',
+    'https://www.quora.com/',
+    'https://news.ycombinator.com/',
+    'https://www.netflix.com/',
+    'https://www.twitch.tv/',
+    'https://www.spotify.com/',
+    'https://www.tumblr.com/',
+    'https://www.medium.com/',
+    'https://www.dropbox.com/',
+    'https://www.paypal.com/'
+]
+LANGUAGES = ['en-US;q=1.0', 'es-ES;q=0.9', 'fr-FR;q=0.8', 'de-DE;q=0.7', 'it-IT;q=0.6', 'pt-BR;q=0.9', 'ja-JP;q=0.8', 'zh-CN;q=0.7', 'ko-KR;q=0.6', 'ru-RU;q=0.9', 'ar-SA;q=0.8', 'hi-IN;q=0.7', 'tr-TR;q=0.6', 'nl-NL;q=0.9', 'sv-SE;q=0.8', 'pl-PL;q=0.7', 'fi-FI;q=0.6', 'da-DK;q=0.9', 'no-NO;q=0.8', 'hu-HU;q=0.7', 'ro-RO;q=0.6', 'cs-CZ;q=0.9', 'el-GR;q=0.8', 'th-TH;q=0.7', 'id-ID;q=0.6']
 
 # system stages
 def update_b3_companies(value: str) -> str:
