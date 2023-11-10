@@ -12,7 +12,7 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.alert import Alert
 from webdriver_manager.chrome import ChromeDriverManager
- 
+
 import unidecode
 import string
 
@@ -181,7 +181,7 @@ def wRaw(xpath, wait):
     # print('wText', e)
     return ''
 
-def sys_clean_text(text):
+def clean_text(text):
     """
     Cleans text by removing any leading/trailing white space, converting it to lowercase, removing
     accents, punctuation, and converting to uppercase.
@@ -206,7 +206,7 @@ def sys_clean_text(text):
         print(e)
     return text
 
-def sys_remaining_time(start_time, size, i):
+def remaining_time(start_time, size, i):
   # # elapsed time
   # running_time = (time.time() - start_time)
   # avg_time_per_item = running_time / (i + 1)
@@ -250,19 +250,6 @@ def sys_remaining_time(start_time, size, i):
 
   return progress
 
-def sys_header_random():
-    user_agent = random.choice(b3.USER_AGENTS)
-    referer = random.choice(b3.REFERERS)
-    language = random.choice(b3.LANGUAGES)
-
-    headers = {
-        'User-Agent': user_agent,
-        'Referer': referer,
-        'Accept-Language': language
-    }
-
-    return headers
-
 # selenium functions
 def load_browser_old():
     """
@@ -302,7 +289,7 @@ def load_browser_old():
     # Return a tuple containing the driver and the wait object.
     return driver, wait
 
-def sys_load_browser(chromedriver_path="D:\\Fausto Stangler\\Documentos\\Python\\DSH\\chromedriver-win64\\chromedriver.exe", driver_wait_time=5):
+def load_browser(chromedriver_path="D:\\Fausto Stangler\\Documentos\\Python\\DSH\\chromedriver-win64\\chromedriver.exe", driver_wait_time=5):
     """
     Launches chromedriver and creates a wait object.
     
@@ -372,21 +359,21 @@ def get_company(i, driver, wait):
     listagem = wText(xpath, wait)
     list_dict = dict(zip(b3.listagem_siglas, b3.listagem_extenso))
     for word, replacement in list_dict.items():
-      listagem = sys_clean_text(listagem.replace(word, replacement))
+      listagem = clean_text(listagem.replace(word, replacement))
   except Exception as e:
     listagem = ''
 
   # company name
   try:
     xpath = f'//*[@id="nav-bloco"]/div/div[{i}]/div/div/p[1]'
-    company_name = sys_clean_text(wText(xpath, wait))
+    company_name = clean_text(wText(xpath, wait))
   except Exception as e:
     company_name = ''
 
   # pregao
   try:
     xpath = f'//*[@id="nav-bloco"]/div/div[{i}]/div/div/p[2]'
-    pregao = sys_clean_text(wText(xpath, wait))
+    pregao = clean_text(wText(xpath, wait))
   except Exception as e:
     pregao = company_name
   
@@ -412,9 +399,9 @@ def get_company(i, driver, wait):
   # setor, subsetor e segmento
   try:
     setor = div1[div1.index('Classificação Setorial')+1]
-    segmento = sys_clean_text(setor.split(' / ')[2].strip())
-    subsetor = sys_clean_text(setor.split(' / ')[1].strip())
-    setor = sys_clean_text(setor.split(' / ')[0].strip())
+    segmento = clean_text(setor.split(' / ')[2].strip())
+    subsetor = clean_text(setor.split(' / ')[1].strip())
+    setor = clean_text(setor.split(' / ')[0].strip())
   except Exception as e:
     setor = ''
     subsetor = ''
@@ -457,7 +444,7 @@ def get_company(i, driver, wait):
   # escriturador
   try:
     escriturador = [div2 for div2 in div2 if 'Instituição' in div2][0].split(':')[1].split()
-    escriturador = sys_clean_text(' '.join(pd.Series(escriturador).drop_duplicates().tolist()))
+    escriturador = clean_text(' '.join(pd.Series(escriturador).drop_duplicates().tolist()))
   except Exception as e:
     escriturador = ''
 
@@ -483,10 +470,10 @@ def get_ticker_keywords(raw_code):
     for card in cards:
       try:
         # Extract the ticker and company name from the card element
-        ticker = sys_clean_text(card.find('h5', class_='card-title2').text)
-        company_name = sys_clean_text(card.find('p', class_='card-title').text)
-        pregao = sys_clean_text(card.find('p', class_='card-text').text)
-        listagem = sys_clean_text(card.find('p', class_='card-nome').text)
+        ticker = clean_text(card.find('h5', class_='card-title2').text)
+        company_name = clean_text(card.find('p', class_='card-title').text)
+        pregao = clean_text(card.find('p', class_='card-text').text)
+        listagem = clean_text(card.find('p', class_='card-nome').text)
 
         
         # Append the ticker and company name to the keyword list
@@ -522,7 +509,7 @@ def check_or_create_folder(folder):
     return folder
 
 # pandas functions
-def sys_read_or_create_dataframe(filename, cols):
+def read_or_create_dataframe(filename, cols):
     """
     Read a pandas DataFrame from a compressed file, or create an empty DataFrame if the file doesn't exist.
 
@@ -536,13 +523,13 @@ def sys_read_or_create_dataframe(filename, cols):
     # Construct the full path to the file using the varsys data_path.
     filepath = os.path.join(b3.data_path, f'{filename}.zip')
     try:
-      df = sys_download_from_gcs(filename+'errorgoogle')
-      df = sys_save_and_pickle(df, filename)
+      df = download_from_gcs(filename+'errorgoogle')
+      df = save_and_pickle(df, filename)
       pass
     except Exception as e:
       try:
         df = pd.read_pickle(filepath)  # Try to read the file as a pickle.
-        df = sys_upload_to_gcs(df, filename)
+        df = upload_to_gcs(df, filename)
       except Exception as e:
         # print(f'Error occurred while reading file {filename}: {e}')
         df = pd.DataFrame(columns=cols)
@@ -552,17 +539,17 @@ def sys_read_or_create_dataframe(filename, cols):
     print(f'{filename}: total {len(df)} items')
     return df[cols]
 
-def sys_save_and_pickle(df, filename):
+def save_and_pickle(df, filename):
   try:
       df.to_pickle(f'{b3.data_path}/{filename}.zip')
       print('google upload fast debug')
-    #   df = sys_upload_to_gcs(df, filename)
+    #   df = upload_to_gcs(df, filename)
   except Exception as e:
       pass
   return df
 
 # nsd_functions
-def nsd_nsd_range(nsd, safety_factor=1.8):
+def nsd_range(nsd, safety_factor=1.8):
   # start
   try:
     start = int(max(nsd['nsd'].astype(int))) + 1
@@ -596,7 +583,7 @@ def nsd_nsd_range(nsd, safety_factor=1.8):
 
   return start, end
 
-def nsd_nsd_dates(nsd, safety_factor=1.8):
+def nsd_dates(nsd, safety_factor=1.8):
   safety_factor = b3.safety_factor
   try:
     # find the gap in days from today to max 'envio' date
@@ -627,10 +614,10 @@ def nsd_nsd_dates(nsd, safety_factor=1.8):
 
   return last_date, limit_date, max_gap
 
-def sys_get_nsd(nsd):
+def get_nsd(nsd):
   nsd_url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={nsd}&CodigoTipoInstituicao=1'
   # Getting the HTML content from the URL
-  response = requests.get(nsd_url, headers=sys_header_random())
+  response = requests.get(nsd_url)
   html_content = response.text
 
   # Parsing the HTML content with BeautifulSoup
@@ -640,9 +627,11 @@ def sys_get_nsd(nsd):
   nomeCompanhia_tag = soup.find('span', {'id': 'lblNomeCompanhia'})
   company = nomeCompanhia_tag.text.strip()
   company = unidecode.unidecode(company).upper()
-  company = sys_clean_text(company)
-  company = sys_word_to_remove(company)
-  
+  company = clean_text(company)
+  remove_list = [' EM RECUPERACAO JUDICIAL', ' EM LIQUIDACAO EXTRAJUDICIAL', ' EM LIQUIDACAO']
+  pattern = '|'.join(map(re.escape, remove_list))
+  company = re.sub(pattern, '', company)
+
   # Extracting dri and dri2
   nomeDRI_tag = soup.find('span', {'id': 'lblNomeDRI'})
   dri = nomeDRI_tag.text.strip().split(' - ')[0]
@@ -691,7 +680,7 @@ def sys_get_nsd(nsd):
   # company
 
   data = [company, dri, dri2, dre, data, versao, auditor, auditor_rt, cancelamento, protocolo, envio, url, nsd]
-  data = [sys_clean_text(item) if item not in [company, envio, url] else item for item in data]
+  data = [clean_text(item) if item not in [company, envio, url] else item for item in data]
       
   return data
 
@@ -729,7 +718,7 @@ def clean_nsd(nsd):
 
   return nsd
 
-def nsd_get_nsd_content():
+def get_nsd_content():
     try:
         safety_factor = b3.safety_factor
         gap = 0
@@ -737,25 +726,25 @@ def nsd_get_nsd_content():
         filename = 'nsd_links'
         cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
 
-        nsd = sys_read_or_create_dataframe(filename, cols_nsd)
+        nsd = read_or_create_dataframe(filename, cols_nsd)
         if not nsd.empty:
             nsd['envio'] = pd.to_datetime(nsd['envio'], dayfirst=True)
-            start, end = nsd_nsd_range(nsd, safety_factor)
+            start, end = nsd_range(nsd, safety_factor)
         else:
             start, end = 1, 100
 
         start_time = time.time()
         for i, n in enumerate(range(start, end)):
             # interrupt conditions
-            last_date, limit_date, max_gap = nsd_nsd_dates(nsd, safety_factor)
+            last_date, limit_date, max_gap = nsd_dates(nsd, safety_factor)
             if last_date > limit_date:
                 if gap == max_gap:
                     break
 
-            progress = sys_remaining_time(start_time, end-start, i)
+            progress = remaining_time(start_time, end-start, i)
             try:
                 # add nsd row to dataframe
-                row = sys_get_nsd(n)
+                row = get_nsd(n)
                 nsd = pd.concat([nsd, pd.DataFrame([row], columns=cols_nsd)])
                 print(n, progress, row[10], row[4], row[3], row[0])
                 # reset gap
@@ -767,17 +756,17 @@ def nsd_get_nsd_content():
 
             # if n% b3.bin_size == 0:
             if (end-start - i - 1)% b3.bin_size == 0:
-                nsd = sys_save_and_pickle(nsd, filename)
+                nsd = save_and_pickle(nsd, filename)
                 print('partial save')
 
-        nsd = sys_save_and_pickle(nsd, filename)
+        nsd = save_and_pickle(nsd, filename)
         # print('final save')
     except Exception as e:
         pass
 
     return nsd
 
-def stk_get_acoes(driver, wait, url):
+def get_acoes(driver, wait, url):
     try:
         select_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='cmbGrupo']")))
 
@@ -805,133 +794,44 @@ def stk_get_acoes(driver, wait, url):
 
     return acoes
 
-def synchronize_nsd_and_acoes(filtered_nsd, acoes):
-    """
-    Update and synchronize the nsd and acoes dataframes.
+def get_composicao_acionaria():
+    driver, wait = load_browser()
+    filename = 'nsd_links'
+    cols_nsd = ['company', 'dri', 'dri2', 'dre', 'data', 'versao', 'auditor', 'auditor_rt', 'cancelamento', 'protocolo', 'envio', 'url', 'nsd']
+    nsd = get_nsd_content()
+    selected_dre = ['INFORMACOES TRIMESTRAIS', 'DEMONSTRACOES FINANCEIRAS PADRONIZADAS']
+    filtered_nsd = nsd[nsd['dre'].isin(selected_dre)]
 
-    This function processes the nsd dataframe to include only the rows with specific 'dre' types,
-    indicating they are either quarterly reports or standardized financial statements.
-    It then renames columns to match those in acoes, converts the 'nsd' column to integers, and
-    sorts the data to put the most recent documents at the top. After filtering out duplicates,
-    the function extracts the 'nsd' from the URL in the acoes dataframe and merges the two dataframes.
-    It removes any rows in acoes that have an 'nsd' less than the maximum for their respective company
-    and quarter. Finally, it filters out any URLs from filtered_nsd that are present in acoes,
-    ensuring no overlap between the two dataframes in terms of URLs.
+    filename = 'acoes'
+    columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
+    acoes = read_or_create_dataframe(filename, columns)
 
-    Parameters:
-    nsd (DataFrame): The nsd dataframe to be processed.
-    acoes (DataFrame): The acoes dataframe to be updated based on nsd.
+    last = 0
+    if len(acoes) > 0:
+        last = acoes.index[-1]
 
-    Returns:
-    DataFrame: The updated filtered_nsd dataframe with duplicates and outdated entries removed.
-    DataFrame: The updated acoes dataframe with only the most recent entries for each company and quarter.
-    """
-    # Renomear colunas para que 'company' se torne 'Companhia' e 'data' se torne 'Trimestre'.
-    # Isso é necessário para que as colunas correspondam às de acoes, permitindo futuras comparações e combinações.
-    filtered_nsd.rename(columns={'company': 'Companhia', 'data': 'Trimestre'}, inplace=True)
-
-    # Extrair o número sequencial do documento (nsd) da URL no DataFrame acoes.
-    # Isso é feito dividindo a URL em partes e pegando o número que aparece logo após 'Documento='.
-    acoes['nsd'] = acoes['URL'].apply(lambda x: int(x.split('Documento=')[-1].split('&')[0]))
-
-    # Converter a coluna 'Trimestre' em acoes para o tipo datetime, assim como fizemos com filtered_nsd.
-    acoes['Trimestre'] = pd.to_datetime(acoes['Trimestre'], errors='coerce', format='%d%m%Y')
-
-    # Agrupar filtered_nsd por Companhia e Trimestre e pegar o maior nsd para cada grupo.
-    # Isso nos dá o documento mais recente para cada empresa e trimestre.
-    nsd_max_filtered_nsd = filtered_nsd.groupby(['Companhia', 'Trimestre'])['nsd'].max().reset_index()
-
-    # Fazer um merge (junção) entre acoes e nsd_max_filtered_nsd para combinar as linhas com base em Companhia e Trimestre.
-    # Adicionamos um indicador para ver se a linha resultante é uma correspondência ('both') ou não ('left_only').
-    # Isso ajuda a identificar quais linhas em acoes têm um documento correspondente em nsd que é o mais recente.
-
-    acoes['Trimestre'] = pd.to_datetime(acoes['Trimestre'], errors='coerce')
-    acoes['nsd'] = acoes['nsd'].astype(int)
-
-    nsd_max_filtered_nsd['Trimestre'] = pd.to_datetime(nsd_max_filtered_nsd['Trimestre'], errors='coerce')
-    nsd_max_filtered_nsd['nsd'] = nsd_max_filtered_nsd['nsd'].astype(int)
-
-    acoes_updated = pd.merge(acoes, nsd_max_filtered_nsd, on=['Companhia', 'Trimestre', 'nsd'], how='left', indicator=True)
-
-    # Realizar outra junção entre acoes e nsd_max_filtered_nsd para comparar os nsd.
-    # Desta vez, a junção é feita para trazer o nsd máximo ao lado do nsd atual em acoes.
-    acoes_updated = pd.merge(acoes, nsd_max_filtered_nsd, on=['Companhia', 'Trimestre'], how='left', suffixes=('', '_max'))
-
-    # Remover as linhas de acoes onde o nsd é menor que o nsd máximo para a respectiva Companhia e Trimestre.
-    # Isso efetivamente atualiza acoes para manter apenas as entradas mais recentes.
-    acoes_most_recent = acoes_updated[acoes_updated['nsd'] >= acoes_updated['nsd_max']].drop(columns=['nsd_max'])
-
-    # Obter uma lista de URLs presentes em acoes_most_recent para saber quais URLs devemos remover de filtered_nsd.
-    urls_to_remove = acoes_most_recent['URL'].unique()
-
-    # Filtrar filtered_nsd para remover as linhas cuja URL está na lista de urls_to_remove.
-    # Isso assegura que não haja sobreposição entre acoes_most_recent e filtered_nsd em termos de URLs.
-    filtered_nsd = filtered_nsd[~filtered_nsd['url'].isin(urls_to_remove)]
-
-    # Revert the column names in filtered_nsd to their original state
-    filtered_nsd.rename(columns={'Companhia': 'company', 'Trimestre': 'data'}, inplace=True)
-    
-    # Drop the 'nsd' and 'nsd_max' columns from acoes_updated
-    acoes_updated.drop(columns=['nsd', 'nsd_max'], inplace=True)
-    
-    return filtered_nsd, acoes_updated
-
-def stk_get_composicao_acionaria():
-    try:
-        # load dataframes
-        nsd = nsd_get_nsd_content()
-
-        filename = 'acoes'
-        columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
-        acoes = sys_read_or_create_dataframe(filename, columns)
-
-        # Filtrar nsd para incluir apenas as linhas que têm 'dre' como 'INFORMACOES TRIMESTRAIS' ou
-        # 'DEMONSTRACOES FINANCEIRAS PADRONIZADAS'. Isso é como se estivéssemos selecionando
-        # apenas os documentos que são relatórios trimestrais ou demonstrações financeiras padronizadas.
-        selected_dre = ['INFORMACOES TRIMESTRAIS', 'DEMONSTRACOES FINANCEIRAS PADRONIZADAS']
-        filtered_nsd = nsd[nsd['dre'].isin(selected_dre)].copy()
-
-        # Converter a coluna 'nsd' para inteiros para permitir comparações numéricas e
-        # ordenar as linhas para que os documentos mais recentes fiquem no topo.
-        filtered_nsd['nsd'] = filtered_nsd['nsd'].astype(int)
-        filtered_nsd.sort_values(by='nsd', ascending=True, inplace=True)
-
-        # Converter a coluna 'Trimestre' para o tipo datetime para permitir comparações de datas.
-        # Isso transforma strings que representam datas em objetos de data reais.
-        filtered_nsd['data'] = pd.to_datetime(filtered_nsd['data'], errors='coerce', format='%d%m%Y')
-
-        # Remover duplicatas em filtered_nsd, mantendo apenas a entrada mais recente para cada combinação de Companhia-Trimestre.
-        # Isso garante que, se tivermos múltiplos documentos para a mesma empresa e trimestre, só o mais recente seja mantido.
-        filtered_nsd.drop_duplicates(subset=['company', 'data'], keep='last', inplace=True)
-
-        if len(acoes) > 0:
-            filtered_nsd, acoes = synchronize_nsd_and_acoes(filtered_nsd, acoes)
-
-        filtered_nsd.sort_values(by=['company, data'], ascending=[True, True], inplace=True)
-
-        driver, wait = sys_load_browser()
-
-        start_time = time.time()
-        for j, (i, row) in enumerate(filtered_nsd.iterrows()):
-            company = row['company']
-            data = row['data']
-            url = row['url']
+    start_time = time.time()
+    for j, (i, row) in enumerate(filtered_nsd.iterrows()):
+        if j <= last:
+            continue # debug
         
-            driver.get(url)
-            data = [company, data] + stk_get_acoes(driver, wait, url)
-            acoes = pd.concat([acoes, pd.DataFrame([data], columns=columns)], ignore_index=True)
-        
-            print(sys_remaining_time(start_time, len(filtered_nsd), j), i, data[0], data[1], data[2], data[3], data[4], data[5])
-            if (len(filtered_nsd) - j - 1) % b3.bin_size == 0:
-                acoes = sys_save_and_pickle(acoes, filename)
-                print('partial save')
+        company = row['company']
+        data = row['data']
+        url = row['url']
+        print(remaining_time(start_time, len(filtered_nsd), j), company, data)
+    
+        driver.get(url)
+        data = [company, data] + get_acoes(driver, wait, url)
+        acoes = pd.concat([acoes, pd.DataFrame([data], columns=columns)], ignore_index=True)
+    
+        if (len(filtered_nsd) - j - 1)% b3.bin_size == 0:
+            acoes = save_and_pickle(acoes, filename)
+            print('partial save')
 
-        acoes = acoes.drop_duplicates()
-        acoes = sys_save_and_pickle(acoes, filename)
-        print('final save')
-        driver.quit()
-    except Exception as e:
-        pass
+    acoes = acoes.drop_duplicates()
+    acoes = save_and_pickle(acoes, filename)
+    print('final save')
+    driver.quit()
     return acoes
 
 # dre
@@ -964,7 +864,7 @@ def clean_dre(dre):
 def get_new_dre_links(dre):
       # load links
     filename = 'nsd_links'
-    nsd = sys_read_or_create_dataframe(filename, b3.cols_nsd)
+    nsd = read_or_create_dataframe(filename, b3.cols_nsd)
     nsd = clean_nsd(nsd)
 
     # filter most recent by company and data, drop duplicates, keep most recent
@@ -1445,7 +1345,7 @@ def item_to_list(item):
     if type(item) is tuple:
         item = list(item)
     if type(item) is list:
-        item = [sys_clean_text(word) for word in item]
+        item = [clean_text(word) for word in item]
         item = '|'.join(item)
 
     return item
@@ -1472,35 +1372,35 @@ def filter_df_old(df='', line='', exact='', exact_exclusion='', startswith='', s
             if startswith != '':
                 item = item_to_list(startswith)
                 item = item.split('|')[0]
-                startswith_mask = (df[line].apply(lambda word: sys_clean_text(word)).str[:len(item)] == item).replace({np.nan: False})
+                startswith_mask = (df[line].apply(lambda word: clean_text(word)).str[:len(item)] == item).replace({np.nan: False})
 
             # startswith_not
             if startswith_not != '':
                 item = item_to_list(startswith_not)
                 item = item.split('|')[0]
-                startswith_not_mask = ~(df[line].apply(lambda word: sys_clean_text(word)).str[:len(item)] == item).replace({np.nan: False})
+                startswith_not_mask = ~(df[line].apply(lambda word: clean_text(word)).str[:len(item)] == item).replace({np.nan: False})
 
             # endswith
             if endswith != '':
                 item = item_to_list(endswith)
                 item = item.split('|')[0]
-                endswith_mask = (df[line].apply(lambda word: sys_clean_text(word)).str[-len(item):] == item).replace({np.nan: False})
+                endswith_mask = (df[line].apply(lambda word: clean_text(word)).str[-len(item):] == item).replace({np.nan: False})
 
             # endswith_not
             if endswith_not != '':
                 item = item_to_list(endswith_not)
                 item = item.split('|')[0]
-                endswith_not_mask = ~(df[line].apply(lambda word: sys_clean_text(word)).str[-len(item):] == item).replace({np.nan: False})
+                endswith_not_mask = ~(df[line].apply(lambda word: clean_text(word)).str[-len(item):] == item).replace({np.nan: False})
 
             # contains
             if contains != '':
                 item = item_to_list(contains)
-                contains_mask = df[line].apply(lambda word: sys_clean_text(word)).str.contains(item, case=False).replace({np.nan: False})
+                contains_mask = df[line].apply(lambda word: clean_text(word)).str.contains(item, case=False).replace({np.nan: False})
 
             # contains_not
             if contains_not != '':
                 item = item_to_list(contains_not)
-                contains_not_mask = ~df[line].apply(lambda word: sys_clean_text(word)).str.contains(item, case=False).replace({np.nan: False})
+                contains_not_mask = ~df[line].apply(lambda word: clean_text(word)).str.contains(item, case=False).replace({np.nan: False})
 
             # levelmin
             if levelmin != '':
@@ -1584,13 +1484,13 @@ def filter_conditions(df, line, conditions):
         elif operation == "exact_exclusion":
             mask &= (df[line] != value).replace({np.nan: False})
         elif operation == "startswith":
-            mask &= (df[line].apply(lambda word: sys_clean_text(word)).str[:len(value)] == value).replace({np.nan: False})
+            mask &= (df[line].apply(lambda word: clean_text(word)).str[:len(value)] == value).replace({np.nan: False})
         elif operation == "startswith_not":
-            mask &= (df[line].apply(lambda word: sys_clean_text(word)).str[:len(value)] != value).replace({np.nan: False})
+            mask &= (df[line].apply(lambda word: clean_text(word)).str[:len(value)] != value).replace({np.nan: False})
         elif operation == "endswith":
-            mask &= (df[line].apply(lambda word: sys_clean_text(word)).str[-len(value):] == value).replace({np.nan: False})
+            mask &= (df[line].apply(lambda word: clean_text(word)).str[-len(value):] == value).replace({np.nan: False})
         elif operation == "endswith_not":
-            mask &= (df[line].apply(lambda word: sys_clean_text(word)).str[-len(value):] != value).replace({np.nan: False})
+            mask &= (df[line].apply(lambda word: clean_text(word)).str[-len(value):] != value).replace({np.nan: False})
         elif operation == "contains":
             mask &= df[line].str.contains(value, case=False).replace({np.nan: False})
         elif operation == "contains_not":
@@ -2510,7 +2410,7 @@ def fundamentalist_dre(df, group):
       # create md_list (magic dre items list)
       md = {}
       for _, row in df.iterrows():
-          key = sys_clean_text(row['Conta'] + ' - ' + row['Descrição']).split('  ')
+          key = clean_text(row['Conta'] + ' - ' + row['Descrição']).split('  ')
           key = '_' + str(key[0]) + '_' + key[1].replace(' ','_').lower()
           md[key] = row['Valor']
       md_list = [*md.keys()]
@@ -2530,7 +2430,7 @@ def fundamentalist_dre(df, group):
     return result
 
 # storage functions
-def sys_upload_to_gcs(df, df_name):
+def upload_to_gcs(df, df_name):
     """Uploads a pandas DataFrame to Google Cloud Storage (GCS) as a zipped pickle file.
 
     Args:
@@ -2561,13 +2461,13 @@ def sys_upload_to_gcs(df, df_name):
 
       # Upload the buffer to GCS
       blob = bucket.blob(destination_blob_name)
-      blob.upload__local(buffer, content_type='application/zip')
+      blob.upload_from_file(buffer, content_type='application/zip')
     except Exception as e:
       # print(e)
       pass
     return df
 
-def sys_download_from_gcs(df_name):
+def download_from_gcs(df_name):
     """Downloads a zipped pickle file from Google Cloud Storage (GCS) and returns its contents as a pandas DataFrame.
 
     Args:
@@ -2628,7 +2528,7 @@ def pdf_download():
       #     "token": token,
       #     "versaoCaptcha": versaoCaptcha, 
       # }
-      # response = requests.post(url, headers=headers, data=json.dumps(data))
+      # response = requests.post(url, headers={'User-Agent': random.choice(b3.USER_AGENTS), 'Referer': random.choice(b3.REFERERS), 'Accept-Language': random.choice(b3.LANGUAGES),}, data=json.dumps(data))
       # # Get the base64-encoded PDF data from the response
       # pdf_data = response.json()['d']
 
@@ -2641,7 +2541,7 @@ def pdf_download():
 
       
       url = f"https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&numSequencia=567876&numVersao=1&numProtocolo={numeroProtocolo}&descTipo=IPE&CodigoInstituicao=1"
-      response = requests.get(url, headers=sys_header_random())
+      response = requests.get(url, headers={'User-Agent': random.choice(b3.USER_AGENTS), 'Referer': random.choice(b3.REFERERS), 'Accept-Language': random.choice(b3.LANGUAGES),})
 
       # Save PDF file to Google Cloud Service
       # GCS configuration
@@ -2661,7 +2561,7 @@ def pdf_download():
 
 # dre_cvm
 
-def sys_save_pkl(data, filename):
+def save_pkl(data, filename):
     """Saves data to a pickle file.
 
     Args:
@@ -2675,12 +2575,12 @@ def sys_save_pkl(data, filename):
         pickle.dump(data, f)
     # with zipfile.ZipFile(f'{filename}.zip', 'w', compression=zipfile.ZIP_DEFLATED) as zipf:
     #     # Save the data as a Pickle file within the zip archive
-    #     with zipf.open(f'{filename}.pkl', 'w') as datafile:
-    #         pickle.dump(data, datafile)
+    #     with zipf.open(f'{filename}.pkl', 'w') as data_file:
+    #         pickle.dump(data, data_file)
 
     return data
 
-def sys_load_pkl(filename):
+def load_pkl(filename):
     """Loads data from a pickle file.
 
     Args:
@@ -2692,12 +2592,12 @@ def sys_load_pkl(filename):
     with open(f'{filename}.pkl', 'rb') as f:
         data = pickle.load(f)
     # with zipfile.ZipFile(f'{filename}.zip', 'r') as zipf:
-    #     with zipf.open(f'{filename}.pkl', 'r') as datafile:
-    #         data = pickle.load(datafile)
+    #     with zipf.open(f'{filename}.pkl', 'r') as data_file:
+    #         data = pickle.load(data_file)
 
     return data
 
-def create_demofile():
+def create_demo_file():
     """Creates a demo dictionary by loading pickled dataframes for each year.
 
     Args:
@@ -2707,20 +2607,20 @@ def create_demofile():
         dict: A dictionary containing loaded demo dataframes for each year.
     """
     try:
-        cvm_web = {}
+        cvm_new = {}
         years = range(b3.start_year, datetime.datetime.now().year + 1)
         start_time = time.time()
 
         for i, year in enumerate(years):
-            print(sys_remaining_time(start_time, len(years), i))
-            dataframe = sys_load_pkl(f'{b3.app_folder}/dataframe_{year}')
-            cvm_web[year] = dataframe
+            print(remaining_time(start_time, len(years), i))
+            dataframe = load_pkl(f'{b3.app_folder}/dataframe_{year}')
+            cvm_new[year] = dataframe
     except Exception as e:
         # print(e)
         pass
-    return cvm_web
+    return cvm_new
 
-def sys_gather_links(url):
+def gather_links(url):
   """
   Recursively gathers links to files with specific extensions from a given URL.
 
@@ -2747,7 +2647,7 @@ def sys_gather_links(url):
       if full_link.endswith((".csv", ".zip", ".txt")):
         b3.filelist.append(full_link)
       elif full_link.endswith("/"):
-        sys_gather_links(full_link)
+        gather_links(full_link)
   return b3.filelist
 
 def extract_meta(content):
@@ -2794,7 +2694,7 @@ def extract_meta(content):
     
     return meta_dict
 
-def cvm_get_metadados(filelist):
+def get_metadados(filelist):
     """
     Extracts and processes metadata from files in the provided list of file links.
 
@@ -2814,18 +2714,18 @@ def cvm_get_metadados(filelist):
         requests.exceptions.HTTPError: If there is an HTTP error while fetching file content.
     """
     meta_dict = {}
-    metafiles = [filelink for filelink in filelist if "meta" in filelink]
+    meta_files = [filelink for filelink in filelist if "meta" in filelink]
 
-    for file in metafiles:
+    for file in meta_files:
         response = b3.session.get(file)
         response.raise_for_status()
 
         if file.endswith('.zip'):
-            zipfile = zipfile.ZipFile(io.BytesIO(response.content))
+            zip_file = zipfile.ZipFile(io.BytesIO(response.content))
 
-            for filein_zip in zipfile.namelist():
-                with zipfile.open(filein_zip) as zipfilecontent:
-                    filecontent = zipfilecontent.read().decode('utf-8', errors='ignore')
+            for filein_zip in zip_file.namelist():
+                with zip_file.open(filein_zip) as zip_filecontent:
+                    filecontent = zip_filecontent.read().decode('utf-8', errors='ignore')
                     d = extract_meta(filecontent)
                     meta_dict[filein_zip.split('.')[0]] = d
         elif file.endswith('.txt'):
@@ -2836,7 +2736,7 @@ def cvm_get_metadados(filelist):
 
     return meta_dict
 
-def cvm_get_categories(filelist):
+def get_categories(filelist):
     """
     Extracts and returns categories from a list of file links.
 
@@ -2855,7 +2755,7 @@ def cvm_get_categories(filelist):
         The function would return: ['category1', 'category2']
     """
     categories = set()
-    # metafiles = [filelink for filelink in filelist if "meta" in filelink]
+    # meta_files = [filelink for filelink in filelist if "meta" in filelink]
     # files = [filelink for filelink in filelist if "meta" not in filelink]
 
     for filelink in filelist:
@@ -2865,7 +2765,7 @@ def cvm_get_categories(filelist):
 
     return categories
 
-def cvm_get_database_filelist_links():
+def get_filelink_df(base_cvm):
     """
     Retrieves file links and associated dates from a list of URLs.
 
@@ -2879,10 +2779,9 @@ def cvm_get_database_filelist_links():
     Returns:
         pandas.DataFrame: A DataFrame containing file names and dates for the current year.
     """
-    url = b3.base_cvm
-    print(f'... connecting to web "{url}"')
+    print(f'... connecting to web "{base_cvm}"')
     print(f'    to get list of available files for download')
-    filelist = sys_gather_links(url)
+    filelist = gather_links(base_cvm)
     folders = set()
 
     # Extract folder URLs from file links
@@ -2894,8 +2793,7 @@ def cvm_get_database_filelist_links():
     start_time = time.time()
     # Loop through folder URLs and extract file information
     for i, url in enumerate(folders):
-        print(sys_remaining_time(start_time, len(folders), i))
-        response = requests.get(url, headers=sys_header_random())
+        response = requests.get(url, headers={'User-Agent': random.choice(b3.USER_AGENTS), 'Referer': random.choice(b3.REFERERS), 'Accept-Language': random.choice(b3.LANGUAGES),})
         response.raise_for_status()
         tree = html.fromstring(response.content)
         contents = tree.xpath(b3.xpath_cvm) 
@@ -2910,115 +2808,127 @@ def cvm_get_database_filelist_links():
                     date = pd.to_datetime(f'{parts[1]}', format='%d-%b-%Y')
                     fileinfo_df.append([filename, date])
 
+        print(remaining_time(start_time, len(folders), i))
     # Create and filter DataFrame for the current year
     fileinfo_df = pd.DataFrame(fileinfo_df, columns=['filename', 'date'])
 
     return fileinfo_df
 
-def cvm_download_csv_files(filelist_df, types=['itr', 'dfp']):
+def download_database(filelist_df, types=['itr', 'dfp']):
     """
-    Downloads and processes database files based on specified DEMONSTRATIVO values.
+    Downloads and processes CSV files from zipped sources based on specified types.
 
-    This function takes a list of DEMONSTRATIVO values and a DataFrame containing file information.
-    It downloads and processes database files associated with the specified DEMONSTRATIVO values.
-    The downloaded CSV files are extracted, metadata is extracted from filenames, and data is loaded
-    into pandas DataFrames with added metadata columns.
+    It filters files from the provided DataFrame, downloads zipped files, extracts and reads CSV files,
+    enriches them with metadata extracted from filenames, and compiles them into a list of DataFrames.
 
     Args:
-        cvm_webs (list): A list of DEMONSTRATIVO values to filter files.
-        filelist_df (pandas.DataFrame): A DataFrame containing file names and dates.
+        filelist_df (pandas.DataFrame): A DataFrame with 'filename' column containing file URLs.
+        types (list): A list of strings representing types of reports to filter and process.
 
     Returns:
-        list: A list of pandas DataFrames containing processed database files.
+        list of pandas.DataFrame: A list containing processed DataFrames for each downloaded CSV.
     """
+    
+    # Convert the 'filename' column into a list for iteration
     filelist = filelist_df['filename'].to_list()
-    total_size = 0  
+    dataframes = []  # Initialize a list to store the processed DataFrames
+
+    # Initialize counters for statistics
+    total_size = 0
     total_size_csv = 0
     total_rows = 0
-    dataframes = []
+
+    # Record the start time for the entire process
     start_time = time.time()
 
-    # Iterate through DEMONSTRATIVO values
-    for i, demonstrativo in enumerate(types):
-        # Retrieve the list of files based on the specified 'DEMONSTRATIVO'
-        download_files = [filelink for filelink in filelist if 'meta' not in filelink and demonstrativo in filelink]
+    # Iterate over the provided DEMONSTRATIVO types
+    for demonstrativo in types:
+        # Filter the list of files for the current 'DEMONSTRATIVO'
+        download_files = [
+            filelink for filelink in filelist if 'meta' not in filelink and demonstrativo in filelink
+        ]
 
-        # Iterate through the list of URLs
+        # Record the start time for downloading this 'DEMONSTRATIVO'
         start_time_2 = time.time()
-        for j, zip_url in enumerate(download_files):
-            response = requests.get(zip_url, headers=sys_header_random())
 
-            # Check if the download was successful
+        for zip_url in download_files:
+            # Download the file with a random user-agent and referer from the predefined lists
+            response = requests.get(
+                zip_url,
+                headers={
+                    'User-Agent': random.choice(b3.USER_AGENTS),
+                    'Referer': random.choice(b3.REFERERS),
+                    'Accept-Language': random.choice(b3.LANGUAGES),
+                }
+            )
+
+            # Proceed only if the download was successful
             if response.status_code == 200:
-                # Get the size of the downloaded file
-                filesize = len(response.content) / (1024 ** 2)
+                filesize = len(response.content) / (1024 ** 2)  # Size in megabytes
                 total_size += filesize
 
-                # Extract the zip file in memory
+                # Extract the zip file into memory
                 with zipfile.ZipFile(io.BytesIO(response.content)) as zip_ref:
-                    # Iterate through the files in the zip
+                    # Record the start time for processing files within this zip
                     start_time_3 = time.time()
-                    for k, fileinfo in enumerate(zip_ref.infolist()):
-                        # Check if the file is a CSV
+
+                    for fileinfo in zip_ref.infolist():
+                        # Process only CSV files
                         if fileinfo.filename.lower().endswith('.csv'):
-                            # Extract the CSV file
+                            # Extract the CSV file content
                             csv_content = zip_ref.read(fileinfo.filename)
                             csv_filename = os.path.basename(fileinfo.filename)
 
-                            # Extract metadata from the CSV filename
-                            meta_csv = csv_filename.replace('cia_aberta_', '').replace('.csv', '').split('_')
-                            ano = meta_csv[-1]
-                            demonstrativo = meta_csv[0]
-                            meta_csv = meta_csv[1:-1]
-                            if len(meta_csv) > 0:
-                                agrupamento = meta_csv[-1]
-                                meta_csv = meta_csv[:-1]
-                            else:
-                                agrupamento = ''
-                            balance_sheet = '_'.join(meta_csv)
+                            # Parse metadata from the filename
+                            meta_csv = parse_metadata_from_filename(csv_filename)
 
-                            # Read CSV content into a pandas DataFrame
-                            csv_data = pd.read_csv(io.BytesIO(csv_content), encoding='iso-8859-1', sep=';')
+                            # Load the CSV content into a pandas DataFrame
+                            csv_data = pd.read_csv(
+                                io.BytesIO(csv_content),
+                                encoding='iso-8859-1',
+                                sep=';'
+                            )
 
-                            # Add metadata columns to the DataFrame
-                            csv_data.insert(0, 'FILENAME', csv_filename)
-                            csv_data.insert(1, 'DEMONSTRATIVO', demonstrativo)
-                            csv_data.insert(2, 'BALANCE_SHEET', balance_sheet)
-                            csv_data.insert(3, 'ANO', ano)
-                            csv_data.insert(4, 'AGRUPAMENTO', agrupamento)
+                            # Insert metadata columns into the DataFrame
+                            insert_metadata_columns(csv_data, meta_csv)
 
-                            # Append the DataFrame to the list
+                            # Append the DataFrame to our list
                             dataframes.append(csv_data)
                             total_rows += len(csv_data)
 
-                        print('  ' + '  ' + sys_remaining_time(start_time_3, len(zip_ref.infolist()), k))
-            print('  ' + sys_remaining_time(start_time_2, len(download_files), j))
-        print(sys_remaining_time(start_time, len(types), i))
-    print(f'Total {len(dataframes)} databases found and {total_rows} lines downloaded')
+            # Optional: Function to calculate and display remaining time for this part
+            # print('  ' + remaining_time(start_time_2, len(download_files), download_files.index(zip_url)))
+
+    # Optional: Display total statistics about the process
+    # print(f'Total {len(dataframes)} databases found and {total_rows} lines downloaded')
     return dataframes
 
-def sys_word_to_remove(text):
+def clean_cell(cell):
     """
-    Removes specified words from a text content.
+    Removes specified words from a cell content.
 
-    This function takes a text content (string) and removes specified words from it.
+    This function takes a cell content (string) and removes specified words from it.
     The words to remove are defined in the 'words_to_remove' list.
 
     Args:
-        text (str): The content of the text to be cleaned.
+        cell (str): The content of the cell to be cleaned.
 
     Returns:
-        str: The cleaned text content without the specified words.
+        str: The cleaned cell content without the specified words.
     """
-    pattern = '|'.join(map(re.escape, b3.words_to_remove))
-    text = re.sub(pattern, '', text)
-    return text
+    words_to_remove = ['  EM LIQUIDACAO', ' EM LIQUIDACAO', ' EXTRAJUDICIAL', '  EM RECUPERACAO JUDICIAL', '  EM REC JUDICIAL', ' EM RECUPERACAO JUDICIAL']
+    for word in words_to_remove:
+        if word in cell:
+            cell = cell.replace(word, '').strip()
+    return cell
 
-def sys_adjust_vl_conta(row):
-    if row['ESCALA_MOEDA'] == 'MIL':
-        row['VL_CONTA'] = row['VL_CONTA'] * 1000
-        row['ESCALA_MOEDA'] = 'UNIDADE'
-
+def adjust_vl_conta(row):
+    try:
+        if row['ESCALA_MOEDA'] == 'MIL':
+            row['VL_CONTA'] = row['VL_CONTA'] * 1000
+            row['ESCALA_MOEDA'] = 'UNIDADE'
+    except Exception as e:
+        pass
     return row
 
 def yearly(df_list):
@@ -3041,7 +2951,6 @@ def yearly(df_list):
     for i, df in enumerate(df_list):
         # Get the year from the 'DT_REFER' column
         year = pd.to_datetime(df['DT_REFER']).dt.year.iloc[0]
-        print(year, sys_remaining_time(start_time, len(df_list), i))
 
         # Check if the year is already a key in the dictionary, if not, create a list for it
         if year not in df_y:
@@ -3050,17 +2959,18 @@ def yearly(df_list):
         # Append the DataFrame to the list for the respective year
         df_y[year].append(df)
 
+        print(year, remaining_time(start_time, len(df_list), i))
     print('... concatenating')
     start_time = time.time()
 
     # Concatenate DataFrames within each year's list
     for i, (year, df_list) in enumerate(df_y.items()):
-        print(year, sys_remaining_time(start_time, len(df_y), i))
         df_y[year] = pd.concat(df_list, ignore_index=True)
+        print(year, remaining_time(start_time, len(df_y), i))
 
     return df_y
 
-def cvm_clean_dataframe(dict_of_df):
+def clean_dataframe(dict_of_df):
     """
     Cleans and preprocesses DataFrames in a dictionary.
 
@@ -3082,6 +2992,7 @@ def cvm_clean_dataframe(dict_of_df):
     print('... cleaning database')
     start_time = time.time()
     for i, (year, df) in enumerate(dict_of_df.items()):
+        print(f'pass {i+1}')
         
         # Remove extra rows based on specific conditions
         try:
@@ -3099,17 +3010,13 @@ def cvm_clean_dataframe(dict_of_df):
         #     df = df.drop(columns=['DT_INI_EXERC'])
         # except Exception as e:
         #     pass
-        # print('pass 1')
 
         # Clean up text in 'DENOM_CIA' column
         try:
-            df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_clean_text)
+            df['DENOM_CIA'] = df['DENOM_CIA'].apply(clean_text)
         except Exception as e:
             pass
-        try:
-            df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_word_to_remove)
-        except Exception as e:
-            pass
+        # print('pass 2')
 
         # Convert specified columns to specified formats
         for column in df.columns:
@@ -3131,131 +3038,114 @@ def cvm_clean_dataframe(dict_of_df):
 
         # adjust VL_CONTA according to ESCALA
         try:
-            df['VL_CONTA'] = df.apply(sys_adjust_vl_conta, axis=1)
+            df['VL_CONTA'] = df.apply(adjust_vl_conta, axis=1)
         except Exception as e:
             pass
         # print('pass 3')
 
         dict_of_df[year] = df
+        print(year, remaining_time(start_time, len(dict_of_df), i))
 
-        print(year, sys_remaining_time(start_time, len(dict_of_df), i))
     return dict_of_df
 
-def cvm_group_by_year(dataframes):
-    cvm_web = [df for df in dataframes if len(df) > 0 and ('con' in df['FILENAME'][0] or 'ind' in df['FILENAME'][0])]
+def group_by_year(dataframes):
+    cvm_new = [df for df in dataframes if len(df) > 0 and ('con' in df['FILENAME'][0] or 'ind' in df['FILENAME'][0])]
     links = [df for df in dataframes if len(df) > 0 and ('con' not in df['FILENAME'][0] and 'ind' not in df['FILENAME'][0])]
 
     print('... split by year')
-    cvm_web = yearly(cvm_web)
+    cvm_new = yearly(cvm_new)
     links = yearly(links)
 
     # Rename column for consistency
     for year in links.keys():
         links[year].rename(columns={'VERSAO': 'VERSAO_LINK'}, inplace=True)
 
-    return cvm_web, links
+    return cvm_new, links
 
-def cvm_get_database_filelist():
+
+def get_filelist(url):
     """
-    Update the cvm_web files based on new data from filelist_df.
+    Retrieves and filters a list of new file entries from a given URL based on their date.
 
-    This function updates the cvm_web files by downloading new data based on filelist_df.
-    It follows several steps to achieve this and also extracts metadata and categories.
+    This function pulls a DataFrame of file links and dates from a specified URL, checks against a local record
+    to determine which files are new since the last update, and returns a filtered list of these new files along
+    with the date of the most recent file in the list.
 
     Args:
-    None
+        url (str): The URL from which to retrieve the file list.
 
     Returns:
-    dict: Updated cvm_web data.
-    dict: Metadata information.
-    list: List of demonstrativos_cvm.
-
+        pandas.DataFrame: DataFrame of new files to be downloaded with their associated dates.
+        str: A string representation of the date of the most recent file in the format 'YYYY-MM-DD'.
     """
     # Retrieve DataFrame containing file links from base_cvm URL
-    # filelist_df = cvm_get_database_filelist_links()
-    # filelist_df = sys_save_pkl(filelist_df, f'{b3.app_folder}/temp_filelist_df')
-    print('fast debug filelist_df')
-    filelist_df = sys_load_pkl(f'{b3.app_folder}/temp_filelist_df')
+    filelist_df = get_filelink_df(url)
     
-    # Find the maximum date in the filelist_df
+    # Find the maximum date in the filelist_df for reporting the latest file date
     last_update2 = filelist_df['date'].max().strftime('%Y-%m-%d')
 
+    # Attempt to read the last update date from a local file or use a default if not available
     try:
-        # Read last update date from 'last_update.txt' if available, else set to '1970-01-01'
         with open(f'{b3.app_folder}/last_update.txt', 'r') as f:
             last_update = f.read().strip()
-        if not last_update:
-            last_update = '1970-01-01'
-    except Exception as e:
+        last_update = last_update if last_update else '1970-01-01'
+    except FileNotFoundError:
         last_update = '1970-01-01'
 
-    # Filter filelist_df to include only files with dates greater than last_update
-    filelist_df = filelist_df[filelist_df['date'] > (pd.to_datetime(last_update) + pd.DateOffset(days=0))]
+    # Filter filelist_df to include only files with dates greater than the last update
+    filelist_df = filelist_df[filelist_df['date'] > pd.to_datetime(last_update)]
+    
+    # Notify the number of new files identified for download
     print(f'{len(filelist_df)} new files to download')
 
     return filelist_df, last_update2
 
-def cvm_get_web_database():
+def create_cvm(base_cvm):
+    # Retrieves and filters a list of new file entries from a given URL based on their date.
+    filelist_df, last_update = get_filelist(base_cvm)
+
+    # Downloads and processes CSV files from zipped sources based on specified types.
+    dataframes = download_database(filelist_df)
+    cvm_new, links = group_by_year(dataframes)
+    cvm_new = clean_dataframe(cvm_new)
+    if len(cvm_new) > 0:
+        cvm_new = save_pkl(cvm_new, f'{b3.app_folder}/cvm_new')
+
+    # debug
+    print('fast cvm debug')
+    cvm_new = load_pkl(f'{b3.app_folder}/cvm_new')
+
+    # Get metadata and categories from filelist
     try:
-        filelist_df, last_update = cvm_get_database_filelist()
-
-        # dataframes = cvm_download_csv_files(filelist_df)
-        # dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
-        # print('fast debug dataframes')
-        # dataframes = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes')
-        # cvm_web, links = cvm_group_by_year(dataframes)
-
-        # cvm_web = {k: v for k, v in cvm_web.items() if k == 2020}
-        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web')
-        # print('fast debug dataframes')
-        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
-
-        # links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
-        print('fast debug links')
-        links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
-
-        # cvm_web = cvm_clean_dataframe(cvm_web)
-        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web')
-        print('fast debug cvm_web cleaning')
-        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
-
-        # # Save last_update
-        # if len(cvm_web) > 0:
-        #     cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/cvm_web')
-        print('fast debug cvm_web save local')
-
-        # Get metadata and categories from filelist
-        try:
-            meta_dict = cvm_get_metadados(filelist_df['filename'].to_list())
-            categories = cvm_get_categories(filelist_df['filename'].to_list())
-            demonstrativos_cvm = []
-            for cat in categories:
-                term = 'DOC/'
-                if term in cat:
-                    demonstrativos_cvm.append(str(cat).replace(term,'').lower())
-        except Exception as e:
-            pass
-
-        try:
-            # Write the maximum date from filtered filelist_df to 'last_update.txt'
-            print('last update', last_update)
-            with open(f'{b3.app_folder}/last_update.txt', 'w') as f:
-                f.write(last_update)
-        except Exception as e:
-            pass
-
-        # Print results
-        try:
-            total_fields = sum((i + 1) * len(d) for i, d in enumerate(meta_dict.values()))
-            print(f'{b3.base_cvm}')
-            print(f'Encontradas {len(categories)} categorias com {len(meta_dict)} arquivos meta contendo {total_fields} campos')
-            if demonstrativos_cvm:
-                print(demonstrativos_cvm)
-        except Exception as e:
-            pass
+        meta_dict = get_metadados(filelist_df['filename'].to_list())
+        categories = get_categories(filelist_df['filename'].to_list())
+        demonstrativos_cvm = []
+        for cat in categories:
+            term = 'DOC/'
+            if term in cat:
+                demonstrativos_cvm.append(str(cat).replace(term,'').lower())
     except Exception as e:
         pass
-    return cvm_web
+
+    # Write the maximum date from filtered filelist_df to 'last_update.txt'
+    try:
+        print('last update', last_update)
+        with open(f'{b3.app_folder}/last_update.txt', 'w') as f:
+            f.write(last_update)
+    except Exception as e:
+        pass
+
+    # Print results
+    try:
+        total_fields = sum((i + 1) * len(d) for i, d in enumerate(meta_dict.values()))
+        print(f'{b3.base_cvm}')
+        print(f'Encontradas {len(categories)} categorias com {len(meta_dict)} arquivos meta contendo {total_fields} campos')
+        if demonstrativos_cvm:
+            print(demonstrativos_cvm)
+    except Exception as e:
+        pass
+
+    return cvm_new
 
 def adjust_quarters(group_df):
     """
@@ -3325,7 +3215,7 @@ def adjust_last_quarter(group_df):
 
     return group_df
 
-def cvm_math_calculations_adjustments(group):
+def apply_adjustments(group):
     """
     Apply the appropriate adjustment logic based on the 'BALANCE_SHEET' value of the group.
     
@@ -3370,99 +3260,84 @@ def cvm_math_calculations_adjustments(group):
     else:
         return group
 
-def cvm_get_updated_rows(df_local, df_web, df_columns, year):
-
-    # Define the list of columns that should not be included as key columns for merging.
-    no_columns = ['VL_CONTA']
-
-    # Generate the list of key columns for merging by excluding the columns listed in no_columns.
-    key_columns = [col for col in df_columns if col not in no_columns]
-
-    # Merge the local and web DataFrames based on the key columns, and an indicator column 
-    df_merged = pd.merge(df_local, df_web, on=key_columns, how='outer', suffixes=('_local', '_web'), indicator=True)
-
-    # Define conditions to determine which values to keep in the merged DataFrame.
-    conditions = [
-        df_merged['_merge'] == 'left_only',  # Rows that exist only in the local DataFrame.
-        df_merged['_merge'] == 'right_only',  # Rows that exist only in the web DataFrame.
-        (df_merged['_merge'] == 'both') & (df_merged['VL_CONTA_local'] != df_merged['VL_CONTA_web'])  # Rows that exist in both but have different 'VL_CONTA' values.
-    ]
-
-    # Define the choices corresponding to each condition.
-    choices = [
-        df_merged['VL_CONTA_local'],  # Keep the local value for 'VL_CONTA' if the row is from local only.
-        df_merged['VL_CONTA_web'],    # Keep the web value for 'VL_CONTA' if the row is from web only.
-        df_merged['VL_CONTA_web']     # Keep the web value for 'VL_CONTA' if the values differ between local and web.
-    ]
-
-    # Apply the conditions to create a new 'VL_CONTA' column in the merged DataFrame.
-    df_merged['VL_CONTA'] = np.select(conditions, choices, default=df_merged['VL_CONTA_web'])
-
-    # Create a mask to identify rows that have been updated or are new from the web DataFrame.
-    updated_rows_mask = (
-        (df_merged['_merge'] == 'right_only') |
-        ((df_merged['_merge'] == 'both') & (df_merged['VL_CONTA_local'] != df_merged['VL_CONTA_web']))
-    )
-
-    # Use the mask to filter the merged DataFrame to only include updated or new rows.
-    updated_rows = df_merged[updated_rows_mask]
-
-    # Define the columns to be used for the final filtering.
-    filt_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA']
-
-    # Perform an inner merge to filter the original merged DataFrame using the updated rows 
-    # and keep only the rows with matching values in the specified filter columns.
-    cvm_web = pd.merge(
-        updated_rows[filt_cols],  # Only the columns to match from the updated rows.
-        df_merged,  # The original merged DataFrame.
-        on=filt_cols,  # Columns to match on.
-        how='inner'  # Keep only matches found in both DataFrames.
-    )[df_columns]
-
-    # Display the number of updated rows.
-    print(f'{year} {len(updated_rows)}/{len(df_merged)} linhas foram atualizadas')
-
-    return cvm_web
-
-def cvm_updated_rows(cvm_local, cvm_web):
+def get_math_new_from_cvm(cvm_now, cvm_new):
     """
     Merge two dictionaries of dataframes and extract updated rows.
 
-    The function performs an outer merge on two dictionaries of dataframes, `cvm_local` (existing data) 
-    and `cvm_web` (new data). The purpose is to update old financial data with new financial data and 
+    The function performs an outer merge on two dictionaries of dataframes, `cvm_now` (existing data) 
+    and `cvm_new` (new data). The purpose is to update old financial data with new financial data and 
     to identify rows which have been updated for future mathematical transformations.
 
     Parameters:
-    - cvm_local (dict): Dictionary with years as keys and existing financial data as values (pandas DataFrames).
-    - cvm_web (dict): Dictionary with years as keys and new financial data as values (pandas DataFrames).
+    - cvm_now (dict): Dictionary with years as keys and existing financial data as values (pandas DataFrames).
+    - cvm_new (dict): Dictionary with years as keys and new financial data as values (pandas DataFrames).
 
     Returns:
     - tuple: Two dictionaries of dataframes - the first contains the merged data, and the second contains the updated rows.
 
     """
     
-    # Yearly updated data.
-    cvm_updated = {}
-    # Compile a list of years present in either local or web data.
-    years = sorted(set(cvm_local.keys()).union(cvm_web.keys()))
+    years = sorted(set(cvm_now.keys()).union(cvm_new.keys()))
 
-    # Get column names from the earliest year's data.
-    df_columns = (
-        cvm_local.get(min(years), pd.DataFrame()).columns
-        if min(years) in cvm_local
-        else cvm_web[min(years)].columns
-    )
+    df_columns = cvm_now.get(min(years), pd.DataFrame()).columns if min(years) in cvm_now else cvm_new[min(years)].columns
 
-    # Process each year's data.
-    for year in years:
-        # Obtain local and web data for the year.
-        df_local = cvm_local.get(year, pd.DataFrame(columns=df_columns))
-        df_web = cvm_web.get(year, pd.DataFrame(columns=df_columns))
+    value_column = 'VL_CONTA'
+    key_columns = [col for col in df_columns if col != value_column]
 
-        # Update rows by comparing local and web data.
-        cvm_updated[year] = cvm_get_updated_rows(df_local, df_web, df_columns, year)
+    cvm_merged = {}
+    math = {}
 
-    return cvm_updated
+    try:
+        for year in years:
+            df1 = cvm_now.get(year, pd.DataFrame(columns=df_columns))
+            df2 = cvm_new.get(year, pd.DataFrame(columns=df_columns))
+
+            if df1.empty and not df2.empty:
+                df_merged = df2
+                df_merged[f'{value_column}_now'] = pd.NA
+                df_merged[f'{value_column}_new'] = df2['VL_CONTA']
+                # df_merged.rename(columns={value_column: f'{value_column}_new'}, inplace=True)
+            elif df2.empty and not df1.empty:
+                df_merged = df1
+                df_merged[f'{value_column}_now'] = df1['VL_CONTA']
+                df_merged[f'{value_column}_new'] = pd.NA
+                # df_merged.rename(columns={value_column: f'{value_column}_now'}, inplace=True)
+            else:
+                df_merged = pd.merge(df1, df2, on=key_columns, how='right', suffixes=('_now', '_new'))
+
+            # Create mask for rows that need updating
+            # _now and _new have different values (and are not NaN)
+            mask_1a = ~df_merged[f'{value_column}_now'].isna()
+            mask_1b = ~df_merged[f'{value_column}_new'].isna()
+            mask_1c = df_merged[f'{value_column}_now'] != df_merged[f'{value_column}_new']
+            mask_1 = mask_1a & mask_1b & mask_1c
+
+            # _now is NaN but _new has values
+            mask_2a = df_merged[f'{value_column}_now'].isna()
+            mask_2b = ~df_merged[f'{value_column}_new'].isna()
+            mask_2 = mask_2a & mask_2b
+
+            mask_update = mask_1 | mask_2
+
+            # Update VL_CONTA column based on the mask
+            df_merged[value_column] = np.where(mask_update, df_merged[f'{value_column}_new'], df_merged[f'{value_column}_now'])
+
+            # Filter rows that were updated
+            df_math = df_merged[mask_update].copy()
+
+            # Remove temporary columns and store the processed dataframe
+            for df, result_dict in zip([df_merged, df_math], [cvm_merged, math]):
+                df.drop(columns=[f'{value_column}_now', f'{value_column}_new'], inplace=True)
+                df = df[df_columns]
+                result_dict[year] = df
+
+            print(f'{year}, {df_merged.shape[0]:,.0f} total, {df_math.shape[0]:,.0f} new lines')
+
+    except Exception as e:
+        # print(e)
+        pass
+
+    return cvm_merged, math
 
 def get_companies_by_str_port(df):
     """
@@ -3515,45 +3390,45 @@ def get_companies_by_str_port(df):
 
     return companies_by_str_port
 
-def cvm_wrapper_apply(group, pbar):
+def wrapper_apply(group, pbar):
     """Wrapper function for applying adjustments and updating the progress bar."""
-    result = cvm_math_calculations_adjustments(group)
+    result = apply_adjustments(group)
     pbar.update(1)  # Update the progress bar by one step
     return result
 
-def cvm_calculate_math(cvm):
+def get_calculated_math(math):
     """
-    Apply adjustments to dataframes for each year in the cvm dict.
+    Apply adjustments to dataframes for each year in the data_dict.
 
     Parameters:
-    - cvm (dict): Dictionary with years as keys and financial dataframes as values.
+    - data_dict (dict): Dictionary with years as keys and financial dataframes as values.
 
     Returns:
     - dict: Dictionary with years as keys and adjusted dataframes as values.
     """
-    # Initialize a dictionary to store the calculated dataframes for each year
-    math = {}
+    # Initialize a dictionary to store the adjusted dataframes for each year
+    math_new = {}
 
-    # Loop through each year in the cvm dictionary
-    for year, df_merged in cvm.items():
-        # Group the DataFrame by the specified columns
+    # Loop through each year in the data dictionary
+    for year, df_merged in math.items():
+        # Group the DataFrame by the columns: 'DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', and 'DS_CONTA'
         grouped = df_merged.groupby(['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA'], group_keys=False)
 
-        # Set up a progress bar to monitor the processing of each group
+        # Set up a progress bar to track the processing of each group
         with tqdm(total=grouped.ngroups, desc=f"Calculating quarter values for year {year}") as pbar:
-            # Use lambda to pass the progress bar to the function
-            calculated_df = grouped.apply(lambda group: cvm_wrapper_apply(group, pbar)).reset_index(drop=True)
+            # Use a lambda to pass the progress bar to the wrapper_apply function
+            adjusted_df = grouped.apply(lambda group: wrapper_apply(group, pbar)).reset_index(drop=True)
         
-        # Save the calculated dataframe to the math dictionary and to files
-        math[year] = calculated_df
-        # math = sys_save_pkl(math, f'{b3.app_folder}/math_local')
-        # math[year] = sys_save_pkl(math[year], f'{b3.app_folder}/math_{year}')
-    return math
+        # Store the adjusted dataframe in the result dictionary
+        math_new[year] = adjusted_df
+        math_new = save_pkl(math_new, f'{b3.app_folder}/math_now')
+        math_new[year] = save_pkl(math_new[year], f'{b3.app_folder}/math_new_{year}')
+    return math_new
 
-def year_to_company(cvm_web):
+def year_to_company(cvm_new):
 # Get all unique companies across all years
     all_companies = set()
-    for i, (year, df) in enumerate(cvm_web.items()):
+    for i, (year, df) in enumerate(cvm_new.items()):
         all_companies.update(df['DENOM_CIA'].unique())
 
     # Initialize the final dictionary with companies as keys
@@ -3564,9 +3439,9 @@ def year_to_company(cvm_web):
     try:
         for i, company in enumerate(all_companies):
         #   if company == 'ALPARGATAS SA':
-            print(sys_remaining_time(start_time, len(all_companies), i))
+            print(remaining_time(start_time, len(all_companies), i))
             company_df = []  # This will hold dataframes for each year for the company
-            for j, (year, df) in enumerate(cvm_web.items()):
+            for j, (year, df) in enumerate(cvm_new.items()):
                 company_data = df[df['DENOM_CIA'] == company]
                 company_df.append(company_data)
             companies[company] = pd.concat(company_df, ignore_index=True)
@@ -3574,7 +3449,7 @@ def year_to_company(cvm_web):
         pass    
         # Concatenate the data for the company across all years
 
-    companies = sys_save_pkl(companies, f'{b3.app_folder}/database')
+    companies = save_pkl(companies, f'{b3.app_folder}/database')
     return companies
 
 def get_diff(df1, df2):
@@ -3611,72 +3486,72 @@ def get_diff(df1, df2):
     # Return the DataFrame containing differences
     return df_math
 
-def create_df_math(df_old, df_web):
+def create_df_math(df_old, df_new):
     year = 2019
     try:
-        mask_cia = df_web[year]['DENOM_CIA'] == 'ALPARGATAS SA'
-        mask_agg = df_web[year]['AGRUPAMENTO'] == 'con'
-        mask_quarter = df_web[year]['DT_REFER'] == '2014-06-30'
-        mask_sheet = df_web[year]['BALANCE_SHEET'] == 'BPA'
-        mask_CD_CONTA = df_web[year]['CD_CONTA'] == '1'
+        mask_cia = df_new[year]['DENOM_CIA'] == 'ALPARGATAS SA'
+        mask_agg = df_new[year]['AGRUPAMENTO'] == 'con'
+        mask_quarter = df_new[year]['DT_REFER'] == '2014-06-30'
+        mask_sheet = df_new[year]['BALANCE_SHEET'] == 'BPA'
+        mask_CD_CONTA = df_new[year]['CD_CONTA'] == '1'
         mask = mask_cia & mask_agg & mask_quarter & mask_sheet & mask_CD_CONTA
-        df_web[year].loc[mask, 'VL_CONTA'] = 1000000.0
+        df_new[year].loc[mask, 'VL_CONTA'] = 1000000.0
     except Exception as e:
         pass
 
     try:
-        mask_cia = df_web[year+1]['DENOM_CIA'] == 'ALPARGATAS SA'
-        mask_agg = df_web[year+1]['AGRUPAMENTO'] == 'con'
-        mask_quarter = df_web[year+1]['DT_REFER'] == '2015-09-30'
-        mask_sheet = df_web[year+1]['BALANCE_SHEET'] == 'DRE'
-        mask_CD_CONTA = df_web[year+1]['CD_CONTA'] == '3.01'
+        mask_cia = df_new[year+1]['DENOM_CIA'] == 'ALPARGATAS SA'
+        mask_agg = df_new[year+1]['AGRUPAMENTO'] == 'con'
+        mask_quarter = df_new[year+1]['DT_REFER'] == '2015-09-30'
+        mask_sheet = df_new[year+1]['BALANCE_SHEET'] == 'DRE'
+        mask_CD_CONTA = df_new[year+1]['CD_CONTA'] == '3.01'
         mask = mask_cia & mask_agg & mask_quarter & mask_sheet & mask_CD_CONTA
-        df_web[year+1].loc[mask, 'VL_CONTA'] = 1000000.0
+        df_new[year+1].loc[mask, 'VL_CONTA'] = 1000000.0
     except Exception as e:
         pass
 
     try:
-        mask_cia = df_web[year+2]['DENOM_CIA'] == 'ALPARGATAS SA'
-        mask_agg = df_web[year+2]['AGRUPAMENTO'] == 'con'
-        mask_quarter = df_web[year+2]['DT_REFER'] == '2016-12-31'
-        mask_sheet = df_web[year+2]['BALANCE_SHEET'] == 'DFC_MI'
-        mask_CD_CONTA = df_web[year+2]['CD_CONTA'] == '6.01'
+        mask_cia = df_new[year+2]['DENOM_CIA'] == 'ALPARGATAS SA'
+        mask_agg = df_new[year+2]['AGRUPAMENTO'] == 'con'
+        mask_quarter = df_new[year+2]['DT_REFER'] == '2016-12-31'
+        mask_sheet = df_new[year+2]['BALANCE_SHEET'] == 'DFC_MI'
+        mask_CD_CONTA = df_new[year+2]['CD_CONTA'] == '6.01'
         mask = mask_cia & mask_agg & mask_quarter & mask_sheet & mask_CD_CONTA
-        df_web[year+2].loc[mask, 'VL_CONTA'] = 1000000.0
+        df_new[year+2].loc[mask, 'VL_CONTA'] = 1000000.0
     except Exception as e:
         pass
 
-   # Iterate through the years and DataFrames in df_web
+   # Iterate through the years and DataFrames in df_new
     # Initialize the dictionary to store differences
     df_math = {}
 
-    for year, df in df_web.items():
+    for year, df in df_new.items():
         # Check if the year is in the past
-        if year in df_old and df_old[year].shape == df_web[year].shape:
+        if year in df_old and df_old[year].shape == df_new[year].shape:
             # Call the get_diff function to identify and extract differences
-            dfs = get_diff(df_old[year], df_web[year])
+            dfs = get_diff(df_old[year], df_new[year])
             
             # Check if there are differences found
             if len(dfs) > 0:
                 # Store the differences in the dictionary using the year as the key
                 df_math[year] = dfs
             else: 
-                df_math[year] = df_web[year]
+                df_math[year] = df_new[year]
         else:
-            # If the year is not in df_old or the shapes don't match, store the entire df_web[year]
-            df_math[year] = df_web[year]
+            # If the year is not in df_old or the shapes don't match, store the entire df_new[year]
+            df_math[year] = df_new[year]
 
     return df_math.copy()
 
-def merge_cvm_math(cvm_web, df_math):
-    for year in cvm_web.keys():
+def merge_cvm_math(cvm_new, df_math):
+    for year in cvm_new.keys():
         # Update df_cvm['VL_CONTA'] using the values from df_math['VL_CONTA']
-        cvm_web[year].loc[df_math[year].index, 'VL_CONTA'] = df_math[year]['VL_CONTA']
-    return cvm_web
+        cvm_new[year].loc[df_math[year].index, 'VL_CONTA'] = df_math[year]['VL_CONTA']
+    return cvm_new
 
-def merge_math(math_existing, math_web):
+def merge_math(math_existing, math_new):
     df1 = math_existing
-    df2 = math_web
+    df2 = math_new
 
     # The key columns used to determine unique rows
     key_columns = ['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DT_REFER']
@@ -3721,39 +3596,36 @@ def merge_math(math_existing, math_web):
        pass
     return df_merged
 
-def math_from_cvm(cvm_local):
-    math_local = {}
-    years = sorted(cvm_local.keys())
-    df_columns = cvm_local[min(years)].columns
+def math_from_cvm(cvm_now):
+    math_now = {}
+    years = sorted(cvm_now.keys())
+    df_columns = cvm_now[min(years)].columns
     for year in years:
         try:
-            math_local[year] = sys_load_pkl(f'{b3.app_folder}/math_web_{year}')
+            math_now[year] = load_pkl(f'{b3.app_folder}/math_new_{year}')
         except Exception as e:
-            math_local[year] = pd.DataFrame(columns=df_columns)
+            math_now[year] = pd.DataFrame(columns=df_columns)
 
-    return math_local
+    return math_now
 
-def math_merge(math_local, math_web):
+def math_merge(math_now, math_new):
     print('... math merge')
     math = {}
-    years = sorted(set(math_local.keys()).union(math_web.keys()))
-    try:
-        df_columns = math_local[min(years)].columns
-    except Exception as e:
-        df_columns = math_web[min(years)].columns
+    years = sorted(set(math_now.keys()).union(math_new.keys()))
+    df_columns = math_now[min(years)].columns
     value_column = 'VL_CONTA'
     key_columns = [col for col in df_columns if col != value_column]
 
     try:
         for year in years:
             print(year)
-            df_local = math_local.get(year, pd.DataFrame(columns=df_columns))
-            df_web = math_web.get(year, pd.DataFrame(columns=df_columns))
+            df_now = math_now.get(year, pd.DataFrame(columns=df_columns))
+            df_new = math_new.get(year, pd.DataFrame(columns=df_columns))
 
             # Merge dataframes based on key columns
-            df_merged = pd.merge(df_local, df_web, on=key_columns, how='outer', suffixes=('_now', '_new'))
+            df_merged = pd.merge(df_now, df_new, on=key_columns, how='outer', suffixes=('_now', '_new'))
 
-            # Check if VL_CONTA in df_web contains a value, if it does, use it, otherwise use df_local's value
+            # Check if VL_CONTA in df_new contains a value, if it does, use it, otherwise use df_now's value
             mask = ~df_merged[f'{value_column}_new'].isna()
             df_merged[value_column] = np.where(mask, df_merged[f'{value_column}_new'], df_merged[f'{value_column}_now'])
 
@@ -3787,56 +3659,38 @@ def companies_from_math(math):
 
     return dict(sorted(company.items()))
 
-def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='', math_web=''):
+def get_math(math='', cvm_now='', cvm_new='', math_now='', math_new=''):
     try:
         # prepare CVM
-        if not cvm_local:
+        if not cvm_now:
             try:
-                cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
+                cvm_now = load_pkl(f'{b3.app_folder}/cvm_now')
             except Exception as e:
-                cvm_local = {}
-        if not cvm_web:
-            cvm_web = cvm_get_web_database()
+                cvm_now = {}
+        if not cvm_new:
+            cvm_new = create_cvm(b3.base_cvm)
 
-        cvm_web = cvm_updated_rows(cvm_local, cvm_web)
-        
-        math_local = cvm_calculate_math(cvm_local)
-        math_web = cvm_calculate_math(cvm_web)
-        math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp'+'math')
-
-
-        # # prepare MATH
-        # try:
-        #     math_local = sys_load_pkl(f'{b3.app_folder}/math')
-        # except Exception as e:
-        #     math_local = math_calculate_math_from_cvm(cvm_local)
-        
-        # math_web = math_calculate_math_from_cvm(cvm_web)
-        # # then merge with right overwrite
-
-
-
-
-
-
-        # math_local
+        # prepare MATH
+        # math_now
         try:
-            math_local = sys_load_pkl(f'{b3.app_folder}/temp'+'math')
+            math_now = load_pkl(f'{b3.app_folder}/math_now')
         except Exception as e:
-            math_local = {}
-# try:
-    # math_local = math_from_cvm(cvm_local) # shortcut to load math per year, not necessary unless huge huge database
-    # math_local = get_calculated_math(cvm_local) # this is where the groupby transformation mathmagic happens
-    # math_local = sys_save_pkl(math_local, f'{b3.app_folder}/math_local')
-# except Exception as e:
+            try:
+                math_now = math_from_cvm(cvm_now)
+            except Exception as e:
+                try:
+                    math_now = get_calculated_math(cvm_now)
+                    math_now = save_pkl(math_now, f'{b3.app_folder}/math_now')
+                except Exception as e:
+                    math_now = {}
 
-        # math_web
-        try:
-            math_web = sys_load_pkl(f'{b3.app_folder}/math_web')
-        except Exception as e:
-            cvm_local, math_web = cvm_updated_rows(cvm_local, cvm_web)
-
-        math = math_merge(math_local, math_web)
+        # math_new
+        if not math_new:
+            try:
+                math_new = load_pkl(f'{b3.app_folder}/math_new')
+            except Exception as e:
+                cvm_now, math_new = get_math_new_from_cvm(cvm_now, cvm_new)
+        math = math_merge(math_now, math_new)
 
     except Exception as e:
         pass
@@ -3844,7 +3698,7 @@ def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='',
     return math
 
 def get_math_from_b3_cvm():
-    b3_cvm = sys_load_pkl(f'{b3.app_folder}/b3_cvm')
+    b3_cvm = load_pkl(f'{b3.app_folder}/b3_cvm')
 
     # Initialize a new dictionary to hold the results
     math = {}
@@ -3872,7 +3726,7 @@ def get_math_from_b3_cvm():
     return math
 
 def get_classificacao_setorial(setorial=''):
-    driver, wait = sys_load_browser()
+    driver, wait = load_browser()
     driver.get(b3.url_setorial)
     # time.sleep(1)
 
@@ -3880,7 +3734,7 @@ def get_classificacao_setorial(setorial=''):
     download_link_element = driver.find_element(By.XPATH, '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/div[2]/div[3]/div[2]/p/a')
     url = download_link_element.get_attribute('href')
     time.sleep(3)
-    response = requests.get(url, headers=sys_header_random())
+    response = requests.get(url, headers={'User-Agent': random.choice(b3.USER_AGENTS), 'Referer': random.choice(b3.REFERERS), 'Accept-Language': random.choice(b3.LANGUAGES),})
     filename = url.split("/")[-1]
 
     with open(filename, 'wb') as f:
@@ -3988,11 +3842,11 @@ def get_companies(math, company):
         print(sector)
         b3_cvm[sector] = pd.concat(df_list, ignore_index=True)
 
-    b3_cvm = sys_save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
+    b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
 
     return b3_cvm
 
-def b3_get_company_full_info(data, full_company_info):
+def extract_company_info(data, full_company_info):
     # Name (assuming it's always the first item in the list)
     full_company_info["name"] = data[0].strip()
     data = data[1:]  # Removing the name as it's already processed
@@ -4025,9 +3879,9 @@ def b3_get_company_full_info(data, full_company_info):
         if match:
             sector_classification = match.group()
             setor, subsetor, segmento = sector_classification.split(' / ') if sector_classification else (None, None, None)
-            full_company_info["setor"] = sys_clean_text(setor)
-            full_company_info["subsetor"] = sys_clean_text(subsetor)
-            full_company_info["segmento"] = sys_clean_text(segmento)
+            full_company_info["setor"] = clean_text(setor)
+            full_company_info["subsetor"] = clean_text(subsetor)
+            full_company_info["segmento"] = clean_text(segmento)
             data.remove(item)
             break
 
@@ -4073,7 +3927,7 @@ def get_companies_from_b3_cards(driver, wait):
             # Create and append dictionaries with the company details
             for i in range(len(company_names)):
                 company_list_from_web.append({
-                    'COMPANHIA': sys_clean_text(company_names[i]),
+                    'COMPANHIA': clean_text(company_names[i]),
                     'PREGAO': trading_names[i],
                     'TICK': trading_codes[i],
                     'LISTAGEM': listagem_values[i]
@@ -4113,7 +3967,7 @@ def get_b3_companies_from_site(driver, wait, url):
         # Loop through each page and scrape company details
         start_time = time.time()
         for tp in range(total_pages):
-            print(sys_remaining_time(start_time, total_pages, tp))
+            print(remaining_time(start_time, total_pages, tp))
 
             # Attempt to scrape company details from the current page
             for attempt in range(max_retries):
@@ -4148,7 +4002,7 @@ def b3_grab_from_web(driver, wait, url):
     Returns:
     - str: status message
     """
-    b3_companies__local = sys_read_or_create_dataframe('b3_companies', b3.cols_b3_companies)
+    b3_companies_from_file = read_or_create_dataframe('b3_companies', b3.cols_b3_companies)
 
     try:
         # Get the total number of companies and pages
@@ -4174,15 +4028,15 @@ def b3_grab_from_web(driver, wait, url):
             wClick(f'//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a', wait)
             time.sleep(0.5)
             value = f'page {page+1}'
-            print(sys_remaining_time(start_time, pages+1, i), value)
+            print(remaining_time(start_time, pages+1, i), value)
         b3_companies_tickers = get_ticker_keywords(raw_code)
 
         # Update the missing companies from the database
-        b3_companies__local_keywords = []
+        b3_companies_from_file_keywords = []
         # Create a list of all current companies in the b3_companies dataframe
-        for index, row in b3_companies__local.iterrows():
+        for index, row in b3_companies_from_file.iterrows():
             try:
-                b3_companies__local_keywords.append(' '.join([str(row['ticker']), str(row['company_name'])]))
+                b3_companies_from_file_keywords.append(' '.join([str(row['ticker']), str(row['company_name'])]))
             except Exception as e:
                 print(row)
                 pass
@@ -4195,37 +4049,37 @@ def b3_grab_from_web(driver, wait, url):
         for i, (index, row) in enumerate(b3_companies_tickers.iterrows()):
             counter +=1
             new_keyword = str(row['ticker']) + ' ' + str(row['company_name'])
-            if new_keyword not in b3_companies__local_keywords:
+            if new_keyword not in b3_companies_from_file_keywords:
                 driver.get(b3.url)
 
                 kw = wSendKeys(f'//*[@id="keyword"]', new_keyword, wait)
                 kw = wClick(f'//*[@id="accordionName"]/div/app-companies-home-filter-name/form/div/div[3]/button', wait)
 
                 company = get_company(1, driver, wait)
-                b3_companies__local = pd.concat([b3_companies__local, pd.DataFrame([company], columns=b3.cols_b3_companies)])
+                b3_companies_from_file = pd.concat([b3_companies_from_file, pd.DataFrame([company], columns=b3.cols_b3_companies)])
             else:
                 pass
-            print(sys_remaining_time(start_time, len(b3_companies_tickers), i), counter, size-counter, new_keyword)
+            print(remaining_time(start_time, len(b3_companies_tickers), i), counter, size-counter, new_keyword)
             if (len(b3_companies_tickers) - i - 1) % b3.bin_size == 0:
-                b3_companies__local = sys_save_and_pickle(b3_companies__local, 'b3_companies')
+                b3_companies_from_file = save_and_pickle(b3_companies_from_file, 'b3_companies')
                 print('partial save')
-        b3_companies__local.fillna('', inplace=True)
-        b3_companies__local.reset_index(drop=True, inplace=True)
-        b3_companies__local.drop_duplicates(subset='url', inplace=True)
+        b3_companies_from_file.fillna('', inplace=True)
+        b3_companies_from_file.reset_index(drop=True, inplace=True)
+        b3_companies_from_file.drop_duplicates(subset='url', inplace=True)
         
-        b3_companies__local = sys_save_and_pickle(b3_companies__local, 'b3_companies')
+        b3_companies_from_file = save_and_pickle(b3_companies_from_file, 'b3_companies')
         # b3_companies.to_pickle(data_path + f'{df_name}.zip')
 
         # Close the driver and exit the script
         driver.close()
         driver.quit()
 
-        value = f'{len(b3_companies__local)} companies updated'
+        value = f'{len(b3_companies_from_file)} companies updated'
         print(value)
 
     except Exception as e:
         pass
-    return b3_companies__local
+    return b3_companies_from_file
 
 def get_new_companies_from_b3(driver, wait, url):
     cols = ['COMPANHIA', 'PREGAO', 'TICK', 'LISTAGEM']
@@ -4235,7 +4089,7 @@ def get_new_companies_from_b3(driver, wait, url):
 
     return company_list_from_web
 
-def b3_get_company_info(row, driver, wait):
+def get_full_company_info(row, driver, wait):
     # Define columns and constants
     max_retries = 5
     sleep_time = 0.1
@@ -4243,7 +4097,7 @@ def b3_get_company_info(row, driver, wait):
     full_company_info = {}
 
     full_company_info['ticker'] = row['ticker']
-    full_company_info['company_name'] = sys_clean_text(row['company_name'])
+    full_company_info['company_name'] = clean_text(row['company_name'])
 
     # 1 Searching for the company using its name
     for attempt in range(max_retries):
@@ -4270,8 +4124,8 @@ def b3_get_company_info(row, driver, wait):
 
             # Iterate through the cards to find the one that matches the company information
             for card in cards:
-                ticker = sys_clean_text(card.find_element(By.XPATH, ".//h5[@class='card-title2']").text)
-                company_name = sys_clean_text(card.find_element(By.XPATH, ".//p[@class='card-title']").text)
+                ticker = clean_text(card.find_element(By.XPATH, ".//h5[@class='card-title2']").text)
+                company_name = clean_text(card.find_element(By.XPATH, ".//p[@class='card-title']").text)
 
                 # If the card's pregao and company_name match the company information, click the card
                 if ticker == full_company_info['ticker'] and company_name == full_company_info['company_name']:
@@ -4292,7 +4146,7 @@ def b3_get_company_info(row, driver, wait):
             int(cvm_code)  # Validates if the code is numeric
             full_company_info['cvm_code'] = cvm_code
             break
-        except Exception as e:
+        except Exception:
             full_company_info['url'] = ''
             full_company_info['cvm_code'] = ''
             
@@ -4314,7 +4168,7 @@ def b3_get_company_info(row, driver, wait):
 
             elements = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//p[@class="card-linha"]')))
             data = [element.text.strip() for element in elements]
-            full_company_info = b3_get_company_full_info(data, full_company_info)
+            full_company_info = extract_company_info(data, full_company_info)
             break
         except Exception as e:
             print('o' * (attempt + 1) + 'ps..')
@@ -4328,7 +4182,7 @@ def b3_get_company_info(row, driver, wait):
             full_company_info['tickers'] = ', '.join(table_df.iloc[:, 0].tolist())
             full_company_info['isins'] = ', '.join(table_df.iloc[:, 1].tolist())
             break
-        except Exception as e:
+        except Exception:
             full_company_info['tickers'], full_company_info['isins'] = None, None
             time.sleep(sleep_time)
 
@@ -4346,7 +4200,7 @@ def b3_get_company_info(row, driver, wait):
             stock_holders['segmento'] = full_company_info['segmento']
             full_company_info['stock_holders'] = stock_holders.to_dict(orient='records')
             break
-        except Exception as e:
+        except Exception:
             stock_holders = pd.DataFrame()
             full_company_info[''] = stock_holders.to_dict(orient='records')
             time.sleep(sleep_time)
@@ -4378,14 +4232,14 @@ def get_b3_tickers(driver, wait, url):
             wClick(f'//*[@id="listing_pagination"]/pagination-template/ul/li[10]/a', wait)
             time.sleep(0.5)
             value = f'page {page+1}'
-            print(sys_remaining_time(start_time, pages+1, i), value)
+            print(remaining_time(start_time, pages+1, i), value)
         b3_companies_tickers = get_ticker_keywords(raw_code)
     except Exception as e:
         pass
 
     return b3_companies_tickers
 
-def b3_get_company_extra_cnpj_info(response):
+def get_cnpj_info(response):
     # Parse the HTML snippet
     tree = html.fromstring(response.text)
     
@@ -4425,12 +4279,12 @@ def b3_get_company_extra_cnpj_info(response):
         if 'Razão Social:' in text_content:
             razao_social = p.xpath('.//b[@class="copy"]/text()')
             if razao_social:
-                info['Razão Social'] = sys_clean_text(razao_social[0])
+                info['Razão Social'] = clean_text(razao_social[0])
         
         if 'Nome Fantasia:' in text_content:
             nome_fantasia = p.xpath('.//b[@class="copy"]/text()')
             if nome_fantasia:
-                info['Nome Fantasia'] = sys_clean_text(nome_fantasia[0])
+                info['Nome Fantasia'] = clean_text(nome_fantasia[0])
         
         # Extract "Data da Abertura"
         if 'Data da Abertura:' in text_content:
@@ -4532,7 +4386,7 @@ def change_col_type(df, str_cols, float_cols):
 
     return df
 
-def b3_get_companies(url):
+def b3_grab(url):
     """
     Scrape company details from the B3 website and update a local database of companies.
 
@@ -4560,25 +4414,20 @@ def b3_get_companies(url):
     col_types = {col: 'float' if col in b3_cols_float else 'str' for col in b3_cols}
 
     # Initialize the browser and load the URL
-    driver, wait = sys_load_browser()
+    driver, wait = load_browser()
     # time.sleep(1)
 
     # company = b3_grab_from_web(driver, wait, url) # new way
-    companies__local = sys_read_or_create_dataframe('company', b3_cols).fillna('')
+    companies_from_file = read_or_create_dataframe('company', b3_cols).fillna('')
 
-    # # Scrape detailed data for each new company
-    # b3_companies_tickers = get_b3_tickers(driver, wait, url)
-    
-    # for col in b3_cols:
-    #     if col not in b3_companies_tickers.columns:
-    #         b3_companies_tickers[col] = ''
-    # b3_companies_tickers = b3_companies_tickers[b3_cols]
-    # b3_companies_tickers = sys_save_pkl(b3_companies_tickers, 'temp_b3_companies_tickers')
-    print('fast temp b3_companies')
-    b3_companies_tickers = sys_load_pkl('temp_b3_companies_tickers')
+    # Scrape detailed data for each new company
+    b3_companies_tickers = get_b3_tickers(driver, wait, url)
+    for col in b3_cols:
+        if col not in b3_companies_tickers.columns:
+            b3_companies_tickers[col] = ''
+    b3_companies_tickers = b3_companies_tickers[b3_cols]
 
-    # anti-join operation
-    merged = pd.merge(companies__local, b3_companies_tickers, how='outer', on=key_columns, indicator=True)
+    merged = pd.merge(companies_from_file, b3_companies_tickers, how='outer', on=key_columns, indicator=True)
     update_strict = merged[merged['_merge'] == 'right_only'][key_columns] # only companies new in web
     update_broad = merged[merged['_merge'] != 'left_only'][key_columns] # all companies from web
     updated = update_strict
@@ -4593,22 +4442,22 @@ def b3_get_companies(url):
         start_time = time.time()
         for i, (index, row) in enumerate(updated.iterrows()):
             driver.get(b3.url)
-            new_company = b3_get_company_info(row, driver, wait)
-            new_company = pd.DataFrame([new_company], columns=b3_cols).astype(col_types).fillna('')
+            new_company = get_full_company_info(row, driver, wait)
+            new_company = pd.DataFrame([new_company], columns=b3_cols).astype(col_types)
             new_company['Capital Social'] = new_company['Capital Social'].replace(np.nan, 0.0)
             new_company = new_company.replace('nan', '')
-            # new_company['Capital Social'] = pd.to_numeric(new_company['Capital Social'], errors='coerce').astype('float')
+            new_company['Capital Social'] = pd.to_numeric(new_company['Capital Social'], errors='coerce').astype('float')
 
             try:
                 if not new_company.empty:
                     cnpj = new_company['cnpj'][0]
-                    if cnpj:
-                        url = f'https://cnpj.biz/{cnpj}'
-                        response = requests.get(url, headers=sys_header_random())
-                        extra = b3_get_company_extra_cnpj_info(response)
-                        extra = pd.DataFrame([extra], columns=b3_cols).astype(col_types).fillna('')
-                    else:
-                        extra = pd.DataFrame([], columns=b3_cols)
+                    url = f'https://cnpj.biz/{cnpj}'
+                    response = requests.get(url, headers={'User-Agent': random.choice(b3.USER_AGENTS), 'Referer': random.choice(b3.REFERERS), 'Accept-Language': random.choice(b3.LANGUAGES),})
+                    extra = get_cnpj_info(response)
+                    extra = pd.DataFrame([extra], columns=b3_cols).fillna('')
+                    extra = extra.astype(col_types)
+                else:
+                    extra = pd.DataFrame([], columns=b3_cols)
 
             except Exception as e:
                 extra = pd.DataFrame([], columns=b3_cols)
@@ -4616,14 +4465,14 @@ def b3_get_companies(url):
             new_company = pd.merge(new_company[b3.cols_b3_companies], extra[b3.col_b3_companies_extra_columns], left_on='cnpj', right_on='CNPJ', how='outer').fillna('').reset_index(drop=True)
             new_companies.append(new_company)
             
-            print(sys_remaining_time(start_time, size, i), row['ticker'], row['company_name'])
+            print(remaining_time(start_time, size, i), row['ticker'], row['company_name'])
 
-            if (size-i-1) % (b3.bin_size) == 0:
+            if (size-i-1) % (b3.bin_size/10) == 0:
                 temp = pd.concat(new_companies).reset_index(drop=True)
                 temp['Capital Social'] = pd.to_numeric(temp['Capital Social'], errors='coerce').astype('float')
                 temp['Capital Social'] = temp['Capital Social'].replace(np.nan, 0.0)
-                temp = pd.merge(companies__local, temp, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
-                temp = sys_save_and_pickle(temp, 'company')
+                temp = pd.merge(companies_from_file, temp, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
+                temp = save_and_pickle(temp, 'company')
 
     # Handle any exceptions that might have occurred during scraping
     except Exception as e:
@@ -4638,11 +4487,10 @@ def b3_get_companies(url):
         company = pd.concat(new_companies).reset_index(drop=True)
         company['Capital Social'] = pd.to_numeric(company['Capital Social'], errors='coerce').astype('float')
         company['Capital Social'] = company['Capital Social'].replace(np.nan, 0.0)
-        company = pd.merge(companies__local, company, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
-        company = sys_save_and_pickle(company, 'company')
+        company = pd.merge(companies_from_file, company, on=b3_cols, how='outer', indicator=False).fillna('').drop_duplicates(subset=key_columns, keep='last').reset_index(drop=True)
 
     except Exception as e:
-        pass
+        company = companies_from_file
 
     return company
 
@@ -4656,7 +4504,7 @@ def get_setores(url):
 
     # Navigate to the specified URL
         # Load the browser and navigate to the given URL.
-    driver, wait = sys_load_browser()
+    driver, wait = load_browser()
     driver.get(url)
     # time.sleep(1)
 
@@ -4682,7 +4530,7 @@ def get_setores(url):
                 option = select.options[idx]
                 option_value = option.get_attribute("value")
                 select.select_by_value(option_value)
-                setor = sys_clean_text(option_value)
+                setor = clean_text(option_value)
                 # Extract table data for the selected option
                 table_xpath = '//*[@id="divContainerIframeB3"]/div/div/app-companies-home-filter-classification/form/table'
                 rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, f"{table_xpath}/tbody/tr")))
@@ -4714,9 +4562,9 @@ def get_segmentos(driver, wait, option_value):
         rows_fresh = wait.until(EC.presence_of_all_elements_located((By.XPATH, f"{table_xpath}/tbody/tr")))
         row = rows_fresh[idx]
 
-        setor = sys_clean_text(option_value)
+        setor = clean_text(option_value)
         subsetor = row.find_element(By.XPATH, "td[1]").text
-        subsetor = sys_clean_text(subsetor)
+        subsetor = clean_text(subsetor)
 
         try:
             segmentos = row.find_elements(By.XPATH, "td[2]/p/a")
@@ -4733,18 +4581,18 @@ def get_segmentos(driver, wait, option_value):
             except Exception as e:
                 segmentos_fresh = wait.until(EC.presence_of_all_elements_located((By.XPATH, "td[2]/p/a")))
             item = segmentos_fresh[seg_idx]
-            segmento = sys_clean_text(item.text)
+            segmento = clean_text(item.text)
             item.click()
 
             link = driver.current_url
             companies = get_companies_from_b3_cards(driver, wait)
 
             for company in companies:
-                company_row = [sys_clean_text(setor), subsetor, segmento, link]
+                company_row = [clean_text(setor), subsetor, segmento, link]
                 company_row.extend([company[key] for key in ['COMPANHIA', 'PREGAO', 'TICK', 'LISTAGEM']])
                 setorial.append(company_row)
 
-            print(f'{sys_clean_text(setor)}: {subsetor}: {segmento}: {len(companies)}:')
+            print(f'{clean_text(setor)}: {subsetor}: {segmento}: {len(companies)}:')
             print(f'{[company["TICK"] for company in companies]}')
             for attempt in range(max_retries):
                 try:
@@ -4823,7 +4671,7 @@ def apply_intel_rules(df, rules):
                     The string defines the new CD_CONTA and DS_CONTA values, and the list contains the conditions.
 
     Returns:
-    - df_web (pd.DataFrame): The transformed DataFrame.
+    - df_new (pd.DataFrame): The transformed DataFrame.
 
     Example Rule:
     ('6.01.01.09 - Outros', [('conta_startswith', '6.01.01.'), ('conta_level_exact', 4), ('descricao_contains_not', 'forneced')])
@@ -4833,7 +4681,7 @@ def apply_intel_rules(df, rules):
     """
     
     # Create an empty DataFrame with the same columns as the input DataFrame
-    df_web = pd.DataFrame(columns=df.columns)
+    df_new = pd.DataFrame(columns=df.columns)
     
     try:
         # Get the current time to calculate processing duration
@@ -4947,10 +4795,10 @@ def apply_intel_rules(df, rules):
             matching_rows['DS_CONTA_original'] = df[mask]['DS_CONTA']
             
             # Append the modified rows to the new DataFrame
-            df_web = pd.concat([df_web, matching_rows])
+            df_new = pd.concat([df_new, matching_rows])
 
             # Print progress and diagnostics
-            print(sys_remaining_time(start_time, len(rules), r), line, 'matching rows', len(matching_rows))
+            print(remaining_time(start_time, len(rules), r), line, 'matching rows', len(matching_rows))
             if len(matching_rows) < 1:
                 pass
 
@@ -4958,7 +4806,7 @@ def apply_intel_rules(df, rules):
     except Exception as e:
         pass
 
-    return df_web
+    return df_new
 
 def get_rules():
     # imobilizado e intangível
@@ -5264,7 +5112,7 @@ def prepare_b3_cvm(b3_cvm):
         rules = get_rules()
         start_time_b3 = time.time()
         for k, (key, df) in enumerate(b3_cvm.items()):
-            print(key, sys_remaining_time(start_time_b3, len(b3_cvm), k))
+            print(key, remaining_time(start_time_b3, len(b3_cvm), k))
             # Apply the function to each group
             df = df[[item for item in df.columns if item != "ACIONISTAS"]] # remove ACIONISTAS from df
             df = df.groupby(['CNPJ_CIA', 'DT_REFER'], group_keys=False).apply(choose_agrupamento).reset_index(drop=True)
@@ -5311,7 +5159,7 @@ def compose_intel(acoes, intel_b3):
 
         intelacoes[setor].to_pickle(f'{setor}_intelacoes.pkl')
 
-        print(sys_remaining_time(start_time, len(intel_b3), i), setor)
+        print(remaining_time(start_time, len(intel_b3), i), setor)
     return intelacoes
 
 def calculate_fund(rules_fund, sheet, company, quarter):
@@ -5615,13 +5463,13 @@ def compose_fund(intelacoes):
                 df_list.append(sheet)
 
                 if j% (b3.bin_size * 2) == 0:
-                    print(setor, company, sys_remaining_time(start_time_2, len(sheets), j))
+                    print(setor, company, remaining_time(start_time_2, len(sheets), j))
 
             # Concatenate all dataframes in the list
             df_fund = pd.concat([df_fund, pd.concat(df_list, ignore_index=True)], ignore_index=True)
             fund[setor] = df_fund
             df_fund.to_pickle(f'{setor}_fund.pkl')
-            print(setor, sys_remaining_time(start_time, len(intelacoes), i))
+            print(setor, remaining_time(start_time, len(intelacoes), i))
     except Exception as e:
         pass
     return fund
@@ -5648,7 +5496,7 @@ def load_database():
         - Loaded directly or generated using get_companies()
 
     5. 'company'
-        - Directly loaded or generated using b3_get_companies(b3.search_url)
+        - Directly loaded or generated using b3_grab(b3.search_url)
 
     6. 'math'
         - Directly loaded or generated using get_math_from_b3_cvm()
@@ -5660,62 +5508,64 @@ def load_database():
     Returns:
         fund (dict): The final loaded or generated database.
     """
+    # debug fase
+    cvm = create_cvm(b3.base_cvm)
+    cvm = save_pkl(cvm, f'{b3.app_folder}/cvm')
+
+    math = get_math()
+
+    
+    
     # Step 1: Load or prepare 'acoes'
-    acoes = stk_get_composicao_acionaria()
-    # print('fast debug acoes')
-    # filename = 'acoes'
-    # columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
-    # acoes = sys_read_or_create_dataframe(filename, columns)
+    filename = 'acoes'
+    columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
+    acoes = get_composicao_acionaria()
 
     # Step 2: Load or prepare 'fund'
     try:
-        fund = sys_load_pkl(f'{b3.app_folder}/fund')
-    except Exception as e:
+        fund = load_pkl(f'{b3.app_folder}/fund')
+    except Exception:
         # Nested step: Load or prepare 'intelacoes'
         try:
-            intelacoes = sys_load_pkl(f'{b3.app_folder}/intelacoes')
-        except Exception as e:
+            intelacoes = load_pkl(f'{b3.app_folder}/intelacoes')
+        except Exception:
             # Nested step: Load or prepare 'intel_b3'
             try:
-                intel_b3 = sys_load_pkl(f'{b3.app_folder}/intel_b3')
-            except Exception as e:
+                intel_b3 = load_pkl(f'{b3.app_folder}/intel_b3')
+            except Exception:
                 # Further nested step: Load or prepare 'b3_cvm'
                 try:
-                    b3_cvm = sys_load_pkl(f'{b3.app_folder}/b3_cvm')
-                except Exception as e:
+                    b3_cvm = load_pkl(f'{b3.app_folder}/b3_cvm')
+                except Exception:
                     # Further nested step: Load or prepare 'company'
                     try:
-                        # company = b3_get_companies(b3.search_url)
-                        print('fast debug b3_company')
-                        filename = 'company'
-                        b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
-                        company = sys_read_or_create_dataframe('company', b3_cols).fillna('')
+                        company = b3_grab(b3.search_url)
+                        company = save_and_pickle(company, 'company')
                     except Exception as e:
                         pass
 
                     # Further nested step: Load or prepare 'math'
                     try:
-                        math = sys_load_pkl(f'{b3.app_folder}/math')
-                    except Exception as e:
-                        cvm = cvm_get_databases_from_cvm()
+                        math = load_pkl(f'{b3.app_folder}/math')
+                    except Exception:
                         math = get_math_from_b3_cvm()
-                        math = sys_save_pkl(math, f'{b3.app_folder}/math')
+                        math = save_pkl(math, f'{b3.app_folder}/math')
                     
                     # Use 'math' and 'company' to prepare 'b3_cvm'
                     b3_cvm = get_companies(math, company)
-                    b3_cvm = sys_save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
+                    b3_cvm = save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
                 
                 # Use 'b3_cvm' to prepare 'intel_b3'
                 intel_b3 = prepare_b3_cvm(b3_cvm)
-                intel_b3 = sys_save_pkl(intel_b3, f'{b3.app_folder}/intel_b3')
+                intel_b3 = save_pkl(intel_b3, f'{b3.app_folder}/intel_b3')
 
             # Use 'intel_b3' to prepare 'intelacoes'
             intelacoes = compose_intel(acoes, intel_b3)
-            intelacoes = sys_save_pkl(intelacoes, f'{b3.app_folder}/intelacoes')
+            intelacoes = save_pkl(intelacoes, f'{b3.app_folder}/intelacoes')
         
         # Use 'intelacoes' to prepare 'fund'
         fund = compose_fund(intelacoes)
-        fund = sys_save_pkl(fund, f'{b3.app_folder}/fund')
+        fund = save_pkl(fund, f'{b3.app_folder}/fund')
 
 
 
@@ -5730,7 +5580,7 @@ def save_sss(df_fund):
     sss = pd.concat(setores)
     sss = sss.applymap(clean_text)
 
-    sss = sys_save_pkl(sss, f'{b3.app_folder}/sss')
+    sss = save_pkl(sss, f'{b3.app_folder}/sss')
 
     return df_fund
 
@@ -5796,7 +5646,7 @@ def get_yahoo_quotes(ticker, start_date, end_date=pd.Timestamp.today().strftime(
 
             # Store the DataFrame in the quotes dictionary
             quotes[tick] = df
-            # print(run.sys_remaining_time(start_time, len(ticker), i), tick)
+            # print(run.remaining_time(start_time, len(ticker), i), tick)
         except Exception as e:
             pass
 
@@ -5839,7 +5689,7 @@ def yahoo_quotes(fund, quotes, start_date='1970-01-02'):
                     quotes[pregao] = df_quotes
                 
                     # Print progress information
-                    print(sys_remaining_time(start_time, len(fund), i), setor, sys_remaining_time(start_time_2, len(df_tickers), j), pregao, ', '.join(ticker))
+                    print(remaining_time(start_time, len(fund), i), setor, remaining_time(start_time_2, len(df_tickers), j), pregao, ', '.join(ticker))
             except Exception as e:
                 pass
 
@@ -5894,12 +5744,12 @@ def integrate_yahoo_quotes(fund):
     '''
     try:
         # Attempt to load existing quotes from a pickle file
-        quotes = sys_load_pkl(f'{b3.app_folder}/quotes')
-    except Exception as e:
+        quotes = load_pkl(f'{b3.app_folder}/quotes')
+    except Exception:
         # If loading fails, retrieve initial quotes using Yahoo Finance and save them
         no_quotes = {}
         quotes = yahoo_quotes(fund, no_quotes)
-        quotes = sys_save_pkl(quotes, f'{b3.app_folder}/quotes')
+        quotes = save_pkl(quotes, f'{b3.app_folder}/quotes')
     
     # Retrieve new quotes from Yahoo Finance starting from the determined start date
     quotes_new = yahoo_quotes(fund, quotes)
@@ -6082,7 +5932,7 @@ def merge_quotes(fund, quotes):
 
             df_preplot[setor] = df
 
-            print(setor, sys_remaining_time(start_time, len(fund), i))
+            print(setor, remaining_time(start_time, len(fund), i))
     except Exception as e:
         pass
 
@@ -6104,10 +5954,10 @@ def merge_quotes(fund, quotes):
                 mask = df['PREGAO'] == company
                 df_temp = df[mask]
                 try:
-                    df_temp = sys_save_pkl(df_temp, f'{b3.app_folder}/{b3.company_folder}/{company}')
+                    df_temp = save_pkl(df_temp, f'{b3.app_folder}/{b3.company_folder}/{company}')
                 except Exception as e:
                     pass
-            print(setor, sys_remaining_time(start_time, len(df_preplot), i))
+            print(setor, remaining_time(start_time, len(df_preplot), i))
     except Exception as e:
         pass
 

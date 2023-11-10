@@ -5,17 +5,26 @@ PATHWAY
 1. OK stk_get_composicao_acionaria
     nsd_get_nsd_content
 
-2. OK b3
+2. OK b3 - get companies info
     b3_get_companies
     b3_get_company_info
     b3_get_company_full_info
     b3_get_company_extra_cnpj_info
 
-3. cvm
+3. cvm_web: math_local + cvm_web->math_web -> math_local = merge(math_local, math_web)
+    3.1. get cvm_new
     cvm_get_databases_from_cvm
-    cvm_get_database
-    cvm_get_filelist
-    
+        cvm_get_web_database
+        cvm_get_database_filelist
+        cvm_get_database_filelist_links
+        cvm_get_metadados
+        cvm_get_categories
+    cvm_download_csv_files
+    cvm_group_by_year
+    cvm_clean_dataframe
+    cvm_calculate_math
+    cvm_wrapper_apply
+    cvm_math_calculations_adjustments
 
 N. FUND
     Need intelacoes
@@ -36,6 +45,7 @@ sys_get_nsd
 sys_load_browser
 sys_remaining_time
 sys_clean_text
+sys_gather_links
 
 sys_read_or_create_dataframe
 sys_save_and_pickle
