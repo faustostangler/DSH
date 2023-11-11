@@ -16,9 +16,11 @@ PATHWAY
 
 2. OK b3 - get companies info
     b3_get_companies
+        b3_get_b3_tickers
+            b3_get_ticker_keywords
     b3_get_company_info
-    b3_get_company_full_info
-    b3_get_company_extra_cnpj_info
+        b3_get_company_full_info
+            b3_get_company_extra_cnpj_info
 
 3. cvm_web: math_local + cvm_web->math_web -> math_local = merge(math_local, math_web)
     3.1. get cvm_new

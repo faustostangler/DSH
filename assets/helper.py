@@ -26,8 +26,19 @@ chunksize = 10**6  # Adjust this value based on your available memory
 app_folder = 'datasets'
 company_folder = 'company'
 
-listagem_siglas = ['NM', 'N1', 'N2', 'MA', 'M2', 'MB', 'DR1', 'DR2', 'DR3', 'DRE', 'DRN']
-listagem_extenso = ['Novo Mercado', 'Nível 1 de Governança Corporativa', 'Nível 2 de Governança Corporativa', 'Bovespa Mais', 'Bovespa Mais Nível 2', 'Organização Tradicional OTC', 'BDR Nível 1', 'BDR Nível 2', 'BDR Nível 3', 'BDR ETF', 'BDR Não Patrocinado']
+abbreviations_dict = {
+    "NM": "Cia. Novo Mercado",
+    "N1": "Cia. Nível 1 de Governança Corporativa",
+    "N2": "Cia. Nível 2 de Governança Corporativa",
+    "MA": "Cia. Bovespa Mais",
+    "M2": "Cia. Bovespa Mais Nível 2",
+    "MB": "Cia. Balcão Org. Tradicional",
+    "DR1": "BDR Nível 1",
+    "DR2": "BDR Nível 2",
+    "DR3": "BDR Nível 3",
+    "DRE": "BDR de ETF",
+    "DRN": "BDR Não Patrocinado"
+}
 
 cols_b3_companies = ['pregao', 'company_name', 'cvm', 'listagem', 'ticker', 'tickers', 'asin', 'cnpj', 'site', 'setor', 'subsetor', 'segmento', 'atividade', 'escriturador', 'stock_holders', 'url']
 col_b3_companies_extra_columns = ['CNPJ', 'Razão Social', 'Nome Fantasia', 'Data da Abertura', 'Porte', 'Natureza Jurídica', 'Opção pelo MEI', 'Opção pelo Simples', 'Capital Social', 'Tipo', 'Situação', 'Logradouro', 'Bairro', 'CEP', 'Município', 'Estado']
