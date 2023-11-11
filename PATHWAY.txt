@@ -4,6 +4,15 @@ PATHWAY
 
 1. OK stk_get_composicao_acionaria
     nsd_get_nsd_content
+        nsd_nsd_range
+        nsd_nsd_dates
+        nsd_get_nsd
+    stk_synchronize_nsd_and_acoes
+    sys_load_browser
+    stk_get_acoes
+    stk_fix_stock_values
+        stk_stock_values_units
+        stk_stock_values_magnitude_values
 
 2. OK b3 - get companies info
     b3_get_companies

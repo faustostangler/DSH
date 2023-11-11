@@ -21,6 +21,7 @@ import re
 
 import pandas as pd
 import numpy as np
+import math
 import plotly.express as px
 import plotly.io as pio
 import plotly.graph_objects as go
@@ -627,7 +628,7 @@ def nsd_nsd_dates(nsd, safety_factor=1.8):
 
   return last_date, limit_date, max_gap
 
-def sys_get_nsd(nsd):
+def nsd_get_nsd(nsd):
   nsd_url = f'https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx?NumeroSequencialDocumento={nsd}&CodigoTipoInstituicao=1'
   # Getting the HTML content from the URL
   response = requests.get(nsd_url, headers=sys_header_random())
@@ -755,7 +756,7 @@ def nsd_get_nsd_content():
             progress = sys_remaining_time(start_time, end-start, i)
             try:
                 # add nsd row to dataframe
-                row = sys_get_nsd(n)
+                row = nsd_get_nsd(n)
                 nsd = pd.concat([nsd, pd.DataFrame([row], columns=cols_nsd)])
                 print(n, progress, row[10], row[4], row[3], row[0])
                 # reset gap
@@ -797,15 +798,19 @@ def stk_get_acoes(driver, wait, url):
         pn = pd.to_numeric(dados.iloc[3, 1].replace('.', '').replace(',', ''))
         on_tes = pd.to_numeric(dados.iloc[6, 1].replace('.', '').replace(',', ''))
         pn_tes = pd.to_numeric(dados.iloc[7, 1].replace('.', '').replace(',', ''))
-
-        acoes = [on, pn, on_tes, pn_tes, url]
+        unidade = 'UNIDADE'
+        match = re.search(r'\((.*?)\)', dados.iloc[0,0])
+        if match:
+            unidade = match.group(1).upper()
+        
+        acoes = [on, pn, on_tes, pn_tes, unidade, url]
     except Exception as e:
-        acoes = [0, 0, 0, 0, url]
+        acoes = [0, 0, 0, 0, 'UNIDADE', url]
         pass
 
     return acoes
 
-def synchronize_nsd_and_acoes(filtered_nsd, acoes):
+def stk_synchronize_nsd_and_acoes(filtered_nsd, acoes):
     """
     Update and synchronize the nsd and acoes dataframes.
 
@@ -826,6 +831,8 @@ def synchronize_nsd_and_acoes(filtered_nsd, acoes):
     DataFrame: The updated filtered_nsd dataframe with duplicates and outdated entries removed.
     DataFrame: The updated acoes dataframe with only the most recent entries for each company and quarter.
     """
+    filtered_nsd = filtered_nsd.copy()
+    
     # Renomear colunas para que 'company' se torne 'Companhia' e 'data' se torne 'Trimestre'.
     # Isso é necessário para que as colunas correspondam às de acoes, permitindo futuras comparações e combinações.
     filtered_nsd.rename(columns={'company': 'Companhia', 'data': 'Trimestre'}, inplace=True)
@@ -869,6 +876,7 @@ def synchronize_nsd_and_acoes(filtered_nsd, acoes):
     filtered_nsd = filtered_nsd[~filtered_nsd['url'].isin(urls_to_remove)]
 
     # Revert the column names in filtered_nsd to their original state
+    filtered_nsd = filtered_nsd.copy()
     filtered_nsd.rename(columns={'Companhia': 'company', 'Trimestre': 'data'}, inplace=True)
     
     # Drop the 'nsd' and 'nsd_max' columns from acoes_updated
@@ -876,62 +884,202 @@ def synchronize_nsd_and_acoes(filtered_nsd, acoes):
     
     return filtered_nsd, acoes_updated
 
+def stk_stock_values_units(row):
+    """
+    Adjust the stock values in a DataFrame row based on the unit of measurement.
+
+    If the unit is 'MIL', multiply the stock values (Ações ON, Ações PN, Ações ON em Tesouraria,
+    Ações PN em Tesouraria) by 1000 to convert them to 'UNIDADE'. The 'Unidade' field is then 
+    updated to 'UNIDADE'.
+
+    Parameters:
+    row (pd.Series): A row of a DataFrame that contains stock values and a unit field.
+
+    Returns:
+    pd.Series: The adjusted row with updated stock values if the unit was 'MIL'.
+    """
+    # Verifica se a unidade é 'MIL' e faz os ajustes necessários
+    if row['Unidade'] == 'MIL':
+        # Multiplica os valores de ações por 1000
+        row['Ações ON'] *= 1000
+        row['Ações PN'] *= 1000
+        row['Ações ON em Tesouraria'] *= 1000
+        row['Ações PN em Tesouraria'] *= 1000
+        # Atualiza a unidade para 'UNIDADE'
+        row['Unidade'] = 'UNIDADE'
+
+    return row
+
+def stk_stock_values_magnitude_values(data_series):
+    """
+    Ajusta os valores de uma série temporal para garantir que a ordem de magnitude seja consistente.
+
+    Esta função percorre os valores da série temporal e compara a ordem de magnitude de cada 
+    valor com o valor anterior. Se a diferença entre as ordens de magnitude for exatamente 3,
+    o valor atual será ajustado (multiplicado por 1000) até que as ordens de magnitude sejam iguais.
+
+    Args:
+    data_series (array-like): Uma série temporal de valores numéricos.
+
+    Returns:
+    array-like: A série temporal com os valores ajustados.
+    """
+
+    # Ajustando os valores na série temporal
+    for i in range(1, len(data_series)):
+        value_1 = data_series[i - 1]
+        value_2 = data_series[i]
+
+        # Evitando logaritmo de zero
+        if value_1 == 0 or value_2 == 0:
+            continue
+
+        # Calculando a ordem de magnitude de cada valor
+        magnitude_1 = int(math.floor(math.log10(abs(value_1))))
+        magnitude_2 = int(math.floor(math.log10(abs(value_2))))
+
+        # Ajustando value_2 se a diferença de ordem de magnitude for igual a 3
+        while magnitude_1 - magnitude_2 == 3:
+            value_2 *= 1000
+            magnitude_2 = int(math.floor(math.log10(abs(value_2))))
+
+        # Atualizando o valor na série
+        data_series[i] = value_2
+
+    return data_series
+
+def stk_fix_stock_values(acoes):
+    """
+    Ajusta os valores de estoque e unidades para cada companhia no DataFrame 'acoes'.
+
+    Primeiro, o DataFrame é ordenado por companhia e trimestre. Em seguida, para cada companhia,
+    são feitos ajustes nas unidades de estoque e na magnitude dos valores das ações.
+    Os ajustes são realizados para as colunas 'Ações ON' e 'Ações PN'.
+
+    Args:
+    acoes (pd.DataFrame): DataFrame contendo os dados das ações das companhias.
+
+    Returns:
+    pd.DataFrame: DataFrame com os valores ajustados.
+    """
+
+    # Ordenando o DataFrame por companhia e trimestre
+    acoes = acoes.sort_values(by=['Companhia', 'Trimestre'], ascending=[True, True])
+
+    # Iterando sobre cada companhia única no DataFrame 'acoes'
+    for company in acoes['Companhia'].unique():
+        # Filtrando os dados da companhia atual
+        mask = acoes['Companhia'] == company
+        df = acoes[mask].copy()
+
+        # Aplicando ajustes de unidade de estoque
+        df = df.apply(stk_stock_values_units, axis=1)
+        df['Unidade'] = 'UNIDADE'  # Atualizando a unidade para 'UNIDADE'
+
+        # Ajustando a magnitude dos valores de ações
+        for col in ['Ações ON', 'Ações PN']:
+            data_series = df[col].to_numpy()  # Convertendo a coluna em um array NumPy
+            df[col] = stk_stock_values_magnitude_values(data_series)  # Ajustando a magnitude
+
+        # Atualizando o DataFrame original 'acoes' com os valores ajustados
+        for col in ['Ações ON', 'Ações PN', 'Unidade']:
+            acoes.loc[df.index, col] = df[col]
+
+    return acoes
+
 def stk_get_composicao_acionaria():
+    """
+    Obtém e processa a composição acionária de várias empresas a partir de fontes de dados.
+
+    Esta função carrega dados de duas fontes (nsd e acoes), filtra e sincroniza esses dados
+    com base em critérios específicos. Em seguida, navega em URLs específicas para coletar 
+    informações acionárias adicionais. Finalmente, salva os resultados processados.
+
+    Returns:
+    pd.DataFrame: DataFrame atualizado com informações acionárias de várias empresas.
+    """
     try:
-        # load dataframes
+        # Carregar DataFrames nsd e acoes
         nsd = nsd_get_nsd_content()
 
         filename = 'acoes'
-        columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
+        columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'Unidade', 'URL']
         acoes = sys_read_or_create_dataframe(filename, columns)
 
-        # Filtrar nsd para incluir apenas as linhas que têm 'dre' como 'INFORMACOES TRIMESTRAIS' ou
-        # 'DEMONSTRACOES FINANCEIRAS PADRONIZADAS'. Isso é como se estivéssemos selecionando
-        # apenas os documentos que são relatórios trimestrais ou demonstrações financeiras padronizadas.
+        # Filtrar nsd para relatórios trimestrais ou demonstrações financeiras padronizadas
         selected_dre = ['INFORMACOES TRIMESTRAIS', 'DEMONSTRACOES FINANCEIRAS PADRONIZADAS']
         filtered_nsd = nsd[nsd['dre'].isin(selected_dre)].copy()
 
-        # Converter a coluna 'nsd' para inteiros para permitir comparações numéricas e
-        # ordenar as linhas para que os documentos mais recentes fiquem no topo.
+        # Processar filtered_nsd para converter tipos de dados e remover duplicatas
         filtered_nsd['nsd'] = filtered_nsd['nsd'].astype(int)
         filtered_nsd.sort_values(by='nsd', ascending=True, inplace=True)
-
-        # Converter a coluna 'Trimestre' para o tipo datetime para permitir comparações de datas.
-        # Isso transforma strings que representam datas em objetos de data reais.
         filtered_nsd['data'] = pd.to_datetime(filtered_nsd['data'], errors='coerce', format='%d%m%Y')
-
-        # Remover duplicatas em filtered_nsd, mantendo apenas a entrada mais recente para cada combinação de Companhia-Trimestre.
-        # Isso garante que, se tivermos múltiplos documentos para a mesma empresa e trimestre, só o mais recente seja mantido.
         filtered_nsd.drop_duplicates(subset=['company', 'data'], keep='last', inplace=True)
 
+        # Sincronizar filtered_nsd e acoes
         if len(acoes) > 0:
-            filtered_nsd, acoes = synchronize_nsd_and_acoes(filtered_nsd, acoes)
+            filtered_nsd, acoes = stk_synchronize_nsd_and_acoes(filtered_nsd, acoes)
 
-        filtered_nsd.sort_values(by=['company, data'], ascending=[True, True], inplace=True)
+        # Ordenar filtered_nsd
+        filtered_nsd.sort_values(by=['company', 'data'], ascending=[True, True], inplace=True)
 
+        # Iniciar o processo de coleta de dados da web
         driver, wait = sys_load_browser()
 
+        # Processar cada linha em filtered_nsd para coletar dados acionários
         start_time = time.time()
+        on_old = -1  # Para verificar variabilidade
+        company_old = -1  # Para verificar variabilidade
+
+        # Iterando sobre cada linha do DataFrame 'filtered_nsd'
         for j, (i, row) in enumerate(filtered_nsd.iterrows()):
+            # Extraindo informações da linha atual
             company = row['company']
             data = row['data']
             url = row['url']
         
+            # Acessando a URL para coletar dados acionários
             driver.get(url)
+
+            # Coletando dados de ações da companhia na URL e concatenando com informações existentes
             data = [company, data] + stk_get_acoes(driver, wait, url)
+
+            # Verificando se há uma mudança nas ações ON desde a última iteração para a mesma companhia
+            if data[2] != on_old and on_old >= 0 and company == company_old:
+                # Marcando a linha para atenção caso haja uma mudança significativa
+                data[6] = data[6] + ' ATTENTION PLEASE'
+
+            # Atualizando as variáveis de controle para a próxima iteração
+            on_old = data[2]
+            company_old = data[0]
+
+            # Adicionando os dados coletados ao DataFrame 'acoes'
             acoes = pd.concat([acoes, pd.DataFrame([data], columns=columns)], ignore_index=True)
         
+            # Exibindo o tempo restante estimado para o processo
             print(sys_remaining_time(start_time, len(filtered_nsd), j), i, data[0], data[1], data[2], data[3], data[4], data[5])
+
+            # Salvando parcialmente os dados a cada 'b3.bin_size' iterações
             if (len(filtered_nsd) - j - 1) % b3.bin_size == 0:
                 acoes = sys_save_and_pickle(acoes, filename)
                 print('partial save')
 
-        acoes = acoes.drop_duplicates()
-        acoes = sys_save_and_pickle(acoes, filename)
+        # Finalizar o navegador
+        driver.quit() 
+
+        # Remove linhas duplicadas no DataFrame 'acoes'
+        acoes = acoes.drop_duplicates()  
+
+        # Aplica funções de ajuste aos valores de estoque e unidades
+        acoes = stk_fix_stock_values(acoes)  
+
+        # Salva o DataFrame 'acoes' em um arquivo (como um pickle) para uso futuro
+        acoes = sys_save_and_pickle(acoes, filename)  
+
         print('final save')
-        driver.quit()
+
     except Exception as e:
-        pass
+        print(f"Ocorreu um erro: {e}")
     return acoes
 
 # dre
