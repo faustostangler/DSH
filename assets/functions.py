@@ -3325,10 +3325,10 @@ def cvm_get_database_filelist():
 
     """
     # Retrieve DataFrame containing file links from base_cvm URL
-    # filelist_df = cvm_get_database_filelist_links()
-    # filelist_df = sys_save_pkl(filelist_df, f'{b3.app_folder}/temp_filelist_df')
-    print('fast debug filelist_df')
-    filelist_df = sys_load_pkl(f'{b3.app_folder}/temp_filelist_df')
+    filelist_df = cvm_get_database_filelist_links()
+    filelist_df = sys_save_pkl(filelist_df, f'{b3.app_folder}/temp_filelist_df')
+    # print('fast debug filelist_df')
+    # filelist_df = sys_load_pkl(f'{b3.app_folder}/temp_filelist_df')
     
     # Find the maximum date in the filelist_df
     last_update2 = filelist_df['date'].max().strftime('%Y-%m-%d')
@@ -3350,32 +3350,33 @@ def cvm_get_database_filelist():
 
 def cvm_get_web_database():
     try:
-        filelist_df, last_update = cvm_get_database_filelist()
+        # # filelist_df, last_update = cvm_get_database_filelist()
 
-        # dataframes = cvm_download_csv_files(filelist_df)
-        # dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
+        # # dataframes = cvm_download_csv_files(filelist_df)
+        # # dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
         # print('fast debug dataframes')
         # dataframes = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes')
         # cvm_web, links = cvm_group_by_year(dataframes)
 
-        # cvm_web = {k: v for k, v in cvm_web.items() if k == 2020}
-        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web')
-        # print('fast debug dataframes')
-        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
+        # # cvm_web = {k: v for k, v in cvm_web.items() if k == 2020}
+        # # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web')
+        # # print('fast debug dataframessss')
+        # # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
 
         # links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
-        print('fast debug links')
-        links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
+        # # print('fast debug links')
+        # # links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
 
         # cvm_web = cvm_clean_dataframe(cvm_web)
         # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web')
-        print('fast debug cvm_web cleaning')
-        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
 
         # # Save last_update
         # if len(cvm_web) > 0:
         #     cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/cvm_web')
-        print('fast debug cvm_web save local')
+        # # print('fast debug cvm_web save local')
+
+        print('fast debug cvm_web cleaning')
+        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
 
         # Get metadata and categories from filelist
         try:
@@ -3674,7 +3675,7 @@ def cvm_wrapper_apply(group, pbar):
     pbar.update(1)  # Update the progress bar by one step
     return result
 
-def cvm_calculate_math(cvm):
+def cvm_calculate_math(cvm, where):
     """
     Apply adjustments to dataframes for each year in the cvm dict.
 
@@ -3689,18 +3690,22 @@ def cvm_calculate_math(cvm):
 
     # Loop through each year in the cvm dictionary
     for year, df_merged in cvm.items():
-        # Group the DataFrame by the specified columns
-        grouped = df_merged.groupby(['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA'], group_keys=False)
+        try:
+            math[year] = sys_load_pkl(f'{b3.app_folder}/temp_math_{where}_{year}')
+        except Exception as e:
+            # Group the DataFrame by the specified columns
+            grouped = df_merged.groupby(['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA'], group_keys=False)
 
-        # Set up a progress bar to monitor the processing of each group
-        with tqdm(total=grouped.ngroups, desc=f"Calculating quarter values for year {year}") as pbar:
-            # Use lambda to pass the progress bar to the function
-            calculated_df = grouped.apply(lambda group: cvm_wrapper_apply(group, pbar)).reset_index(drop=True)
-        
-        # Save the calculated dataframe to the math dictionary and to files
-        math[year] = calculated_df
-        # math = sys_save_pkl(math, f'{b3.app_folder}/math_local')
-        # math[year] = sys_save_pkl(math[year], f'{b3.app_folder}/math_{year}')
+            # Set up a progress bar to monitor the processing of each group
+            with tqdm(total=grouped.ngroups, desc=f"Calculating quarter values for year {year}") as pbar:
+                # Use lambda to pass the progress bar to the function
+                calculated_df = grouped.apply(lambda group: cvm_wrapper_apply(group, pbar)).reset_index(drop=True)
+            
+            # Save the calculated dataframe to the math dictionary and to files
+            math[year] = calculated_df
+            # math = sys_save_pkl(math, f'{b3.app_folder}/math_local')
+            math[year] = sys_save_pkl(math[year], f'{b3.app_folder}/temp_math_{where}_{year}')
+
     return math
 
 def year_to_company(cvm_web):
@@ -3942,20 +3947,26 @@ def companies_from_math(math):
 
 def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='', math_web=''):
     try:
-        # prepare CVM
-        if not cvm_local:
-            try:
-                cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
-            except Exception as e:
-                cvm_local = {}
-        if not cvm_web:
-            cvm_web = cvm_get_web_database()
+        # # prepare CVM
+        # if not cvm_local:
+        #     try:
+        #         cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
+        #     except Exception as e:
+        #         cvm_local = {}
+        # if not cvm_web:
+        #     cvm_web = cvm_get_web_database()
 
-        cvm_web = cvm_updated_rows(cvm_local, cvm_web)
+        # cvm_web = cvm_updated_rows(cvm_local, cvm_web)
+
+        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_'+'cvm_web')
+        print('fast_cavm_web debug')
+        cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
+        cvm_web = sys_load_pkl(f'{b3.app_folder}//temp_cvm_web')
         
-        math_local = cvm_calculate_math(cvm_local)
-        math_web = cvm_calculate_math(cvm_web)
-        math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_'+'math')
+        math_local = cvm_calculate_math(cvm_local, where='local')
+        math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_local_'+'math')
+        math_web = cvm_calculate_math(cvm_web, where='web')
+        math_web = sys_save_pkl(math_web, f'{b3.app_folder}/temp_web_'+'math')
 
 
         # # prepare MATH
@@ -4752,6 +4763,7 @@ def b3_get_companies(url):
             new_company = new_company.replace('nan', '')
             # new_company['Capital Social'] = pd.to_numeric(new_company['Capital Social'], errors='coerce').astype('float')
 
+            extra = ''
             try:
                 if not new_company.empty:
                     cnpj = new_company['cnpj'][0]
@@ -5838,11 +5850,11 @@ def load_database():
                 except Exception as e:
                     # Further nested step: Load or prepare 'company'
                     try:
-                        company = b3_get_companies(b3.search_url)
-                        # print('fast debug b3_company')
-                        # filename = 'company'
-                        # b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
-                        # company = sys_read_or_create_dataframe('company', b3_cols).fillna('')
+                        # company = b3_get_companies(b3.search_url)
+                        print('fast debug b3_company')
+                        filename = 'company'
+                        b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
+                        company = sys_read_or_create_dataframe('company', b3_cols).fillna('')
                     except Exception as e:
                         pass
 
