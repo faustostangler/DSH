@@ -53,7 +53,16 @@ import shutil
 
 import random
 
+import multiprocessing
+from multiprocessing import Pool
+
+import winsound
+
 # general functions
+def sys_beep(frequency=5000, duration=50):
+    winsound.Beep(frequency, duration)
+    return True
+
 def wText(xpath: str, wait: WebDriverWait) -> str:
     """
     Finds and retrieves text from a web element using the provided xpath and wait object.
@@ -193,18 +202,19 @@ def sys_clean_text(text):
     Returns:
     str: The cleaned text.
     """
-    try:
-        # Convert text to string
+    if not isinstance(text, str):
         try:
             text = str(text)
         except Exception as e:
-            print(text, 'is not convertible')
-        # Remove accents, punctuation, and convert to uppercase
-        text = unidecode.unidecode(text).translate(str.maketrans('', '', string.punctuation)).upper().strip()
-        # Replace multiple spaces with a single space
-        text = re.sub(r'\s+', ' ', text)
-    except Exception as e:
-        print(e)
+            print(f"{text} is not convertible to string: {e}")
+            return text
+
+    # Remove accents, punctuation, and convert to uppercase
+    text = unidecode.unidecode(text).translate(str.maketrans('', '', string.punctuation)).upper().strip()
+
+    # Replace multiple spaces with a single space
+    text = re.sub(r'\s+', ' ', text)
+
     return text
 
 def sys_remaining_time(start_time, size, i):
@@ -248,6 +258,7 @@ def sys_remaining_time(start_time, size, i):
     f'{avg_time_per_item:.6f}s per item, '
     f'Remaining: {remaining_time_formatted}'
   )
+  sys_beep()
 
   return progress
 
@@ -3068,7 +3079,7 @@ def cvm_get_database_filelist_links():
 
     return fileinfo_df
 
-def cvm_download_csv_files(filelist_df, types=['itr', 'dfp']):
+def cvm_download_csv_files_from_cvm_web(filelist_df, types=['itr', 'dfp']):
     """
     Downloads and processes database files based on specified DEMONSTRATIVO values.
 
@@ -3144,7 +3155,7 @@ def cvm_download_csv_files(filelist_df, types=['itr', 'dfp']):
                             dataframes.append(csv_data)
                             total_rows += len(csv_data)
 
-                        print('  ' + '  ' + sys_remaining_time(start_time_3, len(zip_ref.infolist()), k))
+                        print('  ' + '  ' + sys_remaining_time(start_time_3, len(zip_ref.infolist()), k), fileinfo.filename.lower())
             print('  ' + sys_remaining_time(start_time_2, len(download_files), j))
         print(sys_remaining_time(start_time, len(types), i))
     print(f'Total {len(dataframes)} databases found and {total_rows} lines downloaded')
@@ -3174,7 +3185,7 @@ def sys_adjust_vl_conta(row):
 
     return row
 
-def yearly(df_list):
+def cvm_group_dataframes_by_year_yearly(df_list):
     """
     Organizes a list of DataFrames by year.
 
@@ -3212,6 +3223,34 @@ def yearly(df_list):
         df_y[year] = pd.concat(df_list, ignore_index=True)
 
     return df_y
+
+def sys_multiprocessing(func, df):
+    n_cores = multiprocessing.cpu_count()
+    df_split = np.array_split(df, n_cores)
+    with multiprocessing.Pool(n_cores) as pool:
+        df = pd.concat(pool.map(func, df_split))
+    return df
+
+def cvm_clean_dataframe_parallel(df):
+    df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_clean_text)
+    df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_word_to_remove)
+    return df
+
+def parallel_process_dfs(func, list_of_dfs, df_web, df_columns):
+    n_cores = multiprocessing.cpu_count()
+    pool = multiprocessing.Pool(n_cores)
+
+    # Prepare arguments for each function call including the year
+    func_args = [(df, df_web, df_columns, year) for year, df in list_of_dfs.items()]
+
+    # Process each DataFrame in parallel and collect results
+    processed_dfs = pool.starmap(func, func_args)
+
+    pool.close()
+    pool.join()
+
+    # Convert list of tuples (year, DataFrame) back into a dictionary
+    return {year: df for year, df in processed_dfs}
 
 def cvm_clean_dataframe(dict_of_df):
     """
@@ -3255,52 +3294,54 @@ def cvm_clean_dataframe(dict_of_df):
         # print('pass 1')
 
         # Clean up text in 'DENOM_CIA' column
-        try:
-            df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_clean_text)
-        except Exception as e:
-            pass
-        try:
-            df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_word_to_remove)
-        except Exception as e:
-            pass
+        # try:
+        #     df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_clean_text)
+        #     df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_word_to_remove)
+        # except Exception as e:
+        #     pass
+        df = sys_multiprocessing(cvm_clean_dataframe_parallel, df)
 
         # Convert specified columns to specified formats
-        for column in df.columns:
-            if column in category_columns:
-                try:
-                    df[column] = df[column].astype('category')
-                except Exception as e:
-                    pass
-            elif column in datetime_columns:
-                try:
-                    df[column] = pd.to_datetime(df[column])
-                except Exception as e:
-                    pass
-            elif column in numeric_columns:
-                try:
-                    df[column] = pd.to_numeric(df[column], errors='ignore')
-                except Exception as e:
-                    pass
+        for col in category_columns:
+            try:
+                df[col] = df[col].astype('category')
+            except Exception as e:
+                pass
+        for col in datetime_columns:
+            try:
+                df[col] = pd.to_datetime(df[col])
+            except Exception as e:
+                pass
+        for col in numeric_columns:
+            try:
+                df[col] = pd.to_numeric(df[col], errors='ignore')
+            except Exception as e:
+                pass
 
-        # adjust VL_CONTA according to ESCALA
-        try:
-            df['VL_CONTA'] = df.apply(sys_adjust_vl_conta, axis=1)
-        except Exception as e:
-            pass
-        # print('pass 3')
+        # Vectorized adjustment of VL_CONTA according to ESCALA_MOEDA
+        mask = df['ESCALA_MOEDA'] == 'MIL'
+        df.loc[mask, 'VL_CONTA'] *= 1000
+        df.loc[mask, 'ESCALA_MOEDA'] = 'UNIDADE'
+
+        # # adjust VL_CONTA according to ESCALA
+        # try:
+        #     df['VL_CONTA'] = df.apply(sys_adjust_vl_conta, axis=1)
+        # except Exception as e:
+        #     pass
+        # # print('pass 3')
 
         dict_of_df[year] = df
 
         print(year, sys_remaining_time(start_time, len(dict_of_df), i))
     return dict_of_df
 
-def cvm_group_by_year(dataframes):
+def cvm_group_dataframes_by_year(dataframes):
     cvm_web = [df for df in dataframes if len(df) > 0 and ('con' in df['FILENAME'][0] or 'ind' in df['FILENAME'][0])]
     links = [df for df in dataframes if len(df) > 0 and ('con' not in df['FILENAME'][0] and 'ind' not in df['FILENAME'][0])]
 
     print('... split by year')
-    cvm_web = yearly(cvm_web)
-    links = yearly(links)
+    cvm_web = cvm_group_dataframes_by_year_yearly(cvm_web)
+    links = cvm_group_dataframes_by_year_yearly(links)
 
     # Rename column for consistency
     for year in links.keys():
@@ -3350,33 +3391,35 @@ def cvm_get_database_filelist():
 
 def cvm_get_web_database():
     try:
-        # # filelist_df, last_update = cvm_get_database_filelist()
+        # # # filelist_df, last_update = cvm_get_database_filelist()
 
-        # # dataframes = cvm_download_csv_files(filelist_df)
-        # # dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
-        # print('fast debug dataframes')
-        # dataframes = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes')
-        # cvm_web, links = cvm_group_by_year(dataframes)
+        # # # dataframes = cvm_download_csv_files_from_cvm_web(filelist_df)
+        # # # dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
+        # # print('fast debug dataframes')
+        # # dataframes = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes')
 
-        # # cvm_web = {k: v for k, v in cvm_web.items() if k == 2020}
-        # # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web')
+        # # cvm_web, links = cvm_group_dataframes_by_year(dataframes)
+        # # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'dataframes_by_year')
+        # print('fast debug dataframes by year')
+        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes_by_year')
+
         # # print('fast debug dataframessss')
+        # # cvm_web = {k: v for k, v in cvm_web.items() if k == 2020}
         # # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
 
-        # links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
+        # # links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
         # # print('fast debug links')
         # # links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
 
         # cvm_web = cvm_clean_dataframe(cvm_web)
-        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web')
+        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web_clean')
+        print('fast debug cvm_web cvm_web_cleaned')
+        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web_clean')
 
-        # # Save last_update
+        # Save cvm_web as local cvm
         # if len(cvm_web) > 0:
         #     cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/cvm_web')
-        # # print('fast debug cvm_web save local')
-
-        print('fast debug cvm_web cleaning')
-        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
+        # print('fast debug cvm_web save local')
 
         # Get metadata and categories from filelist
         try:
@@ -3524,13 +3567,13 @@ def cvm_math_calculations_adjustments(group):
     else:
         return group
 
-def cvm_get_updated_rows(df_local, df_web, df_columns, year):
+def cvm_extract_updated_rows(df_local, df_web, df_columns, year):
 
     # Define the list of columns that should not be included as key columns for merging.
-    no_columns = ['VL_CONTA']
+    compare_columns = ['VL_CONTA']
 
     # Generate the list of key columns for merging by excluding the columns listed in no_columns.
-    key_columns = [col for col in df_columns if col not in no_columns]
+    key_columns = [col for col in df_columns if col not in compare_columns]
 
     # Merge the local and web DataFrames based on the key columns, and an indicator column 
     df_merged = pd.merge(df_local, df_web, on=key_columns, how='outer', suffixes=('_local', '_web'), indicator=True)
@@ -3562,14 +3605,14 @@ def cvm_get_updated_rows(df_local, df_web, df_columns, year):
     updated_rows = df_merged[updated_rows_mask]
 
     # Define the columns to be used for the final filtering.
-    filt_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA']
+    filt_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'DT_REFER', 'CD_CONTA', 'DS_CONTA']
 
     # Perform an inner merge to filter the original merged DataFrame using the updated rows 
     # and keep only the rows with matching values in the specified filter columns.
     cvm_web = pd.merge(
         updated_rows[filt_cols],  # Only the columns to match from the updated rows.
-        df_merged,  # The original merged DataFrame.
-        on=filt_cols,  # Columns to match on.
+        df_merged,  # The original merged DataFrame - the updated complete df
+        on=filt_cols,  # Columns to match on 
         how='inner'  # Keep only matches found in both DataFrames.
     )[df_columns]
 
@@ -3614,8 +3657,8 @@ def cvm_updated_rows(cvm_local, cvm_web):
         df_web = cvm_web.get(year, pd.DataFrame(columns=df_columns))
 
         # Update rows by comparing local and web data.
-        cvm_updated[year] = cvm_get_updated_rows(df_local, df_web, df_columns, year)
-
+        cvm_updated[year] = cvm_extract_updated_rows(df_local, df_web, df_columns, year)
+        sys_beep()
     return cvm_updated
 
 def get_companies_by_str_port(df):
@@ -3673,9 +3716,10 @@ def cvm_wrapper_apply(group, pbar):
     """Wrapper function for applying adjustments and updating the progress bar."""
     result = cvm_math_calculations_adjustments(group)
     pbar.update(1)  # Update the progress bar by one step
+    # sys_beep()
     return result
 
-def cvm_calculate_math(cvm, where):
+def cvm_calculate_math__single_processing(cvm, where):
     """
     Apply adjustments to dataframes for each year in the cvm dict.
 
@@ -3705,6 +3749,32 @@ def cvm_calculate_math(cvm, where):
             math[year] = calculated_df
             # math = sys_save_pkl(math, f'{b3.app_folder}/math_local')
             math[year] = sys_save_pkl(math[year], f'{b3.app_folder}/temp_math_{where}_{year}')
+
+    return math
+
+def process_year_data(year, df_merged, where):
+    try:
+        return year, sys_load_pkl(f'{b3.app_folder}/temp_math_{where}_{year}')
+    except Exception as e:
+        try:
+            print(f'STARTED {b3.app_folder}/temp_math_{where}_{year}')
+            grouped = df_merged.groupby(['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA'], group_keys=False)
+            calculated_df = grouped.apply(lambda group: cvm_math_calculations_adjustments(group)).reset_index(drop=True)
+            sys_save_pkl(calculated_df, f'{b3.app_folder}/temp_math_{where}_{year}')
+            print(f'{b3.app_folder}/temp_math_{where}_{year} FINISHED')
+        except Exception as e:
+            calculated_df = df_merged
+        return year, calculated_df
+
+def cvm_calculate_math(cvm, where):
+    math = {}
+    args = [(year, df_merged, where) for year, df_merged in cvm.items()]
+
+    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+        results = pool.starmap(process_year_data, args)
+
+    for year, calculated_df in results:
+        math[year] = calculated_df
 
     return math
 
@@ -3947,7 +4017,7 @@ def companies_from_math(math):
 
 def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='', math_web=''):
     try:
-        # # prepare CVM
+        # # prepare cvm_local and cvm_web
         # if not cvm_local:
         #     try:
         #         cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
@@ -3956,15 +4026,15 @@ def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='',
         # if not cvm_web:
         #     cvm_web = cvm_get_web_database()
 
-        # cvm_web = cvm_updated_rows(cvm_local, cvm_web)
-
-        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_'+'cvm_web')
+        # Compare web (new) data to local (old) data. Extract only updated rows
+        # cvm_updated = cvm_updated_rows(cvm_local, cvm_web)
+        # cvm_updated = sys_save_pkl(cvm_updated, f'{b3.app_folder}/temp_'+'cvm_updated')
         print('fast_cavm_web debug')
         cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
-        cvm_web = sys_load_pkl(f'{b3.app_folder}//temp_cvm_web')
-        
         math_local = cvm_calculate_math(cvm_local, where='local')
         math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_local_'+'math')
+
+        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
         math_web = cvm_calculate_math(cvm_web, where='web')
         math_web = sys_save_pkl(math_web, f'{b3.app_folder}/temp_web_'+'math')
 

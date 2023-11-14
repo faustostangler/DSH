@@ -22,7 +22,21 @@ PATHWAY
         b3_get_company_full_info
             b3_get_company_extra_cnpj_info
 
-3. cvm_web: math_local + cvm_web->math_web -> math_local = merge(math_local, math_web)
+3.1. cvm_get_databases_from_cvm
+    # web
+    cvm_get_database_filelist
+        cvm_get_database_filelist_links
+    cvm_download_csv_files_from_cvm_web
+    cvm_group_dataframes_by_year
+        cvm_group_dataframes_by_year_yearly
+    cvm_clean_dataframe
+    cvm_get_metadados
+    cvm_get_categories
+    # updated
+    cvm_updated_rows
+        cvm_extract_updated_rows
+
+3.2. cvm_web: math_local + cvm_web->math_web -> math_local = merge(math_local, math_web)
     3.1. get cvm_new
     cvm_get_databases_from_cvm
         cvm_get_web_database
@@ -30,8 +44,8 @@ PATHWAY
         cvm_get_database_filelist_links
         cvm_get_metadados
         cvm_get_categories
-    cvm_download_csv_files
-    cvm_group_by_year
+    cvm_download_csv_files_from_cvm_web
+    cvm_group_dataframes_by_year
     cvm_clean_dataframe
     cvm_calculate_math
     cvm_wrapper_apply

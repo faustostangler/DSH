@@ -2931,7 +2931,7 @@ def adjust_vl_conta(row):
         pass
     return row
 
-def yearly(df_list):
+def cvm_group_dataframes_by_year_yearly(df_list):
     """
     Organizes a list of DataFrames by year.
 
@@ -3053,8 +3053,8 @@ def group_by_year(dataframes):
     links = [df for df in dataframes if len(df) > 0 and ('con' not in df['FILENAME'][0] and 'ind' not in df['FILENAME'][0])]
 
     print('... split by year')
-    cvm_new = yearly(cvm_new)
-    links = yearly(links)
+    cvm_new = cvm_group_dataframes_by_year_yearly(cvm_new)
+    links = cvm_group_dataframes_by_year_yearly(links)
 
     # Rename column for consistency
     for year in links.keys():
