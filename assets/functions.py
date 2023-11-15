@@ -3555,51 +3555,61 @@ def cvm_extract_updated_rows(df_local, df_web, df_columns, year):
     # Generate the list of key columns for merging by excluding the columns listed in no_columns.
     key_columns = [col for col in df_columns if col not in compare_columns]
 
+    # updated values
     # Merge the local and web DataFrames based on the key columns, and an indicator column 
-    df_merged = pd.merge(df_local, df_web, on=key_columns, how='outer', suffixes=('_local', '_web'), indicator=True)
+    df_updated_values = pd.merge(df_local, df_web, on=key_columns, how='outer', suffixes=('_local', '_web'), indicator=True)
+
+    existing_lines = df_updated_values['_merge'] == 'left_only'  # Rows that exist only in the local DataFrame.
+    new_lines = df_updated_values['_merge'] == 'right_only'  # Rows that exist only in the web DataFrame.
+    updated_lines = (df_updated_values['_merge'] == 'both') & (df_updated_values['VL_CONTA_local'] != df_updated_values['VL_CONTA_web'])  # Rows that exist in both but have different 'VL_CONTA' values.
 
     # Define conditions to determine which values to keep in the merged DataFrame.
     conditions = [
-        df_merged['_merge'] == 'left_only',  # Rows that exist only in the local DataFrame.
-        df_merged['_merge'] == 'right_only',  # Rows that exist only in the web DataFrame.
-        (df_merged['_merge'] == 'both') & (df_merged['VL_CONTA_local'] != df_merged['VL_CONTA_web'])  # Rows that exist in both but have different 'VL_CONTA' values.
+        existing_lines, 
+        new_lines, 
+        updated_lines, 
     ]
 
     # Define the choices corresponding to each condition.
     choices = [
-        df_merged['VL_CONTA_local'],  # Keep the local value for 'VL_CONTA' if the row is from local only.
-        df_merged['VL_CONTA_web'],    # Keep the web value for 'VL_CONTA' if the row is from web only.
-        df_merged['VL_CONTA_web']     # Keep the web value for 'VL_CONTA' if the values differ between local and web.
+        df_updated_values['VL_CONTA_local'],  # existing_lines = Keep the local value for 'VL_CONTA' if the row is from local only.
+        df_updated_values['VL_CONTA_web'],    # new_lines = Keep the web value for 'VL_CONTA' if the row is from web only.
+        df_updated_values['VL_CONTA_web']     # updated_lines = Keep the web value for 'VL_CONTA' if the values differ between local and web.
     ]
 
     # Apply the conditions to create a new 'VL_CONTA' column in the merged DataFrame.
-    df_merged['VL_CONTA'] = np.select(conditions, choices, default=df_merged['VL_CONTA_web'])
+    df_updated_values['VL_CONTA'] = np.select(conditions, choices, default=df_updated_values['VL_CONTA_web'])
 
+    # updated rows (rows with updated values)
     # Create a mask to identify rows that have been updated or are new from the web DataFrame.
-    updated_rows_mask = (
-        (df_merged['_merge'] == 'right_only') |
-        ((df_merged['_merge'] == 'both') & (df_merged['VL_CONTA_local'] != df_merged['VL_CONTA_web']))
-    )
+    updated_rows_mask = (new_lines | updated_lines)
 
     # Use the mask to filter the merged DataFrame to only include updated or new rows.
-    df_updated = df_merged[updated_rows_mask][df_columns]
+    df_updated_rows = df_updated_values[updated_rows_mask]
 
+    # updated_quarters
     # Define the columns to be used for the final filtering.
-    filt_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'DT_REFER', 'CD_CONTA', 'DS_CONTA', 'COLUNA_DF']
+    quarter_col = ['']
+    unique_sheet_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA', 'COLUNA_DF']
+
+    filter_cols = [col for col in unique_sheet_cols if col not in quarter_col]
+    df_updated_rows[filter_cols]
 
     # Perform an inner merge to filter the original merged DataFrame using the updated rows 
     # and keep only the rows with matching values in the specified filter columns.
-    cvm_web = pd.merge(
-        df_updated[filt_cols],  # Only the columns to match from the updated rows.
-        df_merged,  # The original merged DataFrame - the updated complete df
-        on=filt_cols,  # Columns to match on 
+    df_updated_quarters = pd.merge(
+        df_updated_rows[filter_cols].drop_duplicates(),  # Only the columns to match from the updated rows.
+        df_updated_values,  # The original merged DataFrame - the updated complete df
+        on=filter_cols,  # Columns to match on 
         how='inner'  # Keep only matches found in both DataFrames.
-    )[df_columns]
+    )
+    df_updated_quarters = df_updated_quarters.sort_values(by=['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA', 'COLUNA_DF', 'DT_REFER', ])[df_columns]
+    
 
     # Display the number of updated rows.
-    print(f'{year} {len(df_updated)}/{len(df_merged)} linhas foram atualizadas')
+    print(f'{year} {len(df_updated_rows)}/{len(df_updated_values)} linhas foram atualizadas')
 
-    return cvm_web
+    return df_updated_quarters
 
 def cvm_updated_rows(cvm_local, cvm_web):
     """
