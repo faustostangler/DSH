@@ -56,6 +56,7 @@ cmbQuadro = ['Demonstração do Resultado', 'Balanço Patrimonial Ativo', 'Balan
 
 last_quarters = ['3', '4']
 all_quarters = ['6', '7']
+unique_sheet_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA', 'COLUNA_DF']
 
 words_to_remove = ['  EM LIQUIDACAO', ' EM LIQUIDACAO', ' EXTRAJUDICIAL', '  EM RECUPERACAO JUDICIAL', '  EM REC JUDICIAL', ' EM RECUPERACAO JUDICIAL', ' EM LIQUIDACAO EXTRAJUDICIAL']
 

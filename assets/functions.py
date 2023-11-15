@@ -3283,24 +3283,6 @@ def cvm_clean_dataframe(dict_of_df):
             # print(e)
             pass
         
-        # # Apply the condition to filter the DataFrame
-        # try:
-        #     df['DT_INI_EXERC'] = pd.to_datetime(df['DT_INI_EXERC'], errors='coerce')
-        #     mask = (df['DT_INI_EXERC'].dt.month == 1) | (df['DT_INI_EXERC'].isna())
-        #     df = df[mask].copy()  # Make a copy to avoid modifying the original DataFrame
-        #     df = df.drop(columns=['DT_INI_EXERC'])
-        # except Exception as e:
-        #     pass
-        # print('pass 1')
-
-        # Clean up text in 'DENOM_CIA' column
-        # try:
-        #     df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_clean_text)
-        #     df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_word_to_remove)
-        # except Exception as e:
-        #     pass
-        df = sys_multiprocessing(cvm_clean_dataframe_parallel, df)
-
         # Convert specified columns to specified formats
         for col in category_columns:
             try:
@@ -3318,17 +3300,15 @@ def cvm_clean_dataframe(dict_of_df):
             except Exception as e:
                 pass
 
+        # Filter unnecessary lines
+        df = df[df['DT_INI_EXERC'] == df['DT_INI_EXERC'].min()]
+
         # Vectorized adjustment of VL_CONTA according to ESCALA_MOEDA
         mask = df['ESCALA_MOEDA'] == 'MIL'
         df.loc[mask, 'VL_CONTA'] *= 1000
         df.loc[mask, 'ESCALA_MOEDA'] = 'UNIDADE'
 
-        # # adjust VL_CONTA according to ESCALA
-        # try:
-        #     df['VL_CONTA'] = df.apply(sys_adjust_vl_conta, axis=1)
-        # except Exception as e:
-        #     pass
-        # # print('pass 3')
+        df = sys_multiprocessing(cvm_clean_dataframe_parallel, df)
 
         dict_of_df[year] = df
 
@@ -3391,30 +3371,30 @@ def cvm_get_database_filelist():
 
 def cvm_get_web_database():
     try:
-        # # # filelist_df, last_update = cvm_get_database_filelist()
+        filelist_df, last_update = cvm_get_database_filelist()
 
-        # # # dataframes = cvm_download_csv_files_from_cvm_web(filelist_df)
-        # # # dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
-        # # print('fast debug dataframes')
-        # # dataframes = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes')
+        dataframes = cvm_download_csv_files_from_cvm_web(filelist_df)
+        dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
+        # print('fast debug dataframes')
+        # dataframes = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes')
 
-        # # cvm_web, links = cvm_group_dataframes_by_year(dataframes)
-        # # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'dataframes_by_year')
+        cvm_web, links = cvm_group_dataframes_by_year(dataframes)
+        cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'dataframes_by_year')
         # print('fast debug dataframes by year')
         # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes_by_year')
 
-        # # print('fast debug dataframessss')
-        # # cvm_web = {k: v for k, v in cvm_web.items() if k == 2020}
-        # # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
+        # print('fast debug dataframessss')
+        # cvm_web = {k: v for k, v in cvm_web.items() if k == 2020}
+        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
 
-        # # links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
-        # # print('fast debug links')
-        # # links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
+        links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
+        # print('fast debug links')
+        # links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
 
-        # cvm_web = cvm_clean_dataframe(cvm_web)
-        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web_clean')
-        print('fast debug cvm_web cvm_web_cleaned')
-        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web_clean')
+        cvm_web = cvm_clean_dataframe(cvm_web)
+        cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web_clean')
+        # print('fast debug cvm_web cvm_web_cleaned')
+        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web_clean')
 
         # Save cvm_web as local cvm
         # if len(cvm_web) > 0:
@@ -3602,22 +3582,22 @@ def cvm_extract_updated_rows(df_local, df_web, df_columns, year):
     )
 
     # Use the mask to filter the merged DataFrame to only include updated or new rows.
-    updated_rows = df_merged[updated_rows_mask]
+    df_updated = df_merged[updated_rows_mask][df_columns]
 
     # Define the columns to be used for the final filtering.
-    filt_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'DT_REFER', 'CD_CONTA', 'DS_CONTA']
+    filt_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'DT_REFER', 'CD_CONTA', 'DS_CONTA', 'COLUNA_DF']
 
     # Perform an inner merge to filter the original merged DataFrame using the updated rows 
     # and keep only the rows with matching values in the specified filter columns.
     cvm_web = pd.merge(
-        updated_rows[filt_cols],  # Only the columns to match from the updated rows.
+        df_updated[filt_cols],  # Only the columns to match from the updated rows.
         df_merged,  # The original merged DataFrame - the updated complete df
         on=filt_cols,  # Columns to match on 
         how='inner'  # Keep only matches found in both DataFrames.
     )[df_columns]
 
     # Display the number of updated rows.
-    print(f'{year} {len(updated_rows)}/{len(df_merged)} linhas foram atualizadas')
+    print(f'{year} {len(df_updated)}/{len(df_merged)} linhas foram atualizadas')
 
     return cvm_web
 
@@ -3719,7 +3699,7 @@ def cvm_wrapper_apply(group, pbar):
     # sys_beep()
     return result
 
-def cvm_calculate_math__single_processing(cvm, where):
+def cvm_calculate_math(cvm, where):
     """
     Apply adjustments to dataframes for each year in the cvm dict.
 
@@ -3738,7 +3718,7 @@ def cvm_calculate_math__single_processing(cvm, where):
             math[year] = sys_load_pkl(f'{b3.app_folder}/temp_math_{where}_{year}')
         except Exception as e:
             # Group the DataFrame by the specified columns
-            grouped = df_merged.groupby(['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA'], group_keys=False)
+            grouped = df_merged.groupby(b3.unique_sheet_cols, group_keys=False)
 
             # Set up a progress bar to monitor the processing of each group
             with tqdm(total=grouped.ngroups, desc=f"Calculating quarter values for year {year}") as pbar:
@@ -3753,27 +3733,67 @@ def cvm_calculate_math__single_processing(cvm, where):
     return math
 
 def process_year_data(year, df_merged, where):
+    """
+    Processa dados financeiros para um ano específico e salva o resultado.
+
+    Tenta carregar um DataFrame previamente processado e salvo. Se isso falhar (por exemplo, se o arquivo não existir),
+    processa o DataFrame fornecido, aplica ajustes matemáticos e salva o resultado.
+
+    Args:
+    - year (int): O ano correspondente ao DataFrame.
+    - df_merged (pd.DataFrame): O DataFrame a ser processado.
+    - where (str): Identificador que determina onde salvar o arquivo processado.
+
+    Returns:
+    - tuple: Uma tupla contendo o ano e o DataFrame processado.
+    """
     try:
+        # Tenta carregar um DataFrame previamente processado.
         return year, sys_load_pkl(f'{b3.app_folder}/temp_math_{where}_{year}')
     except Exception as e:
         try:
-            print(f'STARTED {b3.app_folder}/temp_math_{where}_{year}')
-            grouped = df_merged.groupby(['DENOM_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA'], group_keys=False)
+            # Se falhar, processa o DataFrame.
+            print(f'INICIANDO {b3.app_folder}/temp_math_{where}_{year}')
+
+            # Agrupa o DataFrame 'df_merged' por múltiplas colunas-chave. 
+            grouped = df_merged.groupby(b3.unique_sheet_cols, group_keys=False)
+
+            # Aplica uma função de ajuste matemático a cada grupo no DataFrame agrupado.
             calculated_df = grouped.apply(lambda group: cvm_math_calculations_adjustments(group)).reset_index(drop=True)
+
+            # Salva o DataFrame processado e ajustado em um arquivo
             sys_save_pkl(calculated_df, f'{b3.app_folder}/temp_math_{where}_{year}')
-            print(f'{b3.app_folder}/temp_math_{where}_{year} FINISHED')
+
+            print(f'{b3.app_folder}/temp_math_{where}_{year} FINALIZADO')
         except Exception as e:
+            # Em caso de falha, retorna o DataFrame original.
             calculated_df = df_merged
         return year, calculated_df
 
-def cvm_calculate_math(cvm, where):
+def cvm_calculate_math_multiprocessing(cvm, where):
+    """
+    Calcula ajustes matemáticos para cada ano em um dicionário de DataFrames e retorna os resultados.
+
+    Utiliza processamento paralelo para processar os DataFrames de cada ano. 
+    Cada DataFrame é processado pela função 'process_year_data'.
+
+    Args:
+    - cvm (dict): Dicionário com anos como chaves e DataFrames como valores.
+    - where (str): Identificador para determinar onde salvar os arquivos processados.
+
+    Returns:
+    - dict: Dicionário com anos como chaves e DataFrames processados como valores.
+    """
     math = {}
+    # Prepara argumentos para processamento paralelo.
     args = [(year, df_merged, where) for year, df_merged in cvm.items()]
 
     with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+        # Processa cada DataFrame em paralelo e coleta os resultados
         results = pool.starmap(process_year_data, args)
 
     for year, calculated_df in results:
+        # Dicionário de anos com os dataframes calculados
         math[year] = calculated_df
 
     return math
@@ -4017,41 +4037,38 @@ def companies_from_math(math):
 
 def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='', math_web=''):
     try:
-        # # prepare cvm_local and cvm_web
-        # if not cvm_local:
-        #     try:
-        #         cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
-        #     except Exception as e:
-        #         cvm_local = {}
-        # if not cvm_web:
-        #     cvm_web = cvm_get_web_database()
+        # prepare cvm_local and cvm_web
+        if not cvm_local:
+            try:
+                cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
+            except Exception as e:
+                cvm_local = {}
+        if not cvm_web:
+            cvm_web = cvm_get_web_database()
 
         # Compare web (new) data to local (old) data. Extract only updated rows
-        # cvm_updated = cvm_updated_rows(cvm_local, cvm_web)
-        # cvm_updated = sys_save_pkl(cvm_updated, f'{b3.app_folder}/temp_'+'cvm_updated')
-        print('fast_cavm_web debug')
-        cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
-        math_local = cvm_calculate_math(cvm_local, where='local')
-        math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_local_'+'math')
+        cvm_updated = cvm_updated_rows(cvm_local, cvm_web)
+        cvm_updated = sys_save_pkl(cvm_updated, f'{b3.app_folder}/temp_'+'cvm_updated')
+        # print('fast cvm_updated debug')
+        # cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
 
-        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
-        math_web = cvm_calculate_math(cvm_web, where='web')
-        math_web = sys_save_pkl(math_web, f'{b3.app_folder}/temp_web_'+'math')
+        # cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
+        # math_local = cvm_calculate_math(cvm_local, where='local')
+        # math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_'+'math_local')
+        print('fast_debug_local_math')
+        math_local = sys_load_pkl(f'{b3.app_folder}/temp_math_local')
 
+        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
+        # math_web = cvm_calculate_math(cvm_web, where='web')
+        # math_web = sys_save_pkl(math_web, f'{b3.app_folder}/temp_'+'math_web')
+        print('fast_debug_web_math')
+        math_web = sys_load_pkl(f'{b3.app_folder}/temp_math_web')
 
-        # # prepare MATH
-        # try:
-        #     math_local = sys_load_pkl(f'{b3.app_folder}/math')
-        # except Exception as e:
-        #     math_local = math_calculate_math_from_cvm(cvm_local)
-        
-        # math_web = math_calculate_math_from_cvm(cvm_web)
-        # # then merge with right overwrite
-
-
-
-
-
+        cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
+        math_updated = cvm_calculate_math(cvm_updated, where='updated')
+        math_updated = sys_save_pkl(math_updated, f'{b3.app_folder}/temp_'+'math_updated')
+        # print('fast_debug_updated_math')
+        # math_updated = sys_load_pkl(f'{b3.app_folder}/temp_math_updated')
 
         # math_local
         try:
@@ -5895,12 +5912,12 @@ def load_database():
     Returns:
         fund (dict): The final loaded or generated database.
     """
-    # Step 1: Load or prepare 'acoes'
-    # acoes = stk_get_composicao_acionaria()
-    print('fast debug acoes')
-    filename = 'acoes'
-    columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
-    acoes = sys_read_or_create_dataframe(filename, columns)
+    Step 1: Load or prepare 'acoes'
+    acoes = stk_get_composicao_acionaria()
+    # print('fast debug acoes')
+    # filename = 'acoes'
+    # columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
+    # acoes = sys_read_or_create_dataframe(filename, columns)
 
     # Step 2: Load or prepare 'fund'
     try:
@@ -5920,11 +5937,11 @@ def load_database():
                 except Exception as e:
                     # Further nested step: Load or prepare 'company'
                     try:
-                        # company = b3_get_companies(b3.search_url)
-                        print('fast debug b3_company')
-                        filename = 'company'
-                        b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
-                        company = sys_read_or_create_dataframe('company', b3_cols).fillna('')
+                        company = b3_get_companies(b3.search_url)
+                        # print('fast debug b3_company')
+                        # filename = 'company'
+                        # b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
+                        # company = sys_read_or_create_dataframe('company', b3_cols).fillna('')
                     except Exception as e:
                         pass
 
