@@ -3397,30 +3397,26 @@ def cvm_get_database_filelist():
 
 def cvm_get_web_database():
     try:
-        # # filelist_df, last_update = cvm_get_database_filelist()
+        filelist_df, last_update = cvm_get_database_filelist()
 
-        # # dataframes = cvm_download_csv_files_from_cvm_web(filelist_df)
-        # # dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
+        dataframes = cvm_download_csv_files_from_cvm_web(filelist_df)
+        dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
         # print('fast debug dataframes')
         # dataframes = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes')
 
-        # cvm_web, links = cvm_group_dataframes_by_year(dataframes)
-        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'dataframes_by_year')
-        print('fast debug dataframes by year')
-        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes_by_year')
+        cvm_web, links = cvm_group_dataframes_by_year(dataframes)
+        cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'dataframes_by_year')
+        # print('fast debug dataframes by year')
+        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes_by_year')
 
-        # print('fast debug dataframessss')
-        # cvm_web = {k: v for k, v in cvm_web.items() if k == 2020}
-        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
-
-        # links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
-        print('fast debug links')
-        links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
+        links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
+        # print('fast debug links')
+        # links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
 
         cvm_web = cvm_clean_dataframe(cvm_web)
-        cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web_clean')
-        # print('fast debug cvm_web cvm_web_cleaned')
-        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web_clean')
+        cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web')
+        # print('fast debug cvm_web cvm_web_clean')
+        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
 
         # Save cvm_web as local cvm
         # if len(cvm_web) > 0:
@@ -4110,13 +4106,13 @@ def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='',
         # prepare cvm_local and cvm_web
         if not cvm_local:
             try:
-                cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
+                cvm_local = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_local')
             except Exception as e:
                 cvm_local = {}
         if not cvm_web:
             # cvm_web = cvm_get_web_database()
             print('debug cvm_web clean load x')
-            cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_web_clean')
+            cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_web')
 
 
         # Compare web (new) data to local (old) data. Extract only updated rows
@@ -4125,17 +4121,17 @@ def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='',
         print('fast cvm_updated debug')
         cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
 
-        math_local = cvm_calculate_math(cvm_local, where='local')
-        math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_'+'math_local')
-        # print('fast_debug_local_math')
-        # math_local = sys_load_pkl(f'{b3.app_folder}/temp_math_local')
+        # math_local = cvm_calculate_math(cvm_local, where='local')
+        # math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_'+'math_local')
+        print('fast_debug_local_math')
+        math_local = sys_load_pkl(f'{b3.app_folder}/temp_math_local')
 
-        df_merged = sys_save_pkl(cvm_web[2011], f'{b3.app_folder}/temp_df_merge_to_math_pre')
+        # df_merged = sys_save_pkl(cvm_web[2011], f'{b3.app_folder}/temp_df_merge_to_math_pre')
 
-        math_web = cvm_calculate_math(cvm_web, where='web')
-        math_web = sys_save_pkl(math_web, f'{b3.app_folder}/temp_'+'math_web')
-        # print('fast_debug_web_math')
-        # math_web = sys_load_pkl(f'{b3.app_folder}/temp_math_web')
+        # math_web = cvm_calculate_math(cvm_web, where='web')
+        # math_web = sys_save_pkl(math_web, f'{b3.app_folder}/temp_'+'math_web')
+        # # print('fast_debug_web_math')
+        # # math_web = sys_load_pkl(f'{b3.app_folder}/temp_math_web')
 
         cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
         math_updated = cvm_calculate_math(cvm_updated, where='updated')
