@@ -1,4 +1,7 @@
-import assets.functions as run
+import assets as run
+
+import requests
+
 from typing import Any
 
 from selenium import webdriver
@@ -80,7 +83,7 @@ def set_driver_and_wait(new_driver, new_wait):
 # variables 3
 local_path = os.curdir + '/'
 data_path = local_path + app_folder
-data_path = run.check_or_create_folder(data_path)
+data_path = run.sys.check_or_create_folder(data_path)
 # raw_data_path = data_path + 'raw/'
 # raw_data_path = run.check_or_create_folder(raw_data_path)
 
@@ -100,7 +103,7 @@ download_folder = 'downloads'
 url_companies_info = 'https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/search?language=pt-br'
 
 start_year = 2010
-session = run.requests.Session() # Inicializar uma sessão
+session = requests.Session() # Inicializar uma sessão
 filelist = [] # Lista para armazenar links de arquivos CSV e ZIP
 visited_subfolders = set() # Conjunto para armazenar subpastas já visitadas
 
