@@ -3231,26 +3231,53 @@ def sys_multiprocessing(func, df):
         df = pd.concat(pool.map(func, df_split))
     return df
 
+def sys_multiprocessing_grouped(func, df, group_key):
+    n_cores = multiprocessing.cpu_count()
+    grouped = df.groupby(group_key, group_keys=False)
+    group_split = [group for _, group in grouped]
+    
+    with multiprocessing.Pool(n_cores) as pool:
+        chunksize = max(1, len(group_split) // (2 * n_cores))
+        results = pool.map(func, group_split, chunksize=chunksize)
+    
+    results = pd.concat(results).reset_index(drop=True)
+
+    return results
+
 def cvm_clean_dataframe_parallel(df):
     df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_clean_text)
     df['DENOM_CIA'] = df['DENOM_CIA'].apply(sys_word_to_remove)
     return df
 
-def parallel_process_dfs(func, list_of_dfs, df_web, df_columns):
-    n_cores = multiprocessing.cpu_count()
-    pool = multiprocessing.Pool(n_cores)
+def cvm_sort_and_select_first(group):
+    if group.shape[0] > 1:
+        group = group.sort_values('DT_INI_EXERC', ascending=True).head(1)
+    return group
 
-    # Prepare arguments for each function call including the year
-    func_args = [(df, df_web, df_columns, year) for year, df in list_of_dfs.items()]
+def cvm_clean_dataframe_parallel_2(df):
+    group_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DT_REFER', 'DS_CONTA', 'COLUNA_DF']
 
-    # Process each DataFrame in parallel and collect results
-    processed_dfs = pool.starmap(func, func_args)
+    # Agrupe o DataFrame por essas colunas
+    grouped = df.groupby(group_cols, group_keys=False)
+    df = grouped.apply(cvm_sort_and_select_first)
 
-    pool.close()
-    pool.join()
+    return df
 
-    # Convert list of tuples (year, DataFrame) back into a dictionary
-    return {year: df for year, df in processed_dfs}
+# def parallel_process_dfs(func, list_of_dfs, df_web, df_columns):
+#     n_cores = multiprocessing.cpu_count()
+#     pool = multiprocessing.Pool(n_cores)
+
+#     # Prepare arguments for each function call including the year
+#     func_args = [(df, df_web, df_columns, year) for year, df in list_of_dfs.items()]
+
+#     # Process each DataFrame in parallel and collect results
+#     processed_dfs = pool.starmap(func, func_args)
+
+#     pool.close()
+#     pool.join()
+
+#     # Convert list of tuples (year, DataFrame) back into a dictionary
+#     return {year: df for year, df in processed_dfs}
 
 def cvm_clean_dataframe(dict_of_df):
     """
@@ -3274,7 +3301,6 @@ def cvm_clean_dataframe(dict_of_df):
     print('... cleaning database')
     start_time = time.time()
     for i, (year, df) in enumerate(dict_of_df.items()):
-        
         # Remove extra rows based on specific conditions
         try:
             df = df[df['ORDEM_EXERC'] == 'ÚLTIMO']
@@ -3300,13 +3326,13 @@ def cvm_clean_dataframe(dict_of_df):
             except Exception as e:
                 pass
 
-        # Filter unnecessary lines
-        df = df[df['DT_INI_EXERC'] == df['DT_INI_EXERC'].min()]
-
         # Vectorized adjustment of VL_CONTA according to ESCALA_MOEDA
         mask = df['ESCALA_MOEDA'] == 'MIL'
         df.loc[mask, 'VL_CONTA'] *= 1000
         df.loc[mask, 'ESCALA_MOEDA'] = 'UNIDADE'
+
+        # Filter unnecessary lines
+        df = df.drop_duplicates(subset=['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DT_REFER', 'COLUNA_DF'], keep='first')
 
         df = sys_multiprocessing(cvm_clean_dataframe_parallel, df)
 
@@ -3371,25 +3397,25 @@ def cvm_get_database_filelist():
 
 def cvm_get_web_database():
     try:
-        filelist_df, last_update = cvm_get_database_filelist()
+        # # filelist_df, last_update = cvm_get_database_filelist()
 
-        dataframes = cvm_download_csv_files_from_cvm_web(filelist_df)
-        dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
+        # # dataframes = cvm_download_csv_files_from_cvm_web(filelist_df)
+        # # dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
         # print('fast debug dataframes')
         # dataframes = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes')
 
-        cvm_web, links = cvm_group_dataframes_by_year(dataframes)
-        cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'dataframes_by_year')
-        # print('fast debug dataframes by year')
-        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes_by_year')
+        # cvm_web, links = cvm_group_dataframes_by_year(dataframes)
+        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'dataframes_by_year')
+        print('fast debug dataframes by year')
+        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes_by_year')
 
         # print('fast debug dataframessss')
         # cvm_web = {k: v for k, v in cvm_web.items() if k == 2020}
         # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
 
-        links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
-        # print('fast debug links')
-        # links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
+        # links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
+        print('fast debug links')
+        links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
 
         cvm_web = cvm_clean_dataframe(cvm_web)
         cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web_clean')
@@ -3534,6 +3560,9 @@ def cvm_math_calculations_adjustments(group):
     # other stuff
     other = ['DMPL']
 
+    row = group.iloc[0]
+    # print(row['ANO'], row['CNPJ_CIA'], row['AGRUPAMENTO'], row['DT_REFER'], row['BALANCE_SHEET'], row['CD_CONTA'])
+  
     sheet = group['BALANCE_SHEET'].iloc[0]
     
     # If the group's 'BALANCE_SHEET' value belongs to the fluxo_de_caixa category, apply quarter adjustments.
@@ -3541,8 +3570,10 @@ def cvm_math_calculations_adjustments(group):
         return adjust_quarters(group)
     # If the group's 'BALANCE_SHEET' value belongs to the resultados category, filter and adjust the last quarter.
     elif sheet in resultados:
-        group = filter_last_quarter(group)
-        return adjust_last_quarter(group)
+        # group = filter_last_quarter(group)
+        # print('debug filter last_quarter')
+        group = adjust_last_quarter(group)
+        return group
     # If the group's 'BALANCE_SHEET' value doesn't match the above categories, return the original group without adjustments.
     else:
         return group
@@ -3723,22 +3754,51 @@ def cvm_calculate_math(cvm, where):
     math = {}
 
     # Loop through each year in the cvm dictionary
-    for year, df_merged in cvm.items():
+    start_time = time.time()
+    for i, (year, df) in enumerate(cvm.items()):
         try:
             math[year] = sys_load_pkl(f'{b3.app_folder}/temp_math_{where}_{year}')
         except Exception as e:
-            # Group the DataFrame by the specified columns
-            grouped = df_merged.groupby(b3.unique_sheet_cols, group_keys=False)
+            problem_column = 'COLUNA_DF'
 
-            # Set up a progress bar to monitor the processing of each group
-            with tqdm(total=grouped.ngroups, desc=f"Calculating quarter values for year {year}") as pbar:
-                # Use lambda to pass the progress bar to the function
-                calculated_df = grouped.apply(lambda group: cvm_wrapper_apply(group, pbar)).reset_index(drop=True)
-            
+            # Split the DataFrame into two parts based on NaN values in COLUNA_DF
+            df_without_coluna_df = df[df[problem_column].isna()]
+            df_with_coluna_df = df.dropna(subset=[problem_column])
+
+            # Grouping with and without COLUNA_DF
+            group_cols = [col for col in b3.unique_sheet_cols if col != problem_column]
+            grouped_without = df_without_coluna_df.groupby(group_cols, group_keys=False)
+            grouped_with = df_with_coluna_df.groupby(b3.unique_sheet_cols, group_keys=False)
+
+            # Initialize the calculated dataframes
+            calculated_df_without = pd.DataFrame()
+            calculated_df_with = pd.DataFrame()
+
+            # # Process groups without COLUNA_DF
+            # calculated_df_without = sys_multiprocessing_grouped(cvm_math_calculations_adjustments, df_without_coluna_df, group_cols)
+
+            # Set up a progress bar to track the processing of each group
+            with tqdm(total=grouped_without.ngroups, desc=f"Calculating quarter values for year {year} part 1") as pbar:
+                # Use a lambda to pass the progress bar to the wrapper_apply function
+                calculated_df_without = grouped_without.apply(lambda group: cvm_wrapper_apply(group, pbar)).reset_index(drop=True)
+
+            # Process groups with COLUNA_DF
+            # calculated_df_with = sys_multiprocessing_grouped(cvm_math_calculations_adjustments, df_with_coluna_df, b3.unique_sheet_cols)
+
+            # Set up a progress bar to track the processing of each group
+            with tqdm(total=grouped_with.ngroups, desc=f"Calculating quarter values for year {year} part 2") as pbar:
+                # Use a lambda to pass the progress bar to the wrapper_apply function
+                calculated_df_with = grouped_with.apply(lambda group: cvm_wrapper_apply(group, pbar)).reset_index(drop=True)
+
+            # Combine the results
+            calculated_df = pd.concat([calculated_df_without, calculated_df_with])
+
             # Save the calculated dataframe to the math dictionary and to files
             math[year] = calculated_df
+
             # math = sys_save_pkl(math, f'{b3.app_folder}/math_local')
             math[year] = sys_save_pkl(math[year], f'{b3.app_folder}/temp_math_{where}_{year}')
+            print(sys_remaining_time(start_time, len(cvm), i))
 
     return math
 
@@ -4054,25 +4114,28 @@ def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='',
             except Exception as e:
                 cvm_local = {}
         if not cvm_web:
-            cvm_web = cvm_get_web_database()
+            # cvm_web = cvm_get_web_database()
+            print('debug cvm_web clean load x')
+            cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_web_clean')
+
 
         # Compare web (new) data to local (old) data. Extract only updated rows
-        cvm_updated = cvm_updated_rows(cvm_local, cvm_web)
-        cvm_updated = sys_save_pkl(cvm_updated, f'{b3.app_folder}/temp_'+'cvm_updated')
-        # print('fast cvm_updated debug')
-        # cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
+        # cvm_updated = cvm_updated_rows(cvm_local, cvm_web)
+        # cvm_updated = sys_save_pkl(cvm_updated, f'{b3.app_folder}/temp_'+'cvm_updated')
+        print('fast cvm_updated debug')
+        cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
 
-        # cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
-        # math_local = cvm_calculate_math(cvm_local, where='local')
-        # math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_'+'math_local')
-        print('fast_debug_local_math')
-        math_local = sys_load_pkl(f'{b3.app_folder}/temp_math_local')
+        math_local = cvm_calculate_math(cvm_local, where='local')
+        math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_'+'math_local')
+        # print('fast_debug_local_math')
+        # math_local = sys_load_pkl(f'{b3.app_folder}/temp_math_local')
 
-        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
-        # math_web = cvm_calculate_math(cvm_web, where='web')
-        # math_web = sys_save_pkl(math_web, f'{b3.app_folder}/temp_'+'math_web')
-        print('fast_debug_web_math')
-        math_web = sys_load_pkl(f'{b3.app_folder}/temp_math_web')
+        df_merged = sys_save_pkl(cvm_web[2011], f'{b3.app_folder}/temp_df_merge_to_math_pre')
+
+        math_web = cvm_calculate_math(cvm_web, where='web')
+        math_web = sys_save_pkl(math_web, f'{b3.app_folder}/temp_'+'math_web')
+        # print('fast_debug_web_math')
+        # math_web = sys_load_pkl(f'{b3.app_folder}/temp_math_web')
 
         cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
         math_updated = cvm_calculate_math(cvm_updated, where='updated')
@@ -5922,11 +5985,11 @@ def load_database():
     Returns:
         fund (dict): The final loaded or generated database.
     """
-    Step 1: Load or prepare 'acoes'
-    acoes = stk_get_composicao_acionaria()
-    # print('fast debug acoes')
-    # filename = 'acoes'
-    # columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
+    # # Step 1: Load or prepare 'acoes'
+    # acoes = stk_get_composicao_acionaria()
+    print('fast debug acoes')
+    filename = 'acoes'
+    columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
     # acoes = sys_read_or_create_dataframe(filename, columns)
 
     # Step 2: Load or prepare 'fund'
@@ -5947,11 +6010,11 @@ def load_database():
                 except Exception as e:
                     # Further nested step: Load or prepare 'company'
                     try:
-                        company = b3_get_companies(b3.search_url)
-                        # print('fast debug b3_company')
-                        # filename = 'company'
-                        # b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
-                        # company = sys_read_or_create_dataframe('company', b3_cols).fillna('')
+                        # company = b3_get_companies(b3.search_url)
+                        print('fast debug b3_company')
+                        filename = 'company'
+                        b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
+                        company = sys_read_or_create_dataframe('company', b3_cols).fillna('')
                     except Exception as e:
                         pass
 
