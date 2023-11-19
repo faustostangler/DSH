@@ -1,4 +1,4 @@
-import assets as run
+import assets.functions as run
 
 import requests
 
@@ -83,7 +83,7 @@ def set_driver_and_wait(new_driver, new_wait):
 # variables 3
 local_path = os.curdir + '/'
 data_path = local_path + app_folder
-data_path = run.sys.check_or_create_folder(data_path)
+data_path = run.sys_check_or_create_folder(data_path)
 # raw_data_path = data_path + 'raw/'
 # raw_data_path = run.check_or_create_folder(raw_data_path)
 
