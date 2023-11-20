@@ -4176,8 +4176,11 @@ def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', cvm_updated=''
             # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_web')
 
         # Compare web (new) data to local (old) data. Extract only updated rows
-        cvm_updated = cvm_updated_rows(cvm_local, cvm_web)
-        cvm_updated = sys_save_pkl(cvm_updated, f'{b3.app_folder}/temp_'+'cvm_updated')
+        if cvm_web:
+            cvm_updated = cvm_updated_rows(cvm_local, cvm_web)
+            cvm_updated = sys_save_pkl(cvm_updated, f'{b3.app_folder}/temp_'+'cvm_updated')
+        else:
+            cvm_updated = {}
         # print('fast cvm_updated debug')
         # cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
 
@@ -4187,8 +4190,8 @@ def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', cvm_updated=''
         math_updated = cvm_calculate_math(cvm_updated, where='local')
         math_updated = sys_save_pkl(math_updated, f'{b3.app_folder}/temp_'+'math_updated')
 
-        math_local = math_merge(math_local, math_updated)
-        math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_'+'math_local')
+        math = math_merge(math_local, math_updated)
+        math = sys_save_pkl(math, f'{b3.app_folder}/temp_'+'math')
 
     except Exception as e:
         pass
@@ -4317,16 +4320,21 @@ def get_classificacao_setorial(setorial=''):
 
     return setorial
 
+def sys_clean_col_names(df):
+    df.rename(columns={col: col.replace(' ', '_').upper() for col in df.columns}, inplace=True)
+    return df
+
 def get_companies(math, company):
     # Initialize a new dictionary to hold the results
     b3_cvm = {}
 
     # Iterate through each year's dataframe in the math dictionary
-    for year, df in math.items():
-        print(year)
+    start_time = time.time()
+    for i, (year, df) in enumerate(math.items()):
         # Merge the dataframe for that year with company_b3 based on CNPJ
         merged_df = pd.merge(df, company, how='left', left_on='CNPJ_CIA', right_on='CNPJ')
-        
+        merged_df = sys_clean_col_names(merged_df)
+
         # Group by 'SETOR' and store each group's dataframe in a list inside the new dictionary
         for sector, sector_df in merged_df.groupby('SETOR'):
             # If the sector is already a key in the dictionary, append the new dataframe to its list
@@ -4334,11 +4342,15 @@ def get_companies(math, company):
                 b3_cvm[sector].append(sector_df)
             else:
                 b3_cvm[sector] = [sector_df]
-
+        print(sys_remaining_time(start_time, len(math.items()), i), year)
+    
+    start_time = time.time()
     # After looping through all years, concatenate all lists in the dictionary to create the final dataframes
-    for sector, df_list in b3_cvm.items():
-        print(sector)
+    for i, (sector, df_list) in enumerate(b3_cvm.items()):
+
         b3_cvm[sector] = pd.concat(df_list, ignore_index=True)
+
+        print(sys_remaining_time(start_time, len(b3_cvm.items()), i), sector)
 
     b3_cvm = sys_save_pkl(b3_cvm, f'{b3.app_folder}/b3_cvm')
 
@@ -6014,11 +6026,11 @@ def load_database():
         fund (dict): The final loaded or generated database.
     """
     # # Step 1: Load or prepare 'acoes'
-    acoes = stk_get_composicao_acionaria()
-    # print('fast debug acoes')
-    # filename = 'acoes'
-    # columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
-    # acoes = sys_read_or_create_dataframe(filename, columns)
+    # acoes = stk_get_composicao_acionaria()
+    print('fast debug acoes')
+    filename = 'acoes'
+    columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
+    acoes = sys_read_or_create_dataframe(filename, columns)
 
     # Step 2: Load or prepare 'fund'
     try:
@@ -6040,7 +6052,6 @@ def load_database():
                     try:
                         # company = b3_get_companies(b3.search_url)
                         print('fast debug b3_company')
-                        filename = 'company'
                         b3_cols = b3.cols_b3_companies + b3.col_b3_companies_extra_columns
                         company = sys_read_or_create_dataframe('company', b3_cols).fillna('')
                     except Exception as e:
@@ -6048,11 +6059,13 @@ def load_database():
 
                     # Further nested step: Load or prepare 'math'
                     try:
+                        # math = cvm_get_databases_from_cvm()
+                        # math = sys_save_pkl(math, f'{b3.app_folder}/math')
+                        print('math fast debug')
                         math = sys_load_pkl(f'{b3.app_folder}/math')
                     except Exception as e:
-                        math = cvm_get_databases_from_cvm()
+                        pass
                         # math = get_math_from_b3_cvm()
-                        math = sys_save_pkl(math, f'{b3.app_folder}/math')
                     
                     # Use 'math' and 'company' to prepare 'b3_cvm'
                     b3_cvm = get_companies(math, company)
