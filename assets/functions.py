@@ -3397,35 +3397,26 @@ def cvm_get_database_filelist():
 
 def cvm_get_web_database():
     try:
-        # # filelist_df, last_update = cvm_get_database_filelist()
+        filelist_df, last_update = cvm_get_database_filelist()
 
-        # # dataframes = cvm_download_csv_files_from_cvm_web(filelist_df)
-        # # dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
+        dataframes = cvm_download_csv_files_from_cvm_web(filelist_df)
+        dataframes = sys_save_pkl(dataframes, f'{b3.app_folder}/temp_' + 'dataframes')
         # print('fast debug dataframes')
         # dataframes = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes')
 
-        # cvm_web, links = cvm_group_dataframes_by_year(dataframes)
-        # cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'dataframes_by_year')
-        print('fast debug dataframes by year')
-        cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes_by_year')
+        cvm_web, links = cvm_group_dataframes_by_year(dataframes)
+        cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'dataframes_by_year')
+        # print('fast debug dataframes by year')
+        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'dataframes_by_year')
 
-        # print('fast debug dataframessss')
-        # cvm_web = {k: v for k, v in cvm_web.items() if k == 2020}
-        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
-
-        # links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
-        print('fast debug links')
-        links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
+        links = sys_save_pkl(links, f'{b3.app_folder}/temp_' + 'links')
+        # print('fast debug links')
+        # links = sys_load_pkl(f'{b3.app_folder}/temp_' + 'links')
 
         cvm_web = cvm_clean_dataframe(cvm_web)
-        cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web_clean')
-        # print('fast debug cvm_web cvm_web_cleaned')
-        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web_clean')
-
-        # Save cvm_web as local cvm
-        # if len(cvm_web) > 0:
-        #     cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/cvm_web')
-        # print('fast debug cvm_web save local')
+        cvm_web = sys_save_pkl(cvm_web, f'{b3.app_folder}/temp_' + 'cvm_web')
+        # print('fast debug cvm_web cvm_web_clean')
+        # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_' + 'cvm_web')
 
         # Get metadata and categories from filelist
         try:
@@ -3579,66 +3570,84 @@ def cvm_math_calculations_adjustments(group):
         return group
 
 def cvm_extract_updated_rows(df_local, df_web, df_columns, year):
+    """
+    Merges two DataFrames (local and web) to identify and update rows that are either new or have changed.
 
-    # Define the list of columns that should not be included as key columns for merging.
-    compare_columns = ['VL_CONTA']
+    Parameters:
+    df_local (pd.DataFrame): The local DataFrame.
+    df_web (pd.DataFrame): The web DataFrame.
+    df_columns (list): List of columns to consider for merging.
+    year (int): The year for which the data is being updated (for future use).
 
-    # Generate the list of key columns for merging by excluding the columns listed in no_columns.
-    key_columns = [col for col in df_columns if col not in compare_columns]
+    Returns:
+    pd.DataFrame: A DataFrame containing quarters only from updated and new rows.
 
-    # updated values
-    # Merge the local and web DataFrames based on the key columns, and an indicator column 
-    df_updated_values = pd.merge(df_local, df_web, on=key_columns, how='outer', suffixes=('_local', '_web'), indicator=True)
+    The function has two main parts:
+    1. Creating df_updated_rows - Identifies new and updated rows after merging df_local and df_web.
+    2. Creating df_updated_quarters - Updates quarters-filtered df_local with the changes identified in df_updated_rows.
+    """
+    # Initialize return
+    df_updated_quarters = df_updated_values = pd.DataFrame(columns=df_columns)
 
-    existing_lines = df_updated_values['_merge'] == 'left_only'  # Rows that exist only in the local DataFrame.
-    new_lines = df_updated_values['_merge'] == 'right_only'  # Rows that exist only in the web DataFrame.
-    updated_lines = (df_updated_values['_merge'] == 'both') & (df_updated_values['VL_CONTA_local'] != df_updated_values['VL_CONTA_web'])  # Rows that exist in both but have different 'VL_CONTA' values.
+    try:
+        # Define the list of columns that should not be included as key columns for merging.
+        compare_columns = ['VL_CONTA']
 
-    # Define conditions to determine which values to keep in the merged DataFrame.
-    conditions = [
-        existing_lines, 
-        new_lines, 
-        updated_lines, 
-    ]
+        # Generate the list of key columns for merging by excluding the columns listed in compare_columns.
+        key_columns = [col for col in df_columns if col not in compare_columns]
 
-    # Define the choices corresponding to each condition.
-    choices = [
-        df_updated_values['VL_CONTA_local'],  # existing_lines = Keep the local value for 'VL_CONTA' if the row is from local only.
-        df_updated_values['VL_CONTA_web'],    # new_lines = Keep the web value for 'VL_CONTA' if the row is from web only.
-        df_updated_values['VL_CONTA_web']     # updated_lines = Keep the web value for 'VL_CONTA' if the values differ between local and web.
-    ]
+        try:
+            key_columns = ['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DT_REFER', 'COLUNA_DF']
+            for col in ['COLUNA_DF']:
+                df_local[col] = df_local[col].astype('object').fillna('')
+                df_web[col] = df_web[col].astype('object').fillna('')
 
-    # Apply the conditions to create a new 'VL_CONTA' column in the merged DataFrame.
-    df_updated_values['VL_CONTA'] = np.select(conditions, choices, default=df_updated_values['VL_CONTA_web'])
+            # Merge the DataFrames with an indicator to track the source of each row.
+            df_updated_values = pd.merge(df_local, df_web, on=key_columns, how='outer', suffixes=('_local', '_web'), indicator=True)
 
-    # updated rows (rows with updated values)
-    # Create a mask to identify rows that have been updated or are new from the web DataFrame.
-    updated_rows_mask = (new_lines | updated_lines)
+            # Drop the '_web' columns (if they are not needed)
+            columns_to_drop = [col for col in df_updated_values.columns if col.endswith('_web') and 'VL_CONTA' not in col and col.replace('_web', '') in df_columns]
+            df_updated_values.drop(columns=columns_to_drop, inplace=True)
 
-    # Use the mask to filter the merged DataFrame to only include updated or new rows.
-    df_updated_rows = df_updated_values[updated_rows_mask]
+            # Rename '_local' columns back to original
+            columns_to_rename = {col: col.replace('_local', '') for col in df_updated_values.columns if col.endswith('_local') and 'VL_CONTA' not in col}
+            df_updated_values.rename(columns=columns_to_rename, inplace=True)
 
-    # updated_quarters
-    # Define the columns to be used for the final filtering.
-    quarter_col = ['']
-    unique_sheet_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA', 'COLUNA_DF']
+        except Exception as e:
+            pass
 
-    filter_cols = [col for col in unique_sheet_cols if col not in quarter_col]
-    df_updated_rows[filter_cols]
+        # Identifying the rows that exist only in the local DataFrame, only in the web DataFrame, and those that are different.
+        # existing_lines = df_updated_values['_merge'] == 'left_only'  # Rows that exist only in the local DataFrame.
+        new_lines = df_updated_values['_merge'] == 'right_only'  # Rows that exist only in the web DataFrame.
+        updated_lines = (df_updated_values['_merge'] == 'both') & (df_updated_values['VL_CONTA_local'] != df_updated_values['VL_CONTA_web'])  # Rows that exist in both but have different 'VL_CONTA' values.
 
-    # Perform an inner merge to filter the original merged DataFrame using the updated rows 
-    # and keep only the rows with matching values in the specified filter columns.
-    df_updated_quarters = pd.merge(
-        df_updated_rows[filter_cols].drop_duplicates(),  # Only the columns to match from the updated rows.
-        df_updated_values,  # The original merged DataFrame - the updated complete df
-        on=filter_cols,  # Columns to match on 
-        how='inner'  # Keep only matches found in both DataFrames.
-    )
-    df_updated_quarters = df_updated_quarters.sort_values(by=['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA', 'COLUNA_DF', 'DT_REFER', ])[df_columns]
+        # Filter to obtain updated and new rows.
+        df_updated_rows = df_updated_values[new_lines | updated_lines]
+
+        # Preparing the updated rows DataFrame.
+        df_updated_rows = df_updated_rows.drop(columns=['VL_CONTA_local']).rename(columns={'VL_CONTA_web': 'VL_CONTA'})
+        df_updated_rows = df_updated_rows[df_columns]
+
+        try:
+            # Creating a composite key for matching rows.
+            df_local['composite_key'] = df_local['CNPJ_CIA'].astype(str) + '_' + df_local['AGRUPAMENTO'].astype(str) + '_' + df_local['CD_CONTA'].astype(str)
+            df_updated_rows['composite_key'] = df_updated_rows['CNPJ_CIA'].astype(str) + '_' + df_updated_rows['AGRUPAMENTO'].astype(str) + '_' + df_updated_rows['CD_CONTA'].astype(str)
+
+            # Identify which rows in df_local need updating.
+            composite_key_set = set(df_updated_rows['composite_key'])
+            df_updated_quarters = df_local[df_local['composite_key'].isin(composite_key_set)].copy()
+
+            # Combine df_updated_quarters with df_updated_rows and sort.
+            df_updated_quarters = df_updated_rows.combine_first(df_updated_quarters)[df_columns]
+            df_updated_quarters.sort_values(by=['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DT_REFER'], inplace=True)
+        except Exception as e:
+            pass
     
+    except Exception as e:
+        pass
 
     # Display the number of updated rows.
-    print(f'{year} {len(df_updated_rows)}/{len(df_updated_values)} linhas foram atualizadas')
+    print(f'{year} {len(df_updated_quarters)}/{len(df_local)} linhas foram atualizadas')
 
     return df_updated_quarters
 
@@ -3658,28 +3667,34 @@ def cvm_updated_rows(cvm_local, cvm_web):
     - tuple: Two dictionaries of dataframes - the first contains the merged data, and the second contains the updated rows.
 
     """
-    
     # Yearly updated data.
     cvm_updated = {}
-    # Compile a list of years present in either local or web data.
-    years = sorted(set(cvm_local.keys()).union(cvm_web.keys()))
+    try:
+        # Compile a list of years present in either local or web data.
+        years = sorted(set(cvm_local.keys()).union(cvm_web.keys()))
 
-    # Get column names from the earliest year's data.
-    df_columns = (
-        cvm_local.get(min(years), pd.DataFrame()).columns
-        if min(years) in cvm_local
-        else cvm_web[min(years)].columns
-    )
+        # Get column names from the earliest year's data.
+        df_columns = (
+            cvm_local.get(min(years), pd.DataFrame()).columns
+            if min(years) in cvm_local
+            else cvm_web[min(years)].columns
+        )
 
-    # Process each year's data.
-    for year in years:
-        # Obtain local and web data for the year.
-        df_local = cvm_local.get(year, pd.DataFrame(columns=df_columns))
-        df_web = cvm_web.get(year, pd.DataFrame(columns=df_columns))
+        # Process each year's data.
+        for year in years:
+            try:
+                # Obtain local and web data for the year.
+                df_local = cvm_local.get(year, pd.DataFrame(columns=df_columns))
+                df_web = cvm_web.get(year, pd.DataFrame(columns=df_columns))
 
-        # Update rows by comparing local and web data.
-        cvm_updated[year] = cvm_extract_updated_rows(df_local, df_web, df_columns, year)
-        sys_beep()
+                # Update rows by comparing local and web data.
+                cvm_updated[year] = cvm_extract_updated_rows(df_local, df_web, df_columns, year)
+                sys_beep()
+            except Exception as e:
+                pass
+    except Exception as e:
+        pass
+
     return cvm_updated
 
 def get_companies_by_str_port(df):
@@ -3798,7 +3813,7 @@ def cvm_calculate_math(cvm, where):
 
             # math = sys_save_pkl(math, f'{b3.app_folder}/math_local')
             math[year] = sys_save_pkl(math[year], f'{b3.app_folder}/temp_math_{where}_{year}')
-            print(sys_remaining_time(start_time, len(cvm), i))
+        print(sys_remaining_time(start_time, len(cvm), i))
 
     return math
 
@@ -4052,37 +4067,79 @@ def math_from_cvm(cvm_local):
     return math_local
 
 def math_merge(math_local, math_web):
-    print('... math merge')
+    """
+    Merge data from local and web sources for each year and update values.
+
+    This function iterates over years present in either the 'math_local' or 'math_web' dictionaries.
+    For each year, it merges the corresponding DataFrames on specified key columns and updates
+    the 'VL_CONTA' values based on certain conditions.
+
+    Parameters:
+    - math_local (dict): A dictionary with years as keys and DataFrames as values representing local data.
+    - math_web (dict): A dictionary with years as keys and DataFrames as values representing web data.
+
+    Returns:
+    - dict: A dictionary with years as keys and merged DataFrames as values.
+
+    """
+
+    # Initialize an empty dictionary to store the merged results
     math = {}
+    
+    # Combine the years present in both dictionaries and sort them
     years = sorted(set(math_local.keys()).union(math_web.keys()))
+
+    # Determine the column structure to use based on the earliest available year
     try:
         df_columns = math_local[min(years)].columns
     except Exception as e:
         df_columns = math_web[min(years)].columns
+
+    # Define the value column and key columns for merging
     value_column = 'VL_CONTA'
     key_columns = [col for col in df_columns if col != value_column]
 
+    # Start time for performance tracking
+    start_time = time.time()
+
+    # Iterate over each year and perform merging and updating operations
     try:
-        for year in years:
-            print(year)
+        for i, year in enumerate(years):
+            # Fetch the DataFrames for the current year, default to empty DataFrame if not present
             df_local = math_local.get(year, pd.DataFrame(columns=df_columns))
             df_web = math_web.get(year, pd.DataFrame(columns=df_columns))
 
-            # Merge dataframes based on key columns
-            df_merged = pd.merge(df_local, df_web, on=key_columns, how='outer', suffixes=('_now', '_new'))
+            # Merge the local and web DataFrames
+            df_merged = pd.merge(df_local, df_web, on=key_columns, how='outer', suffixes=('_local', '_web'), indicator=True)
 
-            # Check if VL_CONTA in df_web contains a value, if it does, use it, otherwise use df_local's value
-            mask = ~df_merged[f'{value_column}_new'].isna()
-            df_merged[value_column] = np.where(mask, df_merged[f'{value_column}_new'], df_merged[f'{value_column}_now'])
+            # Conditions for selecting 'VL_CONTA' values
+            conditions = [
+                df_merged['_merge'] == 'left_only',  # Rows only in local data
+                df_merged['_merge'] == 'right_only', # Rows only in web data
+                (df_merged['_merge'] == 'both') & (df_merged['VL_CONTA_local'] != df_merged['VL_CONTA_web'])  # Rows different in both data
+            ]
 
-            # Drop temporary columns
-            df_merged.drop(columns=[f'{value_column}_now', f'{value_column}_new'], inplace=True)
+            # Corresponding choices for 'VL_CONTA' based on the above conditions
+            choices = [
+                df_merged['VL_CONTA_local'],  # Use local value
+                df_merged['VL_CONTA_web'],    # Use web value
+                df_merged['VL_CONTA_web']     # Use web value for updates
+            ]
 
-            # Store the updated dataframe in the math dictionary
+            # Apply np.select to assign 'VL_CONTA' based on the defined conditions and choices
+            df_merged[value_column] = np.select(conditions, choices, default=df_merged['VL_CONTA_local'])
+
+            # Drop the columns with suffixes '_local' and '_web'
+            df_merged.drop(columns=[col for col in df_merged if str(col).endswith('_local') or str(col).endswith('_web')], inplace=True)
+
+            # Store the result in the 'math' dictionary
             math[year] = df_merged[df_columns]
 
+            # Print remaining time estimation for processing
+            print(sys_remaining_time(start_time, len(years), i))
+
     except Exception as e:
-        # Handle exception (for now, just passing)
+        # Exception handling (currently passing, consider logging or raising)
         pass
 
     return math
@@ -4105,62 +4162,33 @@ def companies_from_math(math):
 
     return dict(sorted(company.items()))
 
-def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', math_local='', math_web=''):
+def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', cvm_updated='', math_local='', math_web=''):
     try:
         # prepare cvm_local and cvm_web
         if not cvm_local:
             try:
-                cvm_local = sys_load_pkl(f'{b3.app_folder}/cvm')
+                cvm_local = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_local')
             except Exception as e:
                 cvm_local = {}
         if not cvm_web:
-            # cvm_web = cvm_get_web_database()
-            print('debug cvm_web clean load x')
-            cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_web_clean')
-
+            cvm_web = cvm_get_web_database()
+            # print('debug cvm_web clean load')
+            # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_web')
 
         # Compare web (new) data to local (old) data. Extract only updated rows
-        # cvm_updated = cvm_updated_rows(cvm_local, cvm_web)
-        # cvm_updated = sys_save_pkl(cvm_updated, f'{b3.app_folder}/temp_'+'cvm_updated')
-        print('fast cvm_updated debug')
-        cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
+        cvm_updated = cvm_updated_rows(cvm_local, cvm_web)
+        cvm_updated = sys_save_pkl(cvm_updated, f'{b3.app_folder}/temp_'+'cvm_updated')
+        # print('fast cvm_updated debug')
+        # cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
 
         math_local = cvm_calculate_math(cvm_local, where='local')
         math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_'+'math_local')
-        # print('fast_debug_local_math')
-        # math_local = sys_load_pkl(f'{b3.app_folder}/temp_math_local')
 
-        df_merged = sys_save_pkl(cvm_web[2011], f'{b3.app_folder}/temp_df_merge_to_math_pre')
-
-        math_web = cvm_calculate_math(cvm_web, where='web')
-        math_web = sys_save_pkl(math_web, f'{b3.app_folder}/temp_'+'math_web')
-        # print('fast_debug_web_math')
-        # math_web = sys_load_pkl(f'{b3.app_folder}/temp_math_web')
-
-        cvm_updated = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_updated')
-        math_updated = cvm_calculate_math(cvm_updated, where='updated')
+        math_updated = cvm_calculate_math(cvm_updated, where='local')
         math_updated = sys_save_pkl(math_updated, f'{b3.app_folder}/temp_'+'math_updated')
-        # print('fast_debug_updated_math')
-        # math_updated = sys_load_pkl(f'{b3.app_folder}/temp_math_updated')
 
-        # math_local
-        try:
-            math_local = sys_load_pkl(f'{b3.app_folder}/temp_'+'math')
-        except Exception as e:
-            math_local = {}
-# try:
-    # math_local = math_from_cvm(cvm_local) # shortcut to load math per year, not necessary unless huge huge database
-    # math_local = get_calculated_math(cvm_local) # this is where the groupby transformation mathmagic happens
-    # math_local = sys_save_pkl(math_local, f'{b3.app_folder}/math_local')
-# except Exception as e:
-
-        # math_web
-        try:
-            math_web = sys_load_pkl(f'{b3.app_folder}/math_web')
-        except Exception as e:
-            cvm_local, math_web = cvm_updated_rows(cvm_local, cvm_web)
-
-        math = math_merge(math_local, math_web)
+        math_local = math_merge(math_local, math_updated)
+        math_local = sys_save_pkl(math_local, f'{b3.app_folder}/temp_'+'math_local')
 
     except Exception as e:
         pass
@@ -5986,10 +6014,10 @@ def load_database():
         fund (dict): The final loaded or generated database.
     """
     # # Step 1: Load or prepare 'acoes'
-    # acoes = stk_get_composicao_acionaria()
-    print('fast debug acoes')
-    filename = 'acoes'
-    columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
+    acoes = stk_get_composicao_acionaria()
+    # print('fast debug acoes')
+    # filename = 'acoes'
+    # columns = ['Companhia', 'Trimestre', 'Ações ON', 'Ações PN', 'Ações ON em Tesouraria', 'Ações PN em Tesouraria', 'URL']
     # acoes = sys_read_or_create_dataframe(filename, columns)
 
     # Step 2: Load or prepare 'fund'
@@ -6022,8 +6050,8 @@ def load_database():
                     try:
                         math = sys_load_pkl(f'{b3.app_folder}/math')
                     except Exception as e:
-                        cvm = cvm_get_databases_from_cvm()
-                        math = get_math_from_b3_cvm()
+                        math = cvm_get_databases_from_cvm()
+                        # math = get_math_from_b3_cvm()
                         math = sys_save_pkl(math, f'{b3.app_folder}/math')
                     
                     # Use 'math' and 'company' to prepare 'b3_cvm'
