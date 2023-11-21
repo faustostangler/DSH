@@ -3461,7 +3461,8 @@ def adjust_quarters(group_df):
     Returns:
     - pd.DataFrame: The same DataFrame with adjusted 'VL_CONTA' values.
     """
-    
+    group_df.to_csv('df_gorup_adjust_quarters.csv')
+
     # Extract the VL_CONTA values for each quarter. If a value is not present for a quarter, default to 0.
     # This ensures that the adjustments are based on the correct values even if data for a particular quarter is missing.
     q1_value = group_df.loc[group_df['DT_REFER'].dt.quarter == 1, 'VL_CONTA'].values[0] if not group_df.loc[group_df['DT_REFER'].dt.quarter == 1, 'VL_CONTA'].empty else 0
@@ -3507,7 +3508,7 @@ def adjust_last_quarter(group_df):
     Returns:
     - pd.DataFrame: The DataFrame with adjusted 'VL_CONTA' values for Q4.
     """
-    
+    group_df.to_csv('df_gorup_adjust_last_quarter.csv')
     # Extract the 'VL_CONTA' values for the first three quarters.
     q1_value = group_df.loc[group_df['DT_REFER'].dt.quarter == 1]['VL_CONTA'].values[0] if not group_df.loc[group_df['DT_REFER'].dt.quarter == 1, 'VL_CONTA'].empty else 0
     q2_value = group_df.loc[group_df['DT_REFER'].dt.quarter == 2]['VL_CONTA'].values[0] if not group_df.loc[group_df['DT_REFER'].dt.quarter == 2, 'VL_CONTA'].empty else 0
@@ -3555,12 +3556,13 @@ def cvm_math_calculations_adjustments(group):
     # print(row['ANO'], row['CNPJ_CIA'], row['AGRUPAMENTO'], row['DT_REFER'], row['BALANCE_SHEET'], row['CD_CONTA'])
   
     sheet = group['BALANCE_SHEET'].iloc[0]
-    
-    # If the group's 'BALANCE_SHEET' value belongs to the fluxo_de_caixa category, apply quarter adjustments.
+
+    # If the group's 'BALANCE_SHEET' value belongs to the resultados category, apply quarter adjustments.
+    if sheet in resultados:
+        group = adjust_quarters(group)
+        return group
+    # If the group's 'BALANCE_SHEET' value belongs to the fluxo_de_caixa category, filter and adjust the last quarter.
     if sheet in fluxo_de_caixa:
-        return adjust_quarters(group)
-    # If the group's 'BALANCE_SHEET' value belongs to the resultados category, filter and adjust the last quarter.
-    elif sheet in resultados:
         # group = filter_last_quarter(group)
         # print('debug filter last_quarter')
         group = adjust_last_quarter(group)
@@ -3775,13 +3777,14 @@ def cvm_calculate_math(cvm, where):
             math[year] = sys_load_pkl(f'{b3.app_folder}/temp_math_{where}_{year}')
         except Exception as e:
             problem_column = 'COLUNA_DF'
+            # unique_sheet_cols = ['CNPJ_CIA', 'AGRUPAMENTO', 'CD_CONTA', 'DS_CONTA', 'COLUNA_DF']
+            group_cols = [col for col in b3.unique_sheet_cols if col != problem_column]
 
             # Split the DataFrame into two parts based on NaN values in COLUNA_DF
             df_without_coluna_df = df[df[problem_column].isna()]
             df_with_coluna_df = df.dropna(subset=[problem_column])
 
             # Grouping with and without COLUNA_DF
-            group_cols = [col for col in b3.unique_sheet_cols if col != problem_column]
             grouped_without = df_without_coluna_df.groupby(group_cols, group_keys=False)
             grouped_with = df_with_coluna_df.groupby(b3.unique_sheet_cols, group_keys=False)
 
@@ -4171,7 +4174,8 @@ def cvm_get_databases_from_cvm(math='', cvm_local='', cvm_web='', cvm_updated=''
             except Exception as e:
                 cvm_local = {}
         if not cvm_web:
-            cvm_web = cvm_get_web_database()
+            # cvm_web = cvm_get_web_database()
+            pass
             # print('debug cvm_web clean load')
             # cvm_web = sys_load_pkl(f'{b3.app_folder}/temp_'+'cvm_web')
 
@@ -5201,6 +5205,8 @@ def apply_intel_rules(df, rules):
     df_web = pd.DataFrame(columns=df.columns)
     
     try:
+        dataframes_to_concat = []
+
         # Get the current time to calculate processing duration
         start_time = time.time()
 
@@ -5310,14 +5316,16 @@ def apply_intel_rules(df, rules):
             matching_rows['DS_CONTA'] = line_DS
             matching_rows['CD_CONTA_original'] = df[mask]['CD_CONTA']
             matching_rows['DS_CONTA_original'] = df[mask]['DS_CONTA']
-            
+
             # Append the modified rows to the new DataFrame
-            df_web = pd.concat([df_web, matching_rows])
+            dataframes_to_concat.append(matching_rows)
 
             # Print progress and diagnostics
-            print(sys_remaining_time(start_time, len(rules), r), line, 'matching rows', len(matching_rows))
+            print('  ', sys_remaining_time(start_time, len(rules), r), line, len(matching_rows))
             if len(matching_rows) < 1:
                 pass
+    
+        df_web = pd.concat(dataframes_to_concat, ignore_index=True)
 
     # Catch any exception and continue
     except Exception as e:
@@ -5616,9 +5624,11 @@ def get_rules():
 
 def choose_agrupamento(group):
     if 'con' in group['AGRUPAMENTO'].values:
-        return group[group['AGRUPAMENTO'] == 'con']
+        group = group[group['AGRUPAMENTO'] == 'con']
+        return group
     else:
-        return group[group['AGRUPAMENTO'] == 'ind']
+        group = group[group['AGRUPAMENTO'] == 'ind']
+        return group
 
 def prepare_b3_cvm(b3_cvm):
     columns = ['CNPJ_CIA', 'DENOM_CIA', 'DT_REFER', 'CD_CONTA', 'DS_CONTA', 'VL_CONTA']
@@ -5629,12 +5639,12 @@ def prepare_b3_cvm(b3_cvm):
         rules = get_rules()
         start_time_b3 = time.time()
         for k, (key, df) in enumerate(b3_cvm.items()):
-            print(key, sys_remaining_time(start_time_b3, len(b3_cvm), k))
             # Apply the function to each group
-            df = df[[item for item in df.columns if item != "ACIONISTAS"]] # remove ACIONISTAS from df
+            # df = df[[item for item in df.columns if item != "ACIONISTAS"]] # remove ACIONISTAS from df
             df = df.groupby(['CNPJ_CIA', 'DT_REFER'], group_keys=False).apply(choose_agrupamento).reset_index(drop=True)
             intel_b3[key] = apply_intel_rules(df, rules)
-            intel_b3[key].to_csv(f'{key}_intel.csv')
+            intel_b3[key] = sys_save_pkl(intel_b3[key], f'intel_b3_{key}')
+            print(key, sys_remaining_time(start_time_b3, len(b3_cvm), k))
     except Exception as e:
         print(e)
         pass
@@ -6046,7 +6056,7 @@ def load_database():
             except Exception as e:
                 # Further nested step: Load or prepare 'b3_cvm'
                 try:
-                    b3_cvm = sys_load_pkl(f'{b3.app_folder}/b3_cvm')
+                    b3_cvm = sys_load_pkl(f'{b3.app_folder}/b3_cvm_error')
                 except Exception as e:
                     # Further nested step: Load or prepare 'company'
                     try:
@@ -6059,7 +6069,7 @@ def load_database():
 
                     # Further nested step: Load or prepare 'math'
                     try:
-                        # math = cvm_get_databases_from_cvm()
+                        math = cvm_get_databases_from_cvm()
                         # math = sys_save_pkl(math, f'{b3.app_folder}/math')
                         print('math fast debug')
                         math = sys_load_pkl(f'{b3.app_folder}/math')
